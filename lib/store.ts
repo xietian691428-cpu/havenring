@@ -2,6 +2,10 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import {
+  clearPendingMomentSnapshot,
+  writePendingMomentSnapshot,
+} from "@/lib/pending-moment";
 
 /**
  * The "pending moment" is a moment that has already been encrypted and
@@ -74,8 +78,14 @@ export const useHavenStore = create<HavenState>()(
       linkedRingId: null,
 
       setStage: (stage) => set({ stage }),
-      stagePending: (pending) => set({ pending, stage: "awaiting_tap" }),
-      clearPending: () => set({ pending: null, stage: "idle" }),
+      stagePending: (pending) => {
+        writePendingMomentSnapshot(pending);
+        set({ pending, stage: "awaiting_tap" });
+      },
+      clearPending: () => {
+        clearPendingMomentSnapshot();
+        set({ pending: null, stage: "idle" });
+      },
 
       grantVaultAccess: (ringId, token) => {
         const now = Date.now();

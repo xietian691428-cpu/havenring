@@ -10,6 +10,10 @@ import {
   type PendingMoment,
 } from "@/lib/store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  clearPendingMomentSnapshot,
+  readPendingMomentSnapshot,
+} from "@/lib/pending-moment";
 
 type HubState =
   | { kind: "deciding" }
@@ -68,21 +72,33 @@ export function HubRouter() {
 
     const decide = async (pending: PendingMoment | null) => {
       const supabase = getSupabaseBrowserClient();
+      const effectivePending = pending ?? readPendingMomentSnapshot();
 
       // Scenario A: there's something waiting to be sealed on this device.
-      if (pending) {
+      if (effectivePending) {
         try {
-          const { error } = await supabase.rpc("seal_moment", {
-            p_ring_id: pending.ringId,
+          // Preferred path for multi-tab iOS Safari behavior:
+          // seal an explicit pending moment id.
+          let sealResult = await supabase.rpc("seal_moment" as never, {
+            p_moment_id: effectivePending.momentId,
             p_token: token,
-          });
+          } as never);
 
-          if (error) {
-            setState({ kind: "error", message: error.message });
+          // Backward-compatible fallback for older DB signatures.
+          if (sealResult.error) {
+            sealResult = await supabase.rpc("seal_moment" as never, {
+              p_ring_id: effectivePending.ringId,
+              p_token: token,
+            } as never);
+          }
+
+          if (sealResult.error) {
+            setState({ kind: "error", message: sealResult.error.message });
             return;
           }
 
           clearPending();
+          clearPendingMomentSnapshot();
           setStage("sealed");
           router.replace("/seal-success");
           return;

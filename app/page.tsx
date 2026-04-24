@@ -11,6 +11,7 @@ import {
 } from "@/lib/moment-content";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { hydrateHavenStore, useHavenStore } from "@/lib/store";
+import { readPendingMomentSnapshot } from "@/lib/pending-moment";
 
 type LocalUi =
   | { kind: "composing" }
@@ -37,6 +38,15 @@ export default function HomePage() {
   useEffect(() => {
     hydrateHavenStore();
   }, []);
+
+  useEffect(() => {
+    if (!useHavenStore.persist.hasHydrated()) return;
+    if (useHavenStore.getState().pending) return;
+    const snapshot = readPendingMomentSnapshot();
+    if (snapshot) {
+      stagePending(snapshot);
+    }
+  }, [stagePending]);
 
   // The awaiting-tap screen is controlled by the persisted store — so if
   // the user refreshes or comes back, they land right back in the ritual.
