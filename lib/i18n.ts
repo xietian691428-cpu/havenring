@@ -1,5 +1,3 @@
-"use client";
-
 export const SUPPORTED_LOCALES = ["en", "fr", "es", "de", "it"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
