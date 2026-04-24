@@ -1,0 +1,279 @@
+# Supabase Schema (Group-safe Haven)
+
+> Apply these in Supabase SQL Editor. Keep in sync with `lib/supabase/types.ts`.
+
+## 1) Extensions
+
+```sql
+create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
+```
+
+## 2) Tables
+
+```sql
+create table if not exists public.havens (
+  id          uuid primary key default uuid_generate_v4(),
+  created_by  uuid not null references auth.users (id) on delete restrict,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.haven_members (
+  id          uuid primary key default uuid_generate_v4(),
+  haven_id    uuid not null references public.havens (id) on delete cascade,
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  role        text not null default 'member' check (role in ('owner', 'member')),
+  created_at  timestamptz not null default now(),
+  unique (haven_id, user_id)
+);
+
+create table if not exists public.rings (
+  id          uuid primary key default uuid_generate_v4(),
+  haven_id    uuid references public.havens (id) on delete set null,
+  owner_id    uuid references auth.users (id) on delete set null,
+  status      varchar not null default 'unclaimed'
+              check (status in ('unclaimed', 'active', 'revoked')),
+  token_hash  text not null,
+  created_at  timestamptz not null default now(),
+  claimed_at  timestamptz
+);
+
+create table if not exists public.ring_invites (
+  id           uuid primary key default uuid_generate_v4(),
+  haven_id     uuid not null references public.havens (id) on delete cascade,
+  created_by   uuid not null references auth.users (id) on delete cascade,
+  invite_hash  text not null,
+  expires_at   timestamptz not null,
+  consumed_by  uuid references auth.users (id) on delete set null,
+  consumed_at  timestamptz,
+  cancelled_at timestamptz,
+  created_at   timestamptz not null default now()
+);
+
+create table if not exists public.moments (
+  id               uuid primary key default uuid_generate_v4(),
+  haven_id         uuid references public.havens (id) on delete cascade,
+  ring_id          uuid not null references public.rings (id) on delete cascade,
+  text             text not null,
+  image_url        text,
+  audio_url        text,
+  encrypted_vault  text not null,
+  iv               text not null,
+  is_sealed        boolean not null default false,
+  created_at       timestamptz not null default now(),
+  sealed_at        timestamptz
+);
+
+create table if not exists public.ring_events (
+  id            uuid primary key default uuid_generate_v4(),
+  ring_id       uuid not null references public.rings (id) on delete cascade,
+  actor_user_id uuid references auth.users (id) on delete set null,
+  action        text not null check (
+    action in (
+      'claim',
+      'ring_link_request',
+      'ring_link_approved',
+      'ring_link_rejected',
+      'token_issue',
+      'token_revoke',
+      'wipe'
+    )
+  ),
+  metadata      jsonb,
+  created_at    timestamptz not null default now()
+);
+```
+
+## 3) Compatibility migration (single-user -> group)
+
+```sql
+alter table public.rings add column if not exists haven_id uuid references public.havens (id) on delete set null;
+alter table public.moments add column if not exists haven_id uuid references public.havens (id) on delete cascade;
+alter table public.moments add column if not exists text text not null default '';
+alter table public.moments add column if not exists image_url text;
+alter table public.moments add column if not exists audio_url text;
+
+-- Backfill one-person haven per existing owner.
+insert into public.havens (created_by)
+select distinct r.owner_id
+from public.rings r
+where r.owner_id is not null
+  and not exists (
+    select 1 from public.havens h where h.created_by = r.owner_id
+  );
+
+insert into public.haven_members (haven_id, user_id, role)
+select h.id, h.created_by, 'owner'
+from public.havens h
+where not exists (
+  select 1 from public.haven_members hm
+  where hm.haven_id = h.id and hm.user_id = h.created_by
+);
+
+update public.rings r
+set haven_id = h.id
+from public.havens h
+where h.created_by = r.owner_id
+  and r.haven_id is null
+  and r.owner_id is not null;
+
+update public.moments m
+set haven_id = r.haven_id
+from public.rings r
+where m.ring_id = r.id
+  and m.haven_id is null;
+```
+
+## 4) Indexes
+
+```sql
+create index if not exists rings_owner_idx on public.rings (owner_id);
+create index if not exists rings_haven_idx on public.rings (haven_id);
+create index if not exists moments_haven_pending_idx on public.moments (haven_id) where is_sealed = false;
+create index if not exists ring_invites_haven_expires_idx on public.ring_invites (haven_id, expires_at desc);
+create index if not exists ring_events_ring_created_idx on public.ring_events (ring_id, created_at desc);
+```
+
+## 5) RLS (member-gated)
+
+```sql
+alter table public.havens enable row level security;
+alter table public.haven_members enable row level security;
+alter table public.rings enable row level security;
+alter table public.ring_invites enable row level security;
+alter table public.moments enable row level security;
+alter table public.ring_events enable row level security;
+
+create policy "haven_members_can_read_havens"
+  on public.havens for select
+  using (
+    exists (
+      select 1 from public.haven_members hm
+      where hm.haven_id = id and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members_can_read_membership"
+  on public.haven_members for select
+  using (
+    exists (
+      select 1 from public.haven_members hm
+      where hm.haven_id = haven_id and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members_can_read_rings"
+  on public.rings for select
+  using (
+    haven_id is not null and exists (
+      select 1 from public.haven_members hm
+      where hm.haven_id = rings.haven_id and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members_can_insert_moments"
+  on public.moments for insert
+  with check (
+    haven_id is not null and exists (
+      select 1 from public.haven_members hm
+      where hm.haven_id = moments.haven_id and hm.user_id = auth.uid()
+    )
+  );
+
+create policy "members_can_read_moments"
+  on public.moments for select
+  using (
+    haven_id is not null and exists (
+      select 1 from public.haven_members hm
+      where hm.haven_id = moments.haven_id and hm.user_id = auth.uid()
+    )
+  );
+```
+
+## 6) Security-sensitive RPCs (requires explicit authorization)
+
+```sql
+-- Issue one-time invite code for an existing haven member.
+create or replace function public.issue_ring_invite(p_haven_id uuid)
+returns table(invite_code text, expires_at timestamptz)
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_code text := encode(gen_random_bytes(16), 'hex');
+begin
+  if auth.uid() is null then raise exception 'unauthenticated' using errcode='42501'; end if;
+  if not exists (
+    select 1 from public.haven_members hm
+    where hm.haven_id = p_haven_id and hm.user_id = auth.uid()
+  ) then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+
+  insert into public.ring_invites (haven_id, created_by, invite_hash, expires_at)
+  values (
+    p_haven_id,
+    auth.uid(),
+    encode(digest(v_code, 'sha256'), 'hex'),
+    now() + interval '10 minutes'
+  )
+  returning ring_invites.expires_at into expires_at;
+
+  invite_code := v_code;
+  return next;
+end $$;
+
+-- Link a ring into an existing haven only with valid invite + tap token.
+create or replace function public.link_ring_by_invite(p_token text, p_invite_code text)
+returns table(haven_id uuid, ring_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_token_hash text := encode(digest(p_token, 'sha256'), 'hex');
+  v_invite_hash text := encode(digest(p_invite_code, 'sha256'), 'hex');
+begin
+  if auth.uid() is null then raise exception 'unauthenticated' using errcode='42501'; end if;
+
+  select ri.haven_id into haven_id
+  from public.ring_invites ri
+  where ri.invite_hash = v_invite_hash
+    and ri.cancelled_at is null
+    and ri.consumed_at is null
+    and ri.expires_at > now()
+  order by ri.created_at desc
+  limit 1;
+
+  if haven_id is null then
+    raise exception 'invalid_or_expired_invite' using errcode='42501';
+  end if;
+
+  update public.rings r
+  set haven_id = haven_id,
+      owner_id = auth.uid(),
+      status = 'active',
+      claimed_at = coalesce(r.claimed_at, now())
+  where r.token_hash = v_token_hash
+  returning r.id into ring_id;
+
+  if ring_id is null then
+    raise exception 'ring_not_found' using errcode='42501';
+  end if;
+
+  insert into public.haven_members (haven_id, user_id, role)
+  values (haven_id, auth.uid(), 'member')
+  on conflict (haven_id, user_id) do nothing;
+
+  update public.ring_invites
+  set consumed_by = auth.uid(), consumed_at = now()
+  where invite_hash = v_invite_hash
+    and consumed_at is null
+    and cancelled_at is null;
+
+  return next;
+end $$;
+```
+
+## 7) Operational notes
+
+- Invite codes are one-time, short-lived (default 10 minutes), and only stored as hashes.
+- Ring tap token and invite code must both be present to link a new ring.
+- Server still stores ciphertext only. Group sharing changes authorization, not plaintext handling.
