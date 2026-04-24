@@ -111,9 +111,6 @@ export default function HomePage() {
         .from("moments")
         .insert({
           ring_id: activeRingId,
-          text: value,
-          image_url: null,
-          audio_url: null,
           encrypted_vault: payload.encryptedVault,
           iv: payload.iv,
           is_sealed: false,
@@ -204,6 +201,11 @@ export default function HomePage() {
                   >
                     {t("home.claim.hint")} {t("home.claim.cta")}
                   </Link>
+                )}
+                {activeRingId && (
+                  <p className="text-xs tracking-[0.08em] text-white/70">
+                    {t("home.vault.hint")}
+                  </p>
                 )}
               </div>
               <button

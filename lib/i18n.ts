@@ -20,6 +20,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.prepare": "Prepare to seal",
     "home.claim.hint": "Not linked yet?",
     "home.claim.cta": "Tap your ring to claim",
+    "home.vault.hint": "To revisit sealed moments, tap your ring anytime.",
     "home.state.encrypting": "Encrypting...",
     "home.state.awaiting.title": "Touch your ring to seal",
     "home.state.awaiting.body":
