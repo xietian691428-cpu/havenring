@@ -25,7 +25,8 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
   const sp = await searchParams;
   const lang = Array.isArray(sp.lang) ? sp.lang[0] : sp.lang;
   const reasonParam = Array.isArray(sp.reason) ? sp.reason[0] : sp.reason;
+  const tokenParam = Array.isArray(sp.token) ? sp.token[0] : sp.token;
   const locale = isSupportedLocale(lang) ? lang : getPreferredLocale(null);
   const reason = getReason(reasonParam);
-  return <ClaimClient locale={locale} reason={reason} />;
+  return <ClaimClient locale={locale} reason={reason} initialToken={tokenParam} />;
 }

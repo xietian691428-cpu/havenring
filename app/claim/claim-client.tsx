@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getTranslator, type Locale } from "@/lib/i18n";
@@ -16,6 +16,7 @@ type ClaimReason =
 interface ClaimClientProps {
   locale: Locale;
   reason: ClaimReason;
+  initialToken?: string;
 }
 
 type Status =
@@ -24,12 +25,17 @@ type Status =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
-export function ClaimClient({ locale, reason }: ClaimClientProps) {
+export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) {
   const t = getTranslator(locale);
   const router = useRouter();
   const token = useHavenStore((s) => s.claimToken);
   const setClaimToken = useHavenStore((s) => s.setClaimToken);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+
+  useEffect(() => {
+    if (!initialToken) return;
+    setClaimToken(initialToken);
+  }, [initialToken, setClaimToken]);
 
   const reasonKey = useMemo(() => {
     if (reason === "ring_inactive") return "claim.reason.ring_inactive";
