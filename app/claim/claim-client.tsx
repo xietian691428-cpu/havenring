@@ -46,10 +46,21 @@ export function ClaimClient({ locale, reason }: ClaimClientProps) {
 
     const supabase = getSupabaseBrowserClient();
     const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
+    let accessToken = data.session?.access_token ?? null;
     if (!accessToken) {
-      setStatus({ kind: "error", message: t("claim.error.auth_required") });
-      return;
+      // Testing-friendly fallback: create an anonymous session so first-time
+      // users can still claim a prewritten ring without manual auth UI.
+      const anon = await supabase.auth.signInAnonymously();
+      if (anon.error) {
+        setStatus({ kind: "error", message: t("claim.error.auth_required") });
+        return;
+      }
+      const refreshed = await supabase.auth.getSession();
+      accessToken = refreshed.data.session?.access_token ?? null;
+      if (!accessToken) {
+        setStatus({ kind: "error", message: t("claim.error.auth_required") });
+        return;
+      }
     }
 
     setStatus({ kind: "loading" });
