@@ -58,10 +58,16 @@ export function ClaimClient({ locale, reason }: ClaimClientProps) {
         });
         return;
       }
-      const refreshed = await supabase.auth.getSession();
-      accessToken = refreshed.data.session?.access_token ?? null;
+      accessToken = anon.data.session?.access_token ?? null;
       if (!accessToken) {
-        setStatus({ kind: "error", message: t("claim.error.auth_required") });
+        const refreshed = await supabase.auth.getSession();
+        accessToken = refreshed.data.session?.access_token ?? null;
+      }
+      if (!accessToken) {
+        setStatus({
+          kind: "error",
+          message: `${t("claim.error.auth_required")} (anonymous session missing access token)`,
+        });
         return;
       }
     }
