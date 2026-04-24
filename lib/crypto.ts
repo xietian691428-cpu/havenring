@@ -79,6 +79,21 @@ export async function getOrCreateKey(): Promise<CryptoKey> {
 }
 
 /**
+ * Enforce a read-from-IndexedDB step before encryption.
+ * If the key is missing, we create it once, then read it back from IndexedDB.
+ */
+async function getIndexedDbKeyForEncryption(): Promise<CryptoKey> {
+  const existing = await getStoredKey();
+  if (existing) return existing;
+  await generateAndStoreKey();
+  const stored = await getStoredKey();
+  if (!stored) {
+    throw new Error("[haven-ring/crypto] Failed to load key from IndexedDB.");
+  }
+  return stored;
+}
+
+/**
  * Permanently forget the local key. After this call, every moment created on
  * this device becomes mathematically unreadable.
  *
@@ -96,7 +111,7 @@ export async function destroyKey(): Promise<void> {
  */
 export async function encrypt(plaintext: string): Promise<EncryptedPayload> {
   assertBrowser();
-  const key = await getOrCreateKey();
+  const key = await getIndexedDbKeyForEncryption();
   const iv = window.crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const data = new TextEncoder().encode(plaintext);
 

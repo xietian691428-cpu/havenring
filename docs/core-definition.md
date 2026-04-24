@@ -129,6 +129,7 @@ Input (plain text in browser)
 ```
 User taps ring (nothing pending) → /hub?token=T
   └─ hub calls resolve_ring_by_token RPC → ringId
+      └─ RPC hashes plaintext T inside Postgres and compares with rings.token_hash
       └─ store in-memory vaultAccess = { ringId, token, expiresAt }
           └─ redirect /vault/[ringId]
               └─ vault verifies vaultAccess matches ringId and not expired
@@ -153,6 +154,11 @@ wipe_ring RPC (verifies ring token server-side)
           └─ client destroys IndexedDB key + clears all Zustand state
               └─ "The ring is now empty and ready for a new chapter."
 ```
+
+Token handling invariant:
+- Ring URL carries plaintext opaque token `T` only.
+- Server/RPC computes hash at query-time (`encode(extensions.digest(T, 'sha256'), 'hex')`).
+- `token_hash` is never exposed to the client or API consumers.
 
 After a wipe:
 - Server retains no ciphertext for that ring.

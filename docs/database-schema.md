@@ -54,7 +54,9 @@ create table if not exists public.moments (
   id               uuid primary key default uuid_generate_v4(),
   haven_id         uuid references public.havens (id) on delete cascade,
   ring_id          uuid not null references public.rings (id) on delete cascade,
-  text             text not null,
+  -- Zero-knowledge invariant:
+  -- user plaintext must never be stored in relational columns.
+  text             text,
   image_url        text,
   audio_url        text,
   encrypted_vault  text not null,
@@ -277,3 +279,82 @@ end $$;
 - Invite codes are one-time, short-lived (default 10 minutes), and only stored as hashes.
 - Ring tap token and invite code must both be present to link a new ring.
 - Server still stores ciphertext only. Group sharing changes authorization, not plaintext handling.
+
+## 8) Token hash validation invariant (critical)
+
+All ring RPCs must accept **plaintext token input** (`p_token`) and hash it
+inside Postgres at query-time. Never store or compare plaintext tokens.
+
+```sql
+-- Canonical comparison shape (must be preserved):
+-- where rings.token_hash = encode(extensions.digest(p_token::text, 'sha256'::text), 'hex')
+
+create or replace function public.resolve_ring_by_token(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_ring_id uuid;
+begin
+  select r.id
+    into v_ring_id
+  from public.rings r
+  where r.token_hash = encode(extensions.digest(p_token::text, 'sha256'::text), 'hex')
+    and r.status = 'active'
+  limit 1;
+
+  if v_ring_id is null then
+    raise exception 'ring_not_found_or_inactive' using errcode = '42501';
+  end if;
+
+  return v_ring_id;
+end $$;
+
+create or replace function public.seal_moment(p_ring_id uuid, p_token text)
+returns public.moments
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_moment public.moments%rowtype;
+begin
+  if not exists (
+    select 1
+    from public.rings r
+    where r.id = p_ring_id
+      and r.token_hash = encode(extensions.digest(p_token::text, 'sha256'::text), 'hex')
+      and r.status = 'active'
+      and r.owner_id = auth.uid()
+  ) then
+    raise exception 'ring_not_authorized' using errcode = '42501';
+  end if;
+
+  with next_moment as (
+    select m.id
+    from public.moments m
+    where m.ring_id = p_ring_id
+      and m.is_sealed = false
+    order by m.created_at asc
+    limit 1
+  )
+  update public.moments m
+  set is_sealed = true,
+      sealed_at = now()
+  where m.id in (select id from next_moment)
+  returning m.* into v_moment;
+
+  if v_moment.id is null then
+    raise exception 'no_pending_moment' using errcode = 'P0001';
+  end if;
+
+  return v_moment;
+end $$;
+```
+
+Non-negotiable:
+- `token_hash` must never be returned by public API responses.
+- Frontend must never compute, store, or display `token_hash`.
+- RPCs must never include decryption logic; they only authorize and flip state.

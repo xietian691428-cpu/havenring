@@ -23,7 +23,7 @@ export type MomentRow = {
   id: string;
   haven_id: string | null;
   ring_id: string;
-  text: string;
+  text: string | null;
   image_url: string | null;
   audio_url: string | null;
   encrypted_vault: string;
@@ -165,7 +165,7 @@ export type Database = {
           id?: string;
           haven_id?: string | null;
           ring_id: string;
-          text: string;
+          text?: string | null;
           image_url?: string | null;
           audio_url?: string | null;
           encrypted_vault: string;
