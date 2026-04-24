@@ -30,6 +30,7 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
   const router = useRouter();
   const token = useHavenStore((s) => s.claimToken);
   const setClaimToken = useHavenStore((s) => s.setClaimToken);
+  const setLinkedRingId = useHavenStore((s) => s.setLinkedRingId);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   useEffect(() => {
@@ -106,6 +107,12 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
         return;
       }
 
+      const payload = (await response.json().catch(() => null)) as
+        | { ringId?: string }
+        | null;
+      if (payload?.ringId) {
+        setLinkedRingId(payload.ringId);
+      }
       setStatus({ kind: "success", message: t("claim.success") });
       setClaimToken(null);
       window.setTimeout(() => router.replace("/"), 700);

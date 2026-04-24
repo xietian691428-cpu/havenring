@@ -49,6 +49,7 @@ interface HavenState {
   pending: PendingMoment | null;
   vaultAccess: VaultAccess | null;
   claimToken: string | null;
+  linkedRingId: string | null;
 
   setStage: (stage: SealStage) => void;
   stagePending: (m: PendingMoment) => void;
@@ -57,6 +58,7 @@ interface HavenState {
   grantVaultAccess: (ringId: string, token: string) => void;
   revokeVaultAccess: () => void;
   setClaimToken: (token: string | null) => void;
+  setLinkedRingId: (ringId: string | null) => void;
 
   /** Full local reset — used on wipe. */
   reset: () => void;
@@ -69,6 +71,7 @@ export const useHavenStore = create<HavenState>()(
       pending: null,
       vaultAccess: null,
       claimToken: null,
+      linkedRingId: null,
 
       setStage: (stage) => set({ stage }),
       stagePending: (pending) => set({ pending, stage: "awaiting_tap" }),
@@ -87,6 +90,7 @@ export const useHavenStore = create<HavenState>()(
       },
       revokeVaultAccess: () => set({ vaultAccess: null }),
       setClaimToken: (claimToken) => set({ claimToken }),
+      setLinkedRingId: (linkedRingId) => set({ linkedRingId }),
 
       reset: () =>
         set({
@@ -94,6 +98,7 @@ export const useHavenStore = create<HavenState>()(
           pending: null,
           vaultAccess: null,
           claimToken: null,
+          linkedRingId: null,
         }),
     }),
     {
@@ -101,7 +106,11 @@ export const useHavenStore = create<HavenState>()(
       storage: createJSONStorage(() => localStorage),
       // Persist ONLY the compose-side state. Vault access is intentionally
       // never persisted — a fresh tap must grant a fresh session.
-      partialize: (s) => ({ stage: s.stage, pending: s.pending }),
+      partialize: (s) => ({
+        stage: s.stage,
+        pending: s.pending,
+        linkedRingId: s.linkedRingId,
+      }),
       skipHydration: true,
     }
   )

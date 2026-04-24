@@ -35,6 +35,7 @@ export function HubRouter() {
   const setStage = useHavenStore((s) => s.setStage);
   const grantVaultAccess = useHavenStore((s) => s.grantVaultAccess);
   const setClaimToken = useHavenStore((s) => s.setClaimToken);
+  const setLinkedRingId = useHavenStore((s) => s.setLinkedRingId);
 
   useEffect(() => {
     hydrateHavenStore();
@@ -121,6 +122,7 @@ export function HubRouter() {
               });
               if (!retry.error && retry.data) {
                 const claimedRingId = retry.data as unknown as string;
+                setLinkedRingId(claimedRingId);
                 grantVaultAccess(claimedRingId, token);
                 router.replace(`/vault/${claimedRingId}`);
                 return;
@@ -129,13 +131,16 @@ export function HubRouter() {
           }
 
           setClaimToken(token);
-          router.replace(
-            `/claim?reason=ring_inactive&lang=${locale}`
-          );
+          const claimUrl = new URL("/claim", window.location.origin);
+          claimUrl.searchParams.set("reason", "ring_inactive");
+          claimUrl.searchParams.set("lang", locale);
+          claimUrl.searchParams.set("token", token);
+          router.replace(`${claimUrl.pathname}${claimUrl.search}`);
           return;
         }
 
         const ringId = data as unknown as string;
+        setLinkedRingId(ringId);
         grantVaultAccess(ringId, token);
         router.replace(`/vault/${ringId}`);
       } catch (err) {
@@ -170,6 +175,7 @@ export function HubRouter() {
     setStage,
     grantVaultAccess,
     setClaimToken,
+    setLinkedRingId,
     locale,
     t,
   ]);

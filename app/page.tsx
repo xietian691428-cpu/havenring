@@ -31,6 +31,7 @@ export default function HomePage() {
   const pending = useHavenStore((s) => s.pending);
   const stagePending = useHavenStore((s) => s.stagePending);
   const clearPending = useHavenStore((s) => s.clearPending);
+  const linkedRingId = useHavenStore((s) => s.linkedRingId);
   const hasTyped = text.length > 0;
 
   useEffect(() => {
@@ -44,6 +45,10 @@ export default function HomePage() {
   const errorMessage = localUi.kind === "error" ? localUi.message : null;
 
   useEffect(() => {
+    if (linkedRingId) {
+      setActiveRingId(linkedRingId);
+      return;
+    }
     // Look up the user's active ring (for MVP: the most recent active one).
     // If no ring is claimed yet we render a minimal placeholder state.
     let cancelled = false;
@@ -67,7 +72,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [linkedRingId]);
 
   async function handlePrepareSeal() {
     const value = text.trim();
