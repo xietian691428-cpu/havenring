@@ -22,6 +22,8 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.claim.cta": "Tap your ring to claim",
     "home.vault.hint": "Tap your ring anytime to revisit your sealed moments.",
     "home.vault.cta": "Tap ring to open your Haven",
+    "home.vault.open": "Open Haven history",
+    "home.seal.hint": "Prepare to seal, then tap your ring to confirm.",
     "home.state.encrypting": "Encrypting...",
     "home.state.awaiting.title": "Touch your ring to seal",
     "home.state.awaiting.body":
@@ -64,6 +66,12 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.prepare": "Préparer le scellement",
     "home.claim.hint": "Pas encore liée ?",
     "home.claim.cta": "Touchez votre bague pour la lier",
+    "home.vault.hint":
+      "Touchez votre bague à tout moment pour retrouver vos moments scellés.",
+    "home.vault.cta": "Touchez la bague pour ouvrir votre Haven",
+    "home.vault.open": "Ouvrir l'historique Haven",
+    "home.seal.hint":
+      "Préparez le scellement, puis touchez votre bague pour confirmer.",
     "home.state.encrypting": "Chiffrement...",
     "home.state.awaiting.title": "Touchez votre bague pour sceller",
     "home.state.awaiting.body":
@@ -109,6 +117,11 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.prepare": "Preparar sello",
     "home.claim.hint": "¿Aún no está vinculado?",
     "home.claim.cta": "Toca tu anillo para vincularlo",
+    "home.vault.hint":
+      "Toca tu anillo en cualquier momento para volver a tus momentos sellados.",
+    "home.vault.cta": "Toca el anillo para abrir tu Haven",
+    "home.vault.open": "Abrir historial de Haven",
+    "home.seal.hint": "Prepara el sellado y luego toca tu anillo para confirmar.",
     "home.state.encrypting": "Cifrando...",
     "home.state.awaiting.title": "Toca tu anillo para sellar",
     "home.state.awaiting.body":
@@ -154,6 +167,12 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.prepare": "Versiegeln vorbereiten",
     "home.claim.hint": "Noch nicht verknüpft?",
     "home.claim.cta": "Berühre deinen Ring zum Verknüpfen",
+    "home.vault.hint":
+      "Berühre deinen Ring jederzeit, um deine versiegelten Momente wiederzusehen.",
+    "home.vault.cta": "Ring berühren, um dein Haven zu öffnen",
+    "home.vault.open": "Haven-Verlauf öffnen",
+    "home.seal.hint":
+      "Versiegelung vorbereiten und dann deinen Ring zur Bestätigung berühren.",
     "home.state.encrypting": "Verschlüsselung...",
     "home.state.awaiting.title": "Berühre deinen Ring zum Versiegeln",
     "home.state.awaiting.body":
@@ -199,6 +218,12 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.prepare": "Prepara sigillo",
     "home.claim.hint": "Non ancora collegato?",
     "home.claim.cta": "Tocca l'anello per associarlo",
+    "home.vault.hint":
+      "Tocca l'anello in qualsiasi momento per ritrovare i tuoi momenti sigillati.",
+    "home.vault.cta": "Tocca l'anello per aprire il tuo Haven",
+    "home.vault.open": "Apri cronologia Haven",
+    "home.seal.hint":
+      "Prepara il sigillo, poi tocca l'anello per confermare.",
     "home.state.encrypting": "Cifratura...",
     "home.state.awaiting.title": "Tocca l'anello per sigillare",
     "home.state.awaiting.body":
