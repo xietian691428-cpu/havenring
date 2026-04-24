@@ -52,7 +52,10 @@ export function ClaimClient({ locale, reason }: ClaimClientProps) {
       // users can still claim a prewritten ring without manual auth UI.
       const anon = await supabase.auth.signInAnonymously();
       if (anon.error) {
-        setStatus({ kind: "error", message: t("claim.error.auth_required") });
+        setStatus({
+          kind: "error",
+          message: `${t("claim.error.auth_required")} (${anon.error.message})`,
+        });
         return;
       }
       const refreshed = await supabase.auth.getSession();
