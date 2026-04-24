@@ -199,16 +199,16 @@ export function HubRouter() {
           transition={{ duration: 0.6 }}
           className="flex flex-col items-center gap-6 text-center"
         >
-          <p className="text-xs tracking-[0.3em] uppercase text-white/60">
+          <p className="text-sm tracking-[0.28em] uppercase text-white/80">
             {t("hub.error.title")}
           </p>
-          <p className="max-w-xs text-sm leading-relaxed text-white/40">
+          <p className="max-w-sm text-base leading-relaxed text-white/85">
             {state.message}
           </p>
           <button
             type="button"
             onClick={() => router.replace("/")}
-            className="text-xs tracking-[0.3em] uppercase text-white/40 hover:text-white/70 transition-colors"
+            className="text-sm tracking-[0.24em] uppercase text-white/80 hover:text-white transition-colors"
           >
             {t("common.return")}
           </button>

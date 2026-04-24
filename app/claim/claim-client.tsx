@@ -125,22 +125,22 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
     <main className="flex flex-1 w-full items-center justify-center px-6 py-16 bg-black text-white">
       <section className="w-full max-w-lg flex flex-col gap-10">
         <header className="flex flex-col gap-3">
-          <p className="text-xs tracking-[0.3em] uppercase text-white/40">
+          <p className="text-sm tracking-[0.24em] uppercase text-white/75">
             {t("claim.subtitle")}
           </p>
-          <h1 className="text-xl font-light leading-relaxed text-white/80">
+          <h1 className="text-2xl font-light leading-relaxed text-white/90">
             {t("claim.title")}
           </h1>
         </header>
 
         <div className="flex flex-col gap-6 border border-white/10 bg-white/[0.02] p-6">
-          <p className="text-sm leading-relaxed text-white/70">{t(reasonKey)}</p>
-          <p className="text-xs leading-relaxed text-white/40">{t("claim.next")}</p>
+          <p className="text-base leading-relaxed text-white/88">{t(reasonKey)}</p>
+          <p className="text-sm leading-relaxed text-white/70">{t("claim.next")}</p>
           {status.kind === "error" && (
-            <p className="text-xs leading-relaxed text-red-300">{status.message}</p>
+            <p className="text-sm leading-relaxed text-red-300">{status.message}</p>
           )}
           {status.kind === "success" && (
-            <p className="text-xs leading-relaxed text-emerald-300">
+            <p className="text-sm leading-relaxed text-emerald-300">
               {status.message}
             </p>
           )}
@@ -149,7 +149,7 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
         <div className="flex items-center justify-end gap-8">
           <Link
             href="/"
-            className="text-xs tracking-[0.3em] uppercase text-white/40 hover:text-white/70 transition-colors"
+            className="text-sm tracking-[0.24em] uppercase text-white/75 hover:text-white transition-colors"
           >
             {t("common.return")}
           </Link>
@@ -157,7 +157,7 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
             type="button"
             onClick={handleClaim}
             disabled={status.kind === "loading"}
-            className="text-xs tracking-[0.3em] uppercase text-white/80 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
+            className="text-sm tracking-[0.24em] uppercase text-white/90 hover:text-white disabled:text-white/40 disabled:cursor-not-allowed transition-colors"
           >
             {status.kind === "loading"
               ? t("claim.cta.claiming")

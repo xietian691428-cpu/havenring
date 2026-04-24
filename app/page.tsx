@@ -182,7 +182,7 @@ export default function HomePage() {
 
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-white/30">
+                <span className="text-sm text-white/75">
                   {activeRingId
                     ? t("home.ring.linked")
                     : t("home.ring.unlinked")}
@@ -190,7 +190,7 @@ export default function HomePage() {
                 {!activeRingId && (
                   <Link
                     href={`/claim?reason=ring_inactive&lang=${locale}`}
-                    className="text-[10px] tracking-[0.2em] uppercase text-white/40 hover:text-white/70 transition-colors"
+                    className="text-xs tracking-[0.18em] uppercase text-white/75 hover:text-white transition-colors"
                   >
                     {t("home.claim.hint")} {t("home.claim.cta")}
                   </Link>
@@ -264,16 +264,16 @@ export default function HomePage() {
             transition={{ duration: 0.4 }}
             className="flex flex-col items-center gap-6 text-center"
           >
-            <p className="text-xs tracking-[0.3em] uppercase text-white/50">
+            <p className="text-sm tracking-[0.28em] uppercase text-white/80">
               {t("home.error.title")}
             </p>
-            <p className="max-w-xs text-sm leading-relaxed text-white/40">
+            <p className="max-w-sm text-base leading-relaxed text-white/85">
               {errorMessage}
             </p>
             <button
               type="button"
               onClick={() => setLocalUi({ kind: "composing" })}
-              className="text-xs tracking-[0.3em] uppercase text-white/60 hover:text-white transition-colors"
+              className="text-sm tracking-[0.24em] uppercase text-white/80 hover:text-white transition-colors"
             >
               {t("common.back")}
             </button>
