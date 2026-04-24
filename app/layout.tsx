@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RegisterServiceWorker } from "./register-sw";
 import { ContrastToggle } from "./contrast-toggle";
+import { LanguageSwitcher } from "./language-switcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,6 +56,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-black text-white selection:bg-white selection:text-black high-contrast">
         <RegisterServiceWorker />
+        <LanguageSwitcher />
         <ContrastToggle />
         {children}
       </body>

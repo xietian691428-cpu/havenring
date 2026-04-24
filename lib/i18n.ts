@@ -1,7 +1,7 @@
 export const SUPPORTED_LOCALES = ["en", "fr", "es", "de", "it"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
-const DEFAULT_LOCALE: Locale = "en";
+export const DEFAULT_LOCALE: Locale = "en";
 const LOCALE_STORAGE_KEY = "haven.locale";
 
 type Dictionary = Record<string, string>;
@@ -264,4 +264,9 @@ export function getPreferredLocale(
 
 export function getTranslator(locale: Locale) {
   return (key: string) => MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+}
+
+export function setPreferredLocale(locale: Locale) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }
