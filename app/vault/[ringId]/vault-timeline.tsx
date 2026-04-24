@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  hasValidVaultAccess,
   hydrateHavenStore,
   useHavenStore,
-  type VaultAccess,
 } from "@/lib/store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { decrypt, destroyKey } from "@/lib/crypto";
@@ -40,7 +38,6 @@ export function VaultTimeline({ ringId }: Props) {
   const [wipeOpen, setWipeOpen] = useState(false);
 
   const vaultAccess = useHavenStore((s) => s.vaultAccess);
-  const revokeVaultAccess = useHavenStore((s) => s.revokeVaultAccess);
   const reset = useHavenStore((s) => s.reset);
 
   useEffect(() => {
@@ -48,14 +45,14 @@ export function VaultTimeline({ ringId }: Props) {
   }, []);
 
   const loadVault = useCallback(
-    async (access: VaultAccess) => {
+    async () => {
       setLoad({ kind: "loading" });
       try {
         const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase
           .from("moments")
           .select("id, ring_id, encrypted_vault, iv, is_sealed, created_at, sealed_at")
-          .eq("ring_id", access.ringId)
+          .eq("ring_id", ringId)
           .eq("is_sealed", true)
           .order("created_at", { ascending: false });
 
@@ -96,55 +93,66 @@ export function VaultTimeline({ ringId }: Props) {
         });
       }
     },
-    []
+    [ringId]
   );
 
   useEffect(() => {
     if (load.kind !== "idle") return;
 
     const decide = async () => {
-      // Wait a microtask so we're outside the synchronous effect body —
-      // this also gives Zustand persist a chance to finish rehydration.
-      await Promise.resolve();
-      const access = useHavenStore.getState().vaultAccess;
-      if (!hasValidVaultAccess(access, ringId)) {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) {
         setLoad({
           kind: "denied",
-          reason: "Tap your ring to unlock this vault.",
+          reason: "Please sign in to view your Haven history.",
         });
         return;
       }
-      await loadVault(access);
+      await loadVault();
     };
 
     void decide();
   }, [load.kind, ringId, loadVault]);
 
-  // Auto-revoke when access expires while viewing.
+  // Security hard lock: if user backgrounds/leaves while viewing vault,
+  // immediately sign out and clear local state. Re-entry requires login.
   useEffect(() => {
     if (load.kind !== "ready") return;
-    if (!vaultAccess) return;
+    const supabase = getSupabaseBrowserClient();
 
-    const ms = vaultAccess.expiresAt - Date.now();
-    if (ms <= 0) {
-      revokeVaultAccess();
-      router.replace("/");
-      return;
-    }
-    const t = window.setTimeout(() => {
-      revokeVaultAccess();
-      router.replace("/");
-    }, ms);
-    return () => window.clearTimeout(t);
-  }, [load.kind, vaultAccess, revokeVaultAccess, router]);
+    const lockSession = async () => {
+      await supabase.auth.signOut().catch(() => {});
+      reset();
+      router.replace("/claim?reason=unknown");
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        void lockSession();
+      }
+    };
+
+    const onPageHide = () => {
+      void lockSession();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [load.kind, reset, router]);
 
   const handleLeave = useCallback(() => {
-    revokeVaultAccess();
     router.replace("/");
-  }, [revokeVaultAccess, router]);
+  }, [router]);
 
   const handleWipeConfirmed = useCallback(async () => {
-    if (!vaultAccess) throw new Error("Vault access expired.");
+    if (!vaultAccess?.token) {
+      throw new Error("Tap your ring once to authorize wiping.");
+    }
     const supabase = getSupabaseBrowserClient();
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;

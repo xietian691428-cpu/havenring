@@ -210,17 +210,28 @@ export default function HomePage() {
                     <p className="text-xs tracking-[0.18em] uppercase text-white/85">
                       {t("home.vault.cta")}
                     </p>
+                    <Link
+                      href={`/vault/${activeRingId}`}
+                      className="text-xs tracking-[0.18em] uppercase text-white/90 hover:text-white transition-colors"
+                    >
+                      {t("home.vault.open")}
+                    </Link>
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={handlePrepareSeal}
-                disabled={!hasTyped || !activeRingId}
-                className="text-xs tracking-[0.3em] uppercase text-white/80 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
-              >
-                {t("home.cta.prepare")}
-              </button>
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrepareSeal}
+                  disabled={!hasTyped || !activeRingId}
+                  className="text-xs tracking-[0.3em] uppercase text-white/80 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
+                >
+                  {t("home.cta.prepare")}
+                </button>
+                <p className="max-w-[13rem] text-right text-[11px] leading-relaxed text-white/65">
+                  {t("home.seal.hint")}
+                </p>
+              </div>
             </div>
           </motion.section>
         )}
