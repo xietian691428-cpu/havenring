@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,6 +36,7 @@ export function VaultTimeline({ ringId }: Props) {
   const router = useRouter();
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [wipeOpen, setWipeOpen] = useState(false);
+  const lockedRef = useRef(false);
 
   const vaultAccess = useHavenStore((s) => s.vaultAccess);
   const reset = useHavenStore((s) => s.reset);
@@ -122,6 +123,8 @@ export function VaultTimeline({ ringId }: Props) {
     const supabase = getSupabaseBrowserClient();
 
     const lockSession = async () => {
+      if (lockedRef.current) return;
+      lockedRef.current = true;
       await supabase.auth.signOut().catch(() => {});
       reset();
       router.replace("/claim?reason=unknown");
@@ -142,6 +145,7 @@ export function VaultTimeline({ ringId }: Props) {
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
+      lockedRef.current = false;
     };
   }, [load.kind, reset, router]);
 
