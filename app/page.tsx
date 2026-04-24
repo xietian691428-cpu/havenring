@@ -203,9 +203,14 @@ export default function HomePage() {
                   </Link>
                 )}
                 {activeRingId && (
-                  <p className="text-xs tracking-[0.08em] text-white/70">
-                    {t("home.vault.hint")}
-                  </p>
+                  <>
+                    <p className="text-xs tracking-[0.08em] text-white/70">
+                      {t("home.vault.hint")}
+                    </p>
+                    <p className="text-xs tracking-[0.18em] uppercase text-white/85">
+                      {t("home.vault.cta")}
+                    </p>
+                  </>
                 )}
               </div>
               <button
