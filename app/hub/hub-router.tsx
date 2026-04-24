@@ -77,30 +77,12 @@ export function HubRouter() {
       // Scenario A: there's something waiting to be sealed on this device.
       if (effectivePending) {
         try {
-          const sealAttempts: Array<Record<string, string>> = [
-            // Canonical v2 shape
-            { p_moment_id: effectivePending.momentId, p_token: token },
-            // Alternate naming seen in some SQL revisions
-            { moment_id: effectivePending.momentId, input_token: token },
-            // Legacy ring-id based shapes
-            { p_ring_id: effectivePending.ringId, p_token: token },
-            { ring_id: effectivePending.ringId, input_token: token },
-          ];
-
-          let sealResult: { error: { message: string } | null } = {
-            error: { message: "Unknown seal failure." },
-          };
-          for (const args of sealAttempts) {
-            const attempt = await supabase.rpc("seal_moment" as never, args as never);
-            if (!attempt.error) {
-              sealResult = { error: null };
-              break;
-            }
-            sealResult = { error: { message: attempt.error.message } };
-          }
-
-          if (sealResult.error) {
-            setState({ kind: "error", message: sealResult.error.message });
+          const { error } = await supabase.rpc("seal_moment" as never, {
+            p_moment_id: effectivePending.momentId,
+            p_token: token,
+          } as never);
+          if (error) {
+            setState({ kind: "error", message: error.message });
             return;
           }
 
@@ -120,15 +102,9 @@ export function HubRouter() {
 
       // Scenario B: nothing pending — user wants to revisit sealed moments.
       try {
-        let resolve = await supabase.rpc("resolve_ring_by_token" as never, {
+        const { data, error } = await supabase.rpc("resolve_ring_by_token" as never, {
           p_token: token,
         } as never);
-        if (resolve.error) {
-          resolve = await supabase.rpc("resolve_ring_by_token" as never, {
-            input_token: token,
-          } as never);
-        }
-        const { data, error } = resolve;
 
         if (error || !data) {
           // Auto-claim fallback: if ring is prewritten but unclaimed and user is
