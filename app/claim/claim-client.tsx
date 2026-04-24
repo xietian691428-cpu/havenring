@@ -45,7 +45,13 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
   }, [reason]);
 
   async function handleClaim() {
-    if (!token) {
+    const tokenFromUrl =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("token")
+        : null;
+    const effectiveToken = token ?? initialToken ?? tokenFromUrl ?? null;
+
+    if (!effectiveToken) {
       setStatus({ kind: "error", message: t("claim.error.missing_token") });
       return;
     }
@@ -86,7 +92,7 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token: effectiveToken }),
       });
 
       if (!response.ok) {
