@@ -77,19 +77,26 @@ export function HubRouter() {
       // Scenario A: there's something waiting to be sealed on this device.
       if (effectivePending) {
         try {
-          // Preferred path for multi-tab iOS Safari behavior:
-          // seal an explicit pending moment id.
-          let sealResult = await supabase.rpc("seal_moment" as never, {
-            p_moment_id: effectivePending.momentId,
-            p_token: token,
-          } as never);
+          const sealAttempts: Array<Record<string, string>> = [
+            // Canonical v2 shape
+            { p_moment_id: effectivePending.momentId, p_token: token },
+            // Alternate naming seen in some SQL revisions
+            { moment_id: effectivePending.momentId, input_token: token },
+            // Legacy ring-id based shapes
+            { p_ring_id: effectivePending.ringId, p_token: token },
+            { ring_id: effectivePending.ringId, input_token: token },
+          ];
 
-          // Backward-compatible fallback for older DB signatures.
-          if (sealResult.error) {
-            sealResult = await supabase.rpc("seal_moment" as never, {
-              p_ring_id: effectivePending.ringId,
-              p_token: token,
-            } as never);
+          let sealResult: { error: { message: string } | null } = {
+            error: { message: "Unknown seal failure." },
+          };
+          for (const args of sealAttempts) {
+            const attempt = await supabase.rpc("seal_moment" as never, args as never);
+            if (!attempt.error) {
+              sealResult = { error: null };
+              break;
+            }
+            sealResult = { error: { message: attempt.error.message } };
           }
 
           if (sealResult.error) {
@@ -113,9 +120,15 @@ export function HubRouter() {
 
       // Scenario B: nothing pending — user wants to revisit sealed moments.
       try {
-        const { data, error } = await supabase.rpc("resolve_ring_by_token", {
+        let resolve = await supabase.rpc("resolve_ring_by_token" as never, {
           p_token: token,
-        });
+        } as never);
+        if (resolve.error) {
+          resolve = await supabase.rpc("resolve_ring_by_token" as never, {
+            input_token: token,
+          } as never);
+        }
+        const { data, error } = resolve;
 
         if (error || !data) {
           // Auto-claim fallback: if ring is prewritten but unclaimed and user is
@@ -199,13 +212,15 @@ export function HubRouter() {
   return (
     <main className="fixed inset-0 z-50 flex items-center justify-center bg-black text-white px-8">
       {state.kind === "deciding" && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0.3, 1, 0.3] }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-          className="h-px w-16 bg-white/60"
+        <motion.p
+          initial={{ opacity: 0.25 }}
+          animate={{ opacity: [0.25, 1, 0.25] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          className="text-sm tracking-[0.24em] uppercase text-white/70"
           aria-label="Working"
-        />
+        >
+          Authenticating
+        </motion.p>
       )}
 
       {state.kind === "error" && (
