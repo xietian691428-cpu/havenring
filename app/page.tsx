@@ -14,17 +14,18 @@ import { hydrateHavenStore, useHavenStore } from "@/lib/store";
 import { readPendingMomentSnapshot } from "@/lib/pending-moment";
 
 type LocalUi =
+  | { kind: "landing" }
   | { kind: "composing" }
   | { kind: "preparing" }
   | { kind: "error"; message: string };
 
-type UiKind = "composing" | "preparing" | "awaiting_tap" | "error";
+type UiKind = "landing" | "composing" | "preparing" | "awaiting_tap" | "error";
 
 export default function HomePage() {
   const locale = getPreferredLocale();
   const t = getTranslator(locale);
   const [text, setText] = useState("");
-  const [localUi, setLocalUi] = useState<LocalUi>({ kind: "composing" });
+  const [localUi, setLocalUi] = useState<LocalUi>({ kind: "landing" });
   const [activeRingId, setActiveRingId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -129,7 +130,7 @@ export default function HomePage() {
         stagedAt: data.created_at ? Date.parse(data.created_at) : 0,
       });
       // Store update drives us into the awaiting screen.
-      setLocalUi({ kind: "composing" });
+      setLocalUi({ kind: "landing" });
     } catch (err) {
       setLocalUi({
         kind: "error",
@@ -140,13 +141,76 @@ export default function HomePage() {
 
   function handleCancelWaiting() {
     clearPending();
-    setLocalUi({ kind: "composing" });
+    setLocalUi({ kind: "landing" });
     setTimeout(() => textareaRef.current?.focus(), 50);
   }
 
   return (
     <main className="flex flex-1 w-full items-center justify-center px-6 py-16">
       <AnimatePresence mode="wait">
+        {uiKind === "landing" && (
+          <motion.section
+            key="landing"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="w-full max-w-lg flex flex-col gap-10"
+          >
+            <header className="flex flex-col gap-3">
+              <p className="text-xs tracking-[0.3em] uppercase text-white/40">
+                Haven
+              </p>
+              <h1 className="text-xl font-light leading-relaxed text-white/80">
+                {t("home.title.line1")}
+                <br />
+                {t("home.title.line2")}
+              </h1>
+            </header>
+
+            <div className="flex flex-col gap-5 border border-white/10 bg-white/[0.02] p-6">
+              <span className="text-sm text-white/75">
+                {activeRingId ? t("home.ring.linked") : t("home.ring.unlinked")}
+              </span>
+              {activeRingId ? (
+                <>
+                  <p className="text-xs tracking-[0.08em] text-white/70">
+                    {t("home.vault.hint")}
+                  </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <Link
+                      href={`/vault/${activeRingId}`}
+                      className="text-xs tracking-[0.18em] uppercase text-white/90 hover:text-white transition-colors"
+                    >
+                      {t("home.vault.open")}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setLocalUi({ kind: "composing" })}
+                      className="text-xs tracking-[0.24em] uppercase text-white/80 hover:text-white transition-colors"
+                    >
+                      {t("home.cta.write_new")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <Link
+                  href={`/claim?reason=ring_inactive&lang=${locale}`}
+                  className="text-xs tracking-[0.18em] uppercase text-white/75 hover:text-white transition-colors"
+                >
+                  {t("home.claim.hint")} {t("home.claim.cta")}
+                </Link>
+              )}
+              <Link
+                href={`/help?lang=${locale}`}
+                className="text-xs tracking-[0.18em] uppercase text-white/70 hover:text-white transition-colors"
+              >
+                {t("common.help")}
+              </Link>
+            </div>
+          </motion.section>
+        )}
+
         {uiKind === "composing" && (
           <motion.section
             key="composing"
@@ -189,6 +253,13 @@ export default function HomePage() {
 
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLocalUi({ kind: "landing" })}
+                  className="w-fit text-xs tracking-[0.18em] uppercase text-white/60 hover:text-white transition-colors"
+                >
+                  {t("common.back")}
+                </button>
                 <span className="text-sm text-white/75">
                   {activeRingId
                     ? t("home.ring.linked")

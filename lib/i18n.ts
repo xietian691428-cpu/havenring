@@ -19,6 +19,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.ring.linked": "Ring linked",
     "home.ring.unlinked": "No ring linked",
     "home.cta.prepare": "Prepare to seal",
+    "home.cta.write_new": "Write new",
     "home.claim.hint": "Not linked yet?",
     "home.claim.cta": "Tap your ring to claim",
     "home.vault.hint": "Tap your ring anytime to revisit your sealed moments.",
@@ -85,6 +86,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.ring.linked": "Bague liée",
     "home.ring.unlinked": "Aucune bague liée",
     "home.cta.prepare": "Préparer le scellement",
+    "home.cta.write_new": "Écrire",
     "home.claim.hint": "Pas encore liée ?",
     "home.claim.cta": "Touchez votre bague pour la lier",
     "home.vault.hint":
@@ -136,6 +138,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.ring.linked": "Anillo vinculado",
     "home.ring.unlinked": "Sin anillo vinculado",
     "home.cta.prepare": "Preparar sello",
+    "home.cta.write_new": "Escribir",
     "home.claim.hint": "¿Aún no está vinculado?",
     "home.claim.cta": "Toca tu anillo para vincularlo",
     "home.vault.hint":
@@ -186,6 +189,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.ring.linked": "Ring verbunden",
     "home.ring.unlinked": "Kein Ring verbunden",
     "home.cta.prepare": "Versiegeln vorbereiten",
+    "home.cta.write_new": "Neu schreiben",
     "home.claim.hint": "Noch nicht verknüpft?",
     "home.claim.cta": "Berühre deinen Ring zum Verknüpfen",
     "home.vault.hint":
@@ -237,6 +241,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.ring.linked": "Anello collegato",
     "home.ring.unlinked": "Nessun anello collegato",
     "home.cta.prepare": "Prepara sigillo",
+    "home.cta.write_new": "Scrivi",
     "home.claim.hint": "Non ancora collegato?",
     "home.claim.cta": "Tocca l'anello per associarlo",
     "home.vault.hint":
