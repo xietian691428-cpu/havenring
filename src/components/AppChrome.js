@@ -73,13 +73,14 @@ export function AppChrome({
 const styles = {
   wrapper: {
     minHeight: "100vh",
+    paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)",
     background: "radial-gradient(circle at top, #281d18 0%, #120f0e 58%)",
     color: "#f8efe7",
     fontFamily: "Inter, system-ui, sans-serif",
   },
   header: {
     position: "sticky",
-    top: 0,
+    top: "calc(env(safe-area-inset-top, 0px) + 4px)",
     zIndex: 10,
     display: "flex",
     justifyContent: "space-between",
