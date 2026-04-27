@@ -49,6 +49,8 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.cta.claim": "Claim ring",
     "claim.cta.claiming": "Claiming...",
     "claim.error.auth_required": "Please sign in before claiming this ring.",
+    "claim.error.auth_upgrade_required":
+      "This ring can only be claimed by a permanent account. Please sign in with your account and try again.",
     "claim.error.missing_token": "Missing ring token.",
     "claim.error.generic": "Could not claim this ring right now.",
     "claim.error.owned_by_another":

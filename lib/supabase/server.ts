@@ -75,6 +75,12 @@ export async function requireAuthenticatedUser(req: NextRequest): Promise<User> 
   return data.user;
 }
 
+export function isAnonymousUser(user: User): boolean {
+  const provider = user.app_metadata?.provider;
+  const anonymousFlag = (user as User & { is_anonymous?: boolean }).is_anonymous;
+  return provider === "anonymous" || anonymousFlag === true;
+}
+
 export function requireBearerToken(req: NextRequest): string {
   const token = getBearerToken(req);
   if (!token) {

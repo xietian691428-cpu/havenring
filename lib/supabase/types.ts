@@ -15,6 +15,7 @@ export type RingRow = {
   owner_id: string | null;
   status: RingStatus;
   token_hash: string;
+  pinned_moment_id: string | null;
   created_at: string;
   claimed_at: string | null;
 };
@@ -91,6 +92,7 @@ export type Database = {
           owner_id?: string | null;
           status?: RingStatus;
           token_hash: string;
+          pinned_moment_id?: string | null;
           created_at?: string;
           claimed_at?: string | null;
         };
@@ -101,6 +103,13 @@ export type Database = {
             columns: ["haven_id"];
             isOneToOne: false;
             referencedRelation: "havens";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rings_pinned_moment_id_fkey";
+            columns: ["pinned_moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
             referencedColumns: ["id"];
           },
         ];

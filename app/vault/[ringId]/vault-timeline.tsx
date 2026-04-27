@@ -21,7 +21,7 @@ interface Props {
 type LoadState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ready"; moments: DecryptedMoment[] }
+  | { kind: "ready"; moments: DecryptedMoment[]; pinnedMomentId: string | null }
   | { kind: "denied"; reason: string }
   | { kind: "error"; message: string }
   | { kind: "wiped" };
@@ -36,6 +36,7 @@ export function VaultTimeline({ ringId }: Props) {
   const router = useRouter();
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [wipeOpen, setWipeOpen] = useState(false);
+  const [pinBusyMomentId, setPinBusyMomentId] = useState<string | null>(null);
   const lockedRef = useRef(false);
 
   const vaultAccess = useHavenStore((s) => s.vaultAccess);
@@ -63,6 +64,15 @@ export function VaultTimeline({ ringId }: Props) {
         }
 
         const rows = (data ?? []) as MomentRow[];
+        const { data: ringData, error: ringError } = await supabase
+          .from("rings")
+          .select("pinned_moment_id")
+          .eq("id", ringId)
+          .maybeSingle();
+        if (ringError) {
+          setLoad({ kind: "error", message: ringError.message });
+          return;
+        }
         const decrypted = await Promise.all(
           rows.map(async (row) => {
             try {
@@ -86,7 +96,11 @@ export function VaultTimeline({ ringId }: Props) {
           })
         );
 
-        setLoad({ kind: "ready", moments: decrypted });
+        setLoad({
+          kind: "ready",
+          moments: decrypted,
+          pinnedMomentId: ringData?.pinned_moment_id ?? null,
+        });
       } catch (err) {
         setLoad({
           kind: "error",
@@ -188,6 +202,67 @@ export function VaultTimeline({ ringId }: Props) {
     setLoad({ kind: "wiped" });
   }, [ringId, vaultAccess, reset]);
 
+  const handlePinToggle = useCallback(
+    async (momentId: string) => {
+      if (load.kind !== "ready") return;
+      const supabase = getSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setLoad({
+          kind: "denied",
+          reason: "Please sign in to view your Haven history.",
+        });
+        return;
+      }
+
+      const nextPinnedId = load.pinnedMomentId === momentId ? null : momentId;
+      setPinBusyMomentId(momentId);
+      try {
+        const response = await fetch(`/api/rings/${ringId}/pin`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ momentId: nextPinnedId }),
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string; pinnedMomentId?: string | null }
+          | null;
+        if (!response.ok) {
+          throw new Error(payload?.error ?? "Could not update pinned moment.");
+        }
+        setLoad((prev) =>
+          prev.kind === "ready"
+            ? {
+                ...prev,
+                pinnedMomentId: payload?.pinnedMomentId ?? nextPinnedId,
+              }
+            : prev
+        );
+      } catch (err) {
+        setLoad({
+          kind: "error",
+          message: err instanceof Error ? err.message : "Unknown error.",
+        });
+      } finally {
+        setPinBusyMomentId(null);
+      }
+    },
+    [load, ringId]
+  );
+
+  const orderedMoments = useMemo(() => {
+    if (load.kind !== "ready") return [];
+    return [...load.moments].sort((a, b) => {
+      const aPinned = a.id === load.pinnedMomentId ? 1 : 0;
+      const bPinned = b.id === load.pinnedMomentId ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+  }, [load]);
+
   return (
     <main className="flex flex-1 w-full justify-center px-6 py-12 bg-black text-white">
       <div className="w-full max-w-xl flex flex-col gap-16">
@@ -288,8 +363,14 @@ export function VaultTimeline({ ringId }: Props) {
                 </p>
               ) : (
                 <ol className="flex flex-col gap-16 pt-4">
-                  {load.moments.map((m) => (
-                    <MomentItem key={m.id} moment={m} />
+                  {orderedMoments.map((m) => (
+                    <MomentItem
+                      key={m.id}
+                      moment={m}
+                      pinned={m.id === load.pinnedMomentId}
+                      pinBusy={pinBusyMomentId === m.id}
+                      onTogglePin={handlePinToggle}
+                    />
                   ))}
                 </ol>
               )}
@@ -336,7 +417,17 @@ function Header({ count, onLeave }: { count: number; onLeave: () => void }) {
   );
 }
 
-function MomentItem({ moment }: { moment: DecryptedMoment }) {
+function MomentItem({
+  moment,
+  pinned,
+  pinBusy,
+  onTogglePin,
+}: {
+  moment: DecryptedMoment;
+  pinned: boolean;
+  pinBusy: boolean;
+  onTogglePin: (momentId: string) => void;
+}) {
   const date = new Date(moment.createdAt);
   const pretty = date.toLocaleDateString(undefined, {
     year: "numeric",
@@ -356,6 +447,20 @@ function MomentItem({ moment }: { moment: DecryptedMoment }) {
           <span className="text-white/20">[unreadable on this device]</span>
         )}
       </p>
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => onTogglePin(moment.id)}
+          disabled={pinBusy}
+          className="text-[11px] tracking-[0.24em] uppercase text-white/45 hover:text-white/75 disabled:text-white/25 transition-colors"
+        >
+          {pinBusy
+            ? "Saving..."
+            : pinned
+              ? "Unpin from top"
+              : "Pin to top"}
+        </button>
+      </div>
       <div aria-hidden className="h-px w-8 bg-white/10" />
     </li>
   );

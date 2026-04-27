@@ -34,6 +34,7 @@ create table if not exists public.rings (
   status      varchar not null default 'unclaimed'
               check (status in ('unclaimed', 'active', 'revoked')),
   token_hash  text not null,
+  pinned_moment_id uuid,
   created_at  timestamptz not null default now(),
   claimed_at  timestamptz
 );
@@ -84,6 +85,21 @@ create table if not exists public.ring_events (
   metadata      jsonb,
   created_at    timestamptz not null default now()
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'rings_pinned_moment_id_fkey'
+  ) then
+    alter table public.rings
+      add constraint rings_pinned_moment_id_fkey
+      foreign key (pinned_moment_id)
+      references public.moments (id)
+      on delete set null;
+  end if;
+end $$;
 ```
 
 ## 3) Compatibility migration (single-user -> group)
@@ -131,6 +147,7 @@ where m.ring_id = r.id
 ```sql
 create index if not exists rings_owner_idx on public.rings (owner_id);
 create index if not exists rings_haven_idx on public.rings (haven_id);
+create index if not exists rings_pinned_moment_idx on public.rings (pinned_moment_id);
 create index if not exists moments_haven_pending_idx on public.moments (haven_id) where is_sealed = false;
 create index if not exists ring_invites_haven_expires_idx on public.ring_invites (haven_id, expires_at desc);
 create index if not exists ring_events_ring_created_idx on public.ring_events (ring_id, created_at desc);
