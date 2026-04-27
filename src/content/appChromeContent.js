@@ -1,0 +1,50 @@
+const EN = {
+  brand: "Haven Ring",
+  breadcrumbAria: "Breadcrumb",
+  home: "Home",
+  timeline: "Timeline",
+  settings: "Settings",
+  help: "Help",
+  new: "New",
+  detail: "Detail",
+};
+
+export const APP_CHROME_CONTENT = {
+  en: EN,
+  fr: {
+    ...EN,
+    home: "Accueil",
+    timeline: "Timeline",
+    settings: "Reglages",
+    help: "Aide",
+    new: "Nouveau",
+    detail: "Detail",
+  },
+  es: {
+    ...EN,
+    home: "Inicio",
+    timeline: "Timeline",
+    settings: "Configuracion",
+    help: "Ayuda",
+    new: "Nuevo",
+    detail: "Detalle",
+  },
+  de: {
+    ...EN,
+    home: "Start",
+    timeline: "Timeline",
+    settings: "Einstellungen",
+    help: "Hilfe",
+    new: "Neu",
+    detail: "Detail",
+  },
+  it: {
+    ...EN,
+    home: "Home",
+    timeline: "Timeline",
+    settings: "Impostazioni",
+    help: "Aiuto",
+    new: "Nuovo",
+    detail: "Dettaglio",
+  },
+};
