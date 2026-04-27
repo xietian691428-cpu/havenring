@@ -50,9 +50,16 @@ function normalizeClaimToken(input: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuthenticatedUser(req);
+    const authHeader = req.headers.get("authorization");
+    const hasBearer =
+      typeof authHeader === "string" &&
+      authHeader.toLowerCase().startsWith("bearer ");
+    const user = hasBearer ? await requireAuthenticatedUser(req) : null;
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "unknown";
     const limit = await hitRateLimitWithRedisFallback(
-      `claim:${user.id}`,
+      user ? `claim:${user.id}` : `claim-ip:${ip}`,
       20,
       60_000
     );
@@ -82,13 +89,19 @@ export async function POST(req: NextRequest) {
     const admin = getSupabaseAdminClient();
 
     // First-time claim path.
+    const claimPatch = user
+      ? {
+          owner_id: user.id,
+          status: "active" as const,
+          claimed_at: new Date().toISOString(),
+        }
+      : {
+          status: "active" as const,
+          claimed_at: new Date().toISOString(),
+        };
     const { data: claimedRows, error: claimError } = await admin
       .from("rings")
-      .update({
-        owner_id: user.id,
-        status: "active",
-        claimed_at: new Date().toISOString(),
-      })
+      .update(claimPatch)
       .eq("token_hash", tokenHash)
       .in("status", ["unclaimed", "active"])
       .is("owner_id", null)
@@ -103,9 +116,13 @@ export async function POST(req: NextRequest) {
       try {
         await admin.from("ring_events").insert({
           ring_id: claimedRows[0].id,
-          actor_user_id: user.id,
+          actor_user_id: user?.id ?? null,
           action: "claim",
-          metadata: { source: "api", alreadyClaimed: false },
+          metadata: {
+            source: "api",
+            alreadyClaimed: false,
+            claimMode: user ? "user" : "ring_only",
+          },
         });
       } catch {}
 
@@ -120,13 +137,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Idempotent path: ring already belongs to this user.
-    const { data: existingRows, error: existingError } = await admin
+    const existingQuery = admin
       .from("rings")
       .select("id")
       .eq("token_hash", tokenHash)
       .eq("status", "active")
-      .eq("owner_id", user.id)
       .limit(1);
+    const { data: existingRows, error: existingError } = user
+      ? await existingQuery.eq("owner_id", user.id)
+      : await existingQuery.is("owner_id", null);
 
     if (existingError) {
       return NextResponse.json(
@@ -139,9 +158,13 @@ export async function POST(req: NextRequest) {
       try {
         await admin.from("ring_events").insert({
           ring_id: existingRows[0].id,
-          actor_user_id: user.id,
+          actor_user_id: user?.id ?? null,
           action: "claim",
-          metadata: { source: "api", alreadyClaimed: true },
+          metadata: {
+            source: "api",
+            alreadyClaimed: true,
+            claimMode: user ? "user" : "ring_only",
+          },
         });
       } catch {}
 
@@ -189,7 +212,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (ring.owner_id && ring.owner_id !== user.id) {
+    if (ring.owner_id && (!user || ring.owner_id !== user.id)) {
       return NextResponse.json(
         {
           error: "This ring is already linked to another account.",
@@ -199,7 +222,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (ring.owner_id === user.id) {
+    if (user && ring.owner_id === user.id) {
       return NextResponse.json(
         {
           ringId: ring.id,
@@ -218,9 +241,6 @@ export async function POST(req: NextRequest) {
       { status: 409 }
     );
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHENTICATED") {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
     return NextResponse.json({ error: "Unexpected error." }, { status: 500 });
   }
 }

@@ -78,40 +78,20 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
 
     const supabase = getSupabaseBrowserClient();
     const { data } = await supabase.auth.getSession();
-    let accessToken = data.session?.access_token ?? null;
-    if (!accessToken) {
-      // No mandatory account system for now: create anonymous session so
-      // ring possession remains the primary "key".
-      const anon = await supabase.auth.signInAnonymously();
-      if (anon.error) {
-        setStatus({
-          kind: "error",
-          message: `${t("claim.error.auth_required")} (${anon.error.message})`,
-        });
-        return;
-      }
-      accessToken = anon.data.session?.access_token ?? null;
-      if (!accessToken) {
-        const refreshed = await supabase.auth.getSession();
-        accessToken = refreshed.data.session?.access_token ?? null;
-      }
-      if (!accessToken) {
-        setStatus({
-          kind: "error",
-          message: `${t("claim.error.auth_required")} (anonymous session missing access token)`,
-        });
-        return;
-      }
-    }
+    const accessToken = data.session?.access_token ?? null;
 
     setStatus({ kind: "loading" });
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch("/api/rings/claim", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers,
         body: JSON.stringify({ token: effectiveToken }),
       });
 
