@@ -44,6 +44,7 @@ export function NewMemoryPage({
   const mediaStreamRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const photoInputRef = useRef(null);
 
   const voicePreviewUrl = useMemo(
     () => (voiceBlob ? URL.createObjectURL(voiceBlob) : ""),
@@ -227,12 +228,27 @@ export function NewMemoryPage({
 
         <label style={styles.label}>
           {t.photosLabel}
+          <div style={styles.filePickerRow}>
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              style={styles.filePickerButton}
+            >
+              {t.choosePhotos}
+            </button>
+            <span style={styles.filePickerStatus}>
+              {photos.length
+                ? `${photos.length}${t.photosSelectedSuffix}`
+                : t.noPhotosSelected}
+            </span>
+          </div>
           <input
+            ref={photoInputRef}
             type="file"
             accept="image/*"
             multiple
             onChange={handlePhotosSelected}
-            style={styles.fileInput}
+            style={styles.hiddenFileInput}
           />
           <small style={styles.hint}>{t.photosHint}</small>
         </label>
@@ -450,12 +466,26 @@ const styles = {
     padding: "10px 12px",
     resize: "vertical",
   },
-  fileInput: {
+  hiddenFileInput: {
+    display: "none",
+  },
+  filePickerRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  filePickerButton: {
     border: "1px dashed #5a3b30",
     borderRadius: 10,
     background: "#1f1816",
     color: "#f8efe7",
-    padding: 10,
+    padding: "8px 12px",
+    cursor: "pointer",
+  },
+  filePickerStatus: {
+    color: "#d9c3b3",
+    fontSize: 13,
   },
   hint: {
     margin: 0,

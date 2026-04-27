@@ -7,6 +7,9 @@ const EN = {
   storyLabel: "Story",
   storyPlaceholder: "Write what this memory means to you...",
   photosLabel: "Photos",
+  choosePhotos: "Choose photos",
+  noPhotosSelected: "No photos selected",
+  photosSelectedSuffix: " selected",
   photosHint: "Multiple photos supported. Auto-compressed on device.",
   voiceTitlePrefix: "Voice note (max ",
   voiceTitleSuffix: "s)",
@@ -41,8 +44,8 @@ const EN = {
 
 export const NEW_MEMORY_PAGE_CONTENT = {
   en: EN,
-  fr: { ...EN, brand: "Nouveau souvenir", title: "Capturez ce moment", back: "Retour", titleLabel: "Titre", storyLabel: "Histoire", photosLabel: "Photos", save: "Enregistrer dans Haven" },
-  es: { ...EN, brand: "Nuevo recuerdo", title: "Captura este momento", back: "Volver", titleLabel: "Titulo", storyLabel: "Historia", photosLabel: "Fotos", save: "Guardar en Haven" },
-  de: { ...EN, brand: "Neue Erinnerung", title: "Halte diesen Moment fest", back: "Zuruck", titleLabel: "Titel", storyLabel: "Geschichte", photosLabel: "Fotos", save: "In Haven speichern" },
-  it: { ...EN, brand: "Nuovo ricordo", title: "Cattura questo momento", back: "Indietro", titleLabel: "Titolo", storyLabel: "Storia", photosLabel: "Foto", save: "Salva in Haven" },
+  fr: { ...EN, brand: "Nouveau souvenir", title: "Capturez ce moment", back: "Retour", titleLabel: "Titre", storyLabel: "Histoire", photosLabel: "Photos", choosePhotos: "Choisir des photos", noPhotosSelected: "Aucune photo selectionnee", photosSelectedSuffix: " selectionnees", save: "Enregistrer dans Haven" },
+  es: { ...EN, brand: "Nuevo recuerdo", title: "Captura este momento", back: "Volver", titleLabel: "Titulo", storyLabel: "Historia", photosLabel: "Fotos", choosePhotos: "Elegir fotos", noPhotosSelected: "Ninguna foto seleccionada", photosSelectedSuffix: " seleccionadas", save: "Guardar en Haven" },
+  de: { ...EN, brand: "Neue Erinnerung", title: "Halte diesen Moment fest", back: "Zuruck", titleLabel: "Titel", storyLabel: "Geschichte", photosLabel: "Fotos", choosePhotos: "Fotos auswahlen", noPhotosSelected: "Keine Fotos ausgewahlt", photosSelectedSuffix: " ausgewahlt", save: "In Haven speichern" },
+  it: { ...EN, brand: "Nuovo ricordo", title: "Cattura questo momento", back: "Indietro", titleLabel: "Titolo", storyLabel: "Storia", photosLabel: "Foto", choosePhotos: "Scegli foto", noPhotosSelected: "Nessuna foto selezionata", photosSelectedSuffix: " selezionate", save: "Salva in Haven" },
 };
