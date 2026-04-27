@@ -202,6 +202,12 @@ export default function HomePage() {
                     {t("home.claim.hint")} {t("home.claim.cta")}
                   </Link>
                 )}
+                <Link
+                  href={`/help?lang=${locale}`}
+                  className="text-xs tracking-[0.18em] uppercase text-white/70 hover:text-white transition-colors"
+                >
+                  {t("common.help")}
+                </Link>
                 {activeRingId && (
                   <>
                     <p className="text-xs tracking-[0.08em] text-white/70">

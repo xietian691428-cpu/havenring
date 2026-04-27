@@ -13,6 +13,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "common.leave": "Leave",
     "common.discard": "Discard",
     "common.continue": "Continue",
+    "common.help": "Help",
     "home.title.line1": "Write one thing.",
     "home.title.line2": "Touch your ring to seal it.",
     "home.ring.linked": "Ring linked",
@@ -62,6 +63,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.state_unsupported":
       "This ring is currently unavailable for claim. Please try again later or contact support.",
     "claim.success": "Ring claimed. Returning to home...",
+    "help.title": "Recovery and account policy",
+    "help.local_only.title": "Local-first by default",
+    "help.local_only.body":
+      "All configuration is stored on this device for speed and privacy.",
+    "help.recovery.title": "Self-recovery with your ring",
+    "help.recovery.body":
+      "Lost local configuration? Hold your ring near your phone and use wipe/reissue to reset and write a fresh URL.",
+    "help.optional_cloud.title": "Future optional cloud backup",
+    "help.optional_cloud.body":
+      "A future update may add optional Sign in with Apple / Google for cross-device backup, without forcing accounts for everyone.",
   },
   fr: {
     "common.return": "Retour",
