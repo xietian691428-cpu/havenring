@@ -25,6 +25,8 @@ type Status =
   | { kind: "success"; message: string }
   | { kind: "error"; message: string };
 
+type ClaimErrorPayload = { error?: string; code?: string } | null;
+
 export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) {
   const t = getTranslator(locale);
   const router = useRouter();
@@ -32,6 +34,23 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
   const setClaimToken = useHavenStore((s) => s.setClaimToken);
   const setLinkedRingId = useHavenStore((s) => s.setLinkedRingId);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+
+  function resolveClaimErrorMessage(payload: ClaimErrorPayload): string {
+    const code = payload?.code;
+    if (code === "RING_OWNED_BY_ANOTHER") {
+      return t("claim.error.owned_by_another");
+    }
+    if (code === "RING_REVOKED") {
+      return t("claim.error.revoked");
+    }
+    if (code === "TOKEN_NOT_FOUND") {
+      return t("claim.error.token_not_found");
+    }
+    if (code === "RING_CLAIM_STATE_UNSUPPORTED") {
+      return t("claim.error.state_unsupported");
+    }
+    return payload?.error ?? t("claim.error.generic");
+  }
 
   useEffect(() => {
     if (!initialToken) return;
@@ -98,11 +117,11 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         setStatus({
           kind: "error",
-          message: payload?.error ?? t("claim.error.generic"),
+          message: resolveClaimErrorMessage(payload),
         });
         return;
       }

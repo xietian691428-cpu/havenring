@@ -51,6 +51,14 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.auth_required": "Please sign in before claiming this ring.",
     "claim.error.missing_token": "Missing ring token.",
     "claim.error.generic": "Could not claim this ring right now.",
+    "claim.error.owned_by_another":
+      "This ring is already linked to another account. Please use a different ring or contact support.",
+    "claim.error.revoked":
+      "This ring has been revoked and cannot be claimed. Please use a replacement ring.",
+    "claim.error.token_not_found":
+      "This ring token is invalid or expired. Try tapping again or ask support to reprovision this ring.",
+    "claim.error.state_unsupported":
+      "This ring is currently unavailable for claim. Please try again later or contact support.",
     "claim.success": "Ring claimed. Returning to home...",
   },
   fr: {
