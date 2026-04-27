@@ -111,8 +111,7 @@ export function HubRouter() {
           // authenticated, claim silently and continue.
           const { data: sessionData } = await supabase.auth.getSession();
           const accessToken = sessionData.session?.access_token;
-          const isAnonymousSession = sessionData.session?.user?.is_anonymous === true;
-          if (accessToken && !isAnonymousSession) {
+          if (accessToken) {
             const claimRes = await fetch("/api/rings/claim", {
               method: "POST",
               headers: {

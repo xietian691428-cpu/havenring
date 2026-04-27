@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { hitRateLimitWithRedisFallback } from "@/lib/rate-limit";
 import {
   getSupabaseAdminClient,
-  isAnonymousUser,
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
 
@@ -52,15 +51,6 @@ function normalizeClaimToken(input: unknown): string {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuthenticatedUser(req);
-    if (isAnonymousUser(user)) {
-      return NextResponse.json(
-        {
-          error: "Please sign in with a permanent account before claiming this ring.",
-          code: "AUTH_UPGRADE_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
     const limit = await hitRateLimitWithRedisFallback(
       `claim:${user.id}`,
       20,

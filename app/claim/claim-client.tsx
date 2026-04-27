@@ -37,9 +37,6 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
 
   function resolveClaimErrorMessage(payload: ClaimErrorPayload): string {
     const code = payload?.code;
-    if (code === "AUTH_UPGRADE_REQUIRED") {
-      return t("claim.error.auth_upgrade_required");
-    }
     if (code === "RING_OWNED_BY_ANOTHER") {
       return t("claim.error.owned_by_another");
     }
@@ -82,17 +79,29 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
     const supabase = getSupabaseBrowserClient();
     const { data } = await supabase.auth.getSession();
     let accessToken = data.session?.access_token ?? null;
-    const isAnonymous = data.session?.user?.is_anonymous === true;
     if (!accessToken) {
-      setStatus({ kind: "error", message: t("claim.error.auth_required") });
-      return;
-    }
-    if (isAnonymous) {
-      setStatus({
-        kind: "error",
-        message: t("claim.error.auth_upgrade_required"),
-      });
-      return;
+      // No mandatory account system for now: create anonymous session so
+      // ring possession remains the primary "key".
+      const anon = await supabase.auth.signInAnonymously();
+      if (anon.error) {
+        setStatus({
+          kind: "error",
+          message: `${t("claim.error.auth_required")} (${anon.error.message})`,
+        });
+        return;
+      }
+      accessToken = anon.data.session?.access_token ?? null;
+      if (!accessToken) {
+        const refreshed = await supabase.auth.getSession();
+        accessToken = refreshed.data.session?.access_token ?? null;
+      }
+      if (!accessToken) {
+        setStatus({
+          kind: "error",
+          message: `${t("claim.error.auth_required")} (anonymous session missing access token)`,
+        });
+        return;
+      }
     }
 
     setStatus({ kind: "loading" });
