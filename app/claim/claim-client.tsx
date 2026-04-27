@@ -153,8 +153,12 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
         </header>
 
         <div className="flex flex-col gap-6 border border-white/10 bg-white/[0.02] p-6">
-          <p className="text-base leading-relaxed text-white/88">{t(reasonKey)}</p>
-          <p className="text-sm leading-relaxed text-white/70">{t("claim.next")}</p>
+          {status.kind !== "error" && (
+            <>
+              <p className="text-base leading-relaxed text-white/88">{t(reasonKey)}</p>
+              <p className="text-sm leading-relaxed text-white/70">{t("claim.next")}</p>
+            </>
+          )}
           {status.kind === "error" && (
             <p className="text-sm leading-relaxed text-red-300">{status.message}</p>
           )}
