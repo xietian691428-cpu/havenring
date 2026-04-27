@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppChrome } from "./components/AppChrome";
-import { HomePage } from "./pages/HomePage";
-import { TimelinePage } from "./pages/TimelinePage";
-import { NewMemoryPage } from "./pages/NewMemoryPage";
-import { MemoryDetailPage } from "./pages/MemoryDetailPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { HelpCenterPage } from "./pages/HelpCenterPage";
+import { HomePage } from "./views/HomePage";
+import { TimelinePage } from "./views/TimelinePage";
+import { NewMemoryPage } from "./views/NewMemoryPage";
+import { MemoryDetailPage } from "./views/MemoryDetailPage";
+import { SettingsPage } from "./views/SettingsPage";
+import { HelpCenterPage } from "./views/HelpCenterPage";
 import { useMemories } from "./hooks/useMemories";
 import { usePwaLocale } from "./i18n/pwaLocale";
 

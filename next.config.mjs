@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // This repo uses App Router under /app and a UI folder under /src/pages.
+  // Restrict page extensions so /src/pages/*.js is treated as plain components.
+  pageExtensions: ["ts", "tsx"],
 
   async headers() {
     return [
