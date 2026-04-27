@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppChrome } from "./components/AppChrome";
 import { HomePage } from "./pages/HomePage";
