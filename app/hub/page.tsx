@@ -1,7 +1,7 @@
-import HavenPwaApp from "@/src/App";
+import { HubRouter } from "./hub-router";
 
 export const dynamic = "force-dynamic";
 
 export default function HubEntryPage() {
-  return <HavenPwaApp />;
+  return <HubRouter />;
 }

@@ -1,6 +1,8 @@
 const EN = {
   brand: "New Memory",
   title: "Capture this moment",
+  sealGuidance:
+    "Do not tap your ring while editing. Tap only after pressing Seal with Ring Now.",
   back: "Back",
   titleLabel: "Title",
   titlePlaceholder: "A quiet title...",
@@ -56,6 +58,7 @@ const EN = {
   feedbackSavingLocal: "Saving draft locally...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
   feedbackReadyToSeal: "Ready to seal. Touch your ring now.",
+  feedbackDraftRestored: "Recovered your unsaved draft.",
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
   untitled: "Untitled memory",

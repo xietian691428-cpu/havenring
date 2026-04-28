@@ -8,6 +8,7 @@ import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
 
 const MAX_RECORD_SECONDS = 45;
 const MAX_PHOTOS = 6;
+const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
 
 /**
  * New Memory Page
@@ -55,6 +56,54 @@ export function NewMemoryPage({
     () => (voiceBlob ? URL.createObjectURL(voiceBlob) : ""),
     [voiceBlob]
   );
+
+  const hasDraftContent = Boolean(
+    title.trim() || story.trim() || photos.length > 0 || voiceBlob
+  );
+
+  function setFeedbackNotice(message) {
+    setFeedback("");
+    window.setTimeout(() => setFeedback(message), 0);
+  }
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft?.title) setTitle(String(draft.title));
+      if (draft?.story) setStory(String(draft.story));
+      if (Array.isArray(draft?.photos)) setPhotos(draft.photos);
+      if (draft?.title || draft?.story || (Array.isArray(draft?.photos) && draft.photos.length)) {
+        setFeedbackNotice(t.feedbackDraftRestored);
+      }
+    } catch {
+      // Ignore malformed draft snapshots.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasDraftContent) {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return;
+    }
+    const payload = JSON.stringify({
+      title,
+      story,
+      photos,
+    });
+    window.localStorage.setItem(DRAFT_STORAGE_KEY, payload);
+  }, [title, story, photos, hasDraftContent]);
+
+  useEffect(() => {
+    const onBeforeUnload = (event) => {
+      if (!hasDraftContent) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasDraftContent]);
 
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -155,7 +204,7 @@ export function NewMemoryPage({
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setMicPermission("denied");
-        setFeedback(t.feedbackMicPermissionDenied);
+        setFeedbackNotice(t.feedbackMicPermissionDenied);
         return;
       }
       if (error instanceof DOMException && error.name === "NotReadableError") {
@@ -224,7 +273,7 @@ export function NewMemoryPage({
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setMicPermission("denied");
-        setFeedback(t.feedbackMicPermissionDenied);
+        setFeedbackNotice(t.feedbackMicPermissionDenied);
         return;
       }
       setFeedback(t.feedbackMicUnavailable);
@@ -285,7 +334,7 @@ export function NewMemoryPage({
       );
       if (openSealPromptOnSuccess) {
         setSealPromptOpen(true);
-        setFeedback(t.feedbackReadyToSeal);
+        setFeedbackNotice(t.feedbackReadyToSeal);
       }
       triggerSuccessFeedback({
         soundEnabled,
@@ -311,6 +360,7 @@ export function NewMemoryPage({
     setPhotos([]);
     setVoiceBlob(null);
     setFeedback(t.feedbackReadyNext);
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
   }
 
   function handleViewTimeline() {
@@ -322,7 +372,7 @@ export function NewMemoryPage({
   function handleOpenSealPrompt() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(true);
-    setFeedback(t.feedbackReadyToSeal);
+    setFeedbackNotice(t.feedbackReadyToSeal);
   }
 
   async function handleSealNow() {
@@ -339,6 +389,7 @@ export function NewMemoryPage({
           </div>
           <OnlineStatusBadge locale={locale} />
         </header>
+        <p style={styles.sealGuidance}>{t.sealGuidance}</p>
 
         <button type="button" onClick={onBack} style={styles.backButton}>
           {t.back}
@@ -622,6 +673,16 @@ const styles = {
     margin: "8px 0 0",
     fontSize: 28,
     fontWeight: 500,
+  },
+  sealGuidance: {
+    margin: 0,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #5a3b30",
+    background: "#1a1412",
+    color: "#f0c29e",
+    fontSize: 12,
+    lineHeight: 1.6,
   },
   backButton: {
     justifySelf: "start",
