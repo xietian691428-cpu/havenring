@@ -14,12 +14,20 @@ export function HomePage({
   onCreateMemory,
   onOpenSettings,
   onOpenMemoryFromRing,
+  onQuickSignIn,
   loading = false,
+  quickSigningIn = false,
   message = "",
 }) {
   const t = HOME_PAGE_CONTENT[locale] || HOME_PAGE_CONTENT.en;
   const ringHandledRef = useRef(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [ringSignIn, setRingSignIn] = useState({
+    needed: false,
+    token: "",
+    reason: "",
+  });
+  const [platformSignInProvider, setPlatformSignInProvider] = useState("apple");
 
   useEffect(() => {
     if (ringHandledRef.current) return;
@@ -31,6 +39,40 @@ export function HomePage({
     ringHandledRef.current = true;
     onOpenMemoryFromRing?.(memoryId);
   }, [onOpenMemoryFromRing]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const ring = url.searchParams.get("ring");
+    if (ring !== "signin") return;
+    setRingSignIn({
+      needed: true,
+      token: url.searchParams.get("token") || "",
+      reason: url.searchParams.get("reason") || "",
+    });
+    url.searchParams.delete("ring");
+    url.searchParams.delete("token");
+    url.searchParams.delete("reason");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent.toLowerCase();
+    const isAndroid = ua.includes("android");
+    const isIOS =
+      /iphone|ipad|ipod/.test(ua) ||
+      (ua.includes("macintosh") && "ontouchend" in window);
+    if (isAndroid) {
+      setPlatformSignInProvider("google");
+      return;
+    }
+    if (isIOS) {
+      setPlatformSignInProvider("apple");
+      return;
+    }
+    setPlatformSignInProvider("apple");
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -67,6 +109,47 @@ export function HomePage({
             {t.howBody}
           </p>
         </section>
+        {ringSignIn.needed ? (
+          <section style={styles.ringSignInCard}>
+            <p style={styles.ringSignInTitle}>{t.ringSignInTitle}</p>
+            <p style={styles.howItWorksBody}>{t.ringSignInBody}</p>
+            {ringSignIn.reason === "permission_denied" ? (
+              <p style={styles.feedback}>{t.ringSignInPermissionHint}</p>
+            ) : null}
+            <button
+              type="button"
+              disabled={quickSigningIn}
+              onClick={() =>
+                onQuickSignIn?.(platformSignInProvider, ringSignIn.token)
+              }
+              style={styles.primaryButton}
+            >
+              {quickSigningIn
+                ? t.ringSignInPrimaryLoading
+                : platformSignInProvider === "google"
+                  ? t.ringSignInGoogle
+                  : t.ringSignInApple}
+            </button>
+            <div style={styles.altSignInRow}>
+              <button
+                type="button"
+                disabled={quickSigningIn}
+                onClick={() => onQuickSignIn?.("apple", ringSignIn.token)}
+                style={styles.tertiaryButton}
+              >
+                {t.ringSignInApple}
+              </button>
+              <button
+                type="button"
+                disabled={quickSigningIn}
+                onClick={() => onQuickSignIn?.("google", ringSignIn.token)}
+                style={styles.tertiaryButton}
+              >
+                {t.ringSignInGoogle}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
           <div style={styles.actions}>
           <button
@@ -185,6 +268,26 @@ const styles = {
     color: "#d9c3b3",
     lineHeight: 1.6,
     fontSize: 14,
+  },
+  ringSignInCard: {
+    border: "1px solid #d9a67a",
+    borderRadius: 14,
+    background: "#1b1512",
+    padding: 14,
+    display: "grid",
+    gap: 8,
+  },
+  ringSignInTitle: {
+    margin: 0,
+    fontSize: 13,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "#f0c29e",
+  },
+  altSignInRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
   },
   actions: {
     display: "grid",

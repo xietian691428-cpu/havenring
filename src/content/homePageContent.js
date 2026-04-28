@@ -6,6 +6,14 @@ const EN = {
   howTitle: "How it works",
   howBody:
     "Ring is your long-term key to open Haven. Saving a memory stores it locally in encrypted form, without rewriting the ring each time.",
+  ringSignInTitle: "Ring detected",
+  ringSignInBody:
+    "Continue with Apple to unlock Haven on this phone. After this, ring tap stays quick and seamless.",
+  ringSignInPermissionHint:
+    "NFC permission was unavailable on the last tap. You can still continue by signing in.",
+  ringSignInApple: "Continue with Apple",
+  ringSignInGoogle: "Continue with Google",
+  ringSignInPrimaryLoading: "Opening sign-in...",
   open: "Open My Haven",
   opening: "Opening...",
   create: "Create New Memory",

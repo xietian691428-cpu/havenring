@@ -6,6 +6,12 @@ import {
   getMemoryById,
 } from "../services/localStorageService";
 
+const SAVE_RETRY_LIMIT = 2;
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 export function useMemories() {
   const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,8 +36,32 @@ export function useMemories() {
       setSaving(true);
       setError(null);
       try {
-        const result = await createMemory(payload);
-        const created = await getMemoryById(result.id);
+        let result = null;
+        let created = null;
+        let lastError = null;
+
+        for (let attempt = 0; attempt < SAVE_RETRY_LIMIT; attempt += 1) {
+          try {
+            result = await createMemory(payload);
+            created = await getMemoryById(result.id);
+            if (!created) {
+              throw new Error("Saved memory could not be verified.");
+            }
+            break;
+          } catch (err) {
+            lastError = err;
+            if (attempt < SAVE_RETRY_LIMIT - 1) {
+              await delay(150 * (attempt + 1));
+            }
+          }
+        }
+
+        if (!result || !created) {
+          throw (lastError instanceof Error
+            ? lastError
+            : new Error("Failed to create memory."));
+        }
+
         if (created) {
           setMemories((prev) =>
             [created, ...prev].sort((a, b) => b.timelineAt - a.timelineAt)

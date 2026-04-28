@@ -43,19 +43,15 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
     if (code === "AUTH_UPGRADE_REQUIRED") {
       return t("claim.error.auth_upgrade_required");
     }
-    if (code === "RING_OWNED_BY_ANOTHER") {
-      return t("claim.error.owned_by_another");
+    if (
+      code === "RING_OWNED_BY_ANOTHER" ||
+      code === "RING_REVOKED" ||
+      code === "TOKEN_NOT_FOUND" ||
+      code === "RING_CLAIM_STATE_UNSUPPORTED"
+    ) {
+      return t("claim.error.generic");
     }
-    if (code === "RING_REVOKED") {
-      return t("claim.error.revoked");
-    }
-    if (code === "TOKEN_NOT_FOUND") {
-      return t("claim.error.token_not_found");
-    }
-    if (code === "RING_CLAIM_STATE_UNSUPPORTED") {
-      return t("claim.error.state_unsupported");
-    }
-    return payload?.error ?? t("claim.error.generic");
+    return t("claim.error.generic");
   }
 
   useEffect(() => {

@@ -42,8 +42,8 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "hub.error.generic": "Unknown error.",
     "hub.error.ring_inactive":
       "This ring is not active yet. Continue to claim.",
-    "claim.title": "Claim this ring",
-    "claim.subtitle": "Set up",
+    "claim.title": "Continue to Haven",
+    "claim.subtitle": "Quick access",
     "claim.reason.ring_inactive":
       "This ring has not been activated for your account yet.",
     "claim.reason.nfc_unavailable":
@@ -52,23 +52,23 @@ const MESSAGES: Record<Locale, Dictionary> = {
       "NFC permission is unavailable. Try another device.",
     "claim.reason.unknown": "We could not verify this ring yet.",
     "claim.next":
-      "Continue to claim after sign-in and ownership verification.",
-    "claim.cta.claim": "Claim ring",
-    "claim.cta.claiming": "Claiming...",
-    "claim.error.auth_required": "Please sign in before claiming this ring.",
+      "Continue with sign-in to unlock Haven on this phone.",
+    "claim.cta.claim": "Continue",
+    "claim.cta.claiming": "Continuing...",
+    "claim.error.auth_required": "Please sign in to continue.",
     "claim.error.auth_upgrade_required":
       "This ring can only be claimed by a permanent account. Please sign in with your account and try again.",
     "claim.error.missing_token": "Missing ring token.",
-    "claim.error.generic": "Could not claim this ring right now.",
+    "claim.error.generic": "Could not continue right now. Please try again.",
     "claim.error.owned_by_another":
-      "This ring is already linked to another account. Please use a different ring or contact support.",
+      "Could not continue with ring quick access on this phone. Please sign in and try again.",
     "claim.error.revoked":
-      "This ring has been revoked and cannot be claimed. Please use a replacement ring.",
+      "This ring cannot be used for quick access right now. Please sign in and continue.",
     "claim.error.token_not_found":
-      "This ring token is invalid or expired. Try tapping again or ask support to reprovision this ring.",
+      "Ring quick access was unavailable. Please sign in and continue.",
     "claim.error.state_unsupported":
-      "This ring is currently unavailable for claim. Please try again later or contact support.",
-    "claim.success": "Ring claimed. Returning to home...",
+      "Ring quick access is temporarily unavailable. Please continue with sign-in.",
+    "claim.success": "Done. Returning to home...",
     "help.title": "Recovery and account policy",
     "help.local_only.title": "Local-first by default",
     "help.local_only.body":

@@ -141,7 +141,7 @@ export function VaultTimeline({ ringId }: Props) {
       lockedRef.current = true;
       await supabase.auth.signOut().catch(() => {});
       reset();
-      router.replace("/claim?reason=unknown");
+      router.replace("/");
     };
 
     const onVisibility = () => {

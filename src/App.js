@@ -10,6 +10,7 @@ import { SettingsPage } from "./views/SettingsPage";
 import { HelpCenterPage } from "./views/HelpCenterPage";
 import { useMemories } from "./hooks/useMemories";
 import { usePwaLocale } from "./i18n/pwaLocale";
+import { getSupabaseBrowserClient } from "../lib/supabase/client";
 
 export default function App() {
   const [route, setRoute] = useState({ name: "home", memoryId: null });
@@ -26,6 +27,7 @@ export default function App() {
     refresh,
     createMemory,
   } = useMemories();
+  const [quickSigningIn, setQuickSigningIn] = useState(false);
 
   const selectedMemory = useMemo(
     () => memories.find((m) => m.id === route.memoryId) || null,
@@ -67,6 +69,22 @@ export default function App() {
   function navigateTo(nextRoute, direction = "forward") {
     setTransitionDirection(direction);
     setRoute(nextRoute);
+  }
+
+  async function handleQuickSignIn(provider, token) {
+    setQuickSigningIn(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const redirectTo = token
+        ? `${window.location.origin}/hub?token=${encodeURIComponent(token)}`
+        : `${window.location.origin}/`;
+      await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+    } finally {
+      setQuickSigningIn(false);
+    }
   }
 
   async function openMemoryFromRingParams(memoryId) {
@@ -245,6 +263,8 @@ export default function App() {
         locale={locale}
         loading={loading || saving}
         message={error || ""}
+        quickSigningIn={quickSigningIn}
+        onQuickSignIn={handleQuickSignIn}
         onOpenTimeline={async () => {
           await refresh();
           navigateTo({ name: "timeline", memoryId: null }, "forward");

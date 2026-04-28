@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { getPreferredLocale, getTranslator } from "@/lib/i18n";
@@ -27,6 +27,17 @@ export function HubRouter() {
   const t = getTranslator(locale);
   const nfcUnavailableParam = searchParams.get("nfc") === "unavailable";
   const permissionDeniedParam = searchParams.get("nfc") === "denied";
+  const fallbackToHome = useCallback(
+    (reason: string) => {
+      const next = new URL("/", window.location.origin);
+      next.searchParams.set("ring", "signin");
+      next.searchParams.set("reason", reason);
+      next.searchParams.set("lang", locale);
+      if (token) next.searchParams.set("token", token);
+      router.replace(`${next.pathname}${next.search}`);
+    },
+    [locale, router, token]
+  );
 
   const [state, setState] = useState<HubState>(() =>
     token
@@ -56,15 +67,15 @@ export function HubRouter() {
   useEffect(() => {
     if (nfcUnavailableParam) {
       setClaimToken(null);
-      router.replace(`/claim?reason=nfc_unavailable&lang=${locale}`);
+      fallbackToHome("nfc_unavailable");
       return;
     }
     if (permissionDeniedParam) {
       setClaimToken(null);
-      router.replace(`/claim?reason=permission_denied&lang=${locale}`);
+      fallbackToHome("permission_denied");
       return;
     }
-  }, [nfcUnavailableParam, permissionDeniedParam, router, locale, setClaimToken]);
+  }, [nfcUnavailableParam, permissionDeniedParam, setClaimToken, fallbackToHome]);
 
   useEffect(() => {
     if (!token) return;
@@ -134,13 +145,8 @@ export function HubRouter() {
               }
             }
           }
-
-          setClaimToken(token);
-          const claimUrl = new URL("/claim", window.location.origin);
-          claimUrl.searchParams.set("reason", "ring_inactive");
-          claimUrl.searchParams.set("lang", locale);
-          claimUrl.searchParams.set("token", token);
-          router.replace(`${claimUrl.pathname}${claimUrl.search}`);
+          setClaimToken(null);
+          fallbackToHome("ring_signin_required");
           return;
         }
 
@@ -149,11 +155,7 @@ export function HubRouter() {
         grantVaultAccess(ringId, token);
         router.replace(`/vault/${ringId}`);
       } catch (err) {
-        setState({
-          kind: "error",
-          message:
-            err instanceof Error ? err.message : t("hub.error.generic"),
-        });
+        fallbackToHome("ring_signin_required");
       }
     };
 
@@ -183,6 +185,7 @@ export function HubRouter() {
     setLinkedRingId,
     locale,
     t,
+    fallbackToHome,
   ]);
 
   return (
