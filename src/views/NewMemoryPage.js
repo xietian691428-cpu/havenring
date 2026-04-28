@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createMemory } from "../services/localStorageService";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
@@ -33,6 +33,8 @@ export function NewMemoryPage({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [micPermission, setMicPermission] = useState("unknown");
+  const [requestingMicPermission, setRequestingMicPermission] = useState(false);
   const { soundEnabled, hapticEnabled, soundScope, updateFeedbackPrefs } =
     useFeedbackPrefs();
   const [saveDialog, setSaveDialog] = useState({
@@ -51,6 +53,39 @@ export function NewMemoryPage({
     () => (voiceBlob ? URL.createObjectURL(voiceBlob) : ""),
     [voiceBlob]
   );
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicPermission("unavailable");
+      return;
+    }
+    if (!navigator.permissions?.query) {
+      setMicPermission("prompt");
+      return;
+    }
+
+    let mounted = true;
+    let permissionStatus = null;
+
+    navigator.permissions
+      .query({ name: "microphone" })
+      .then((result) => {
+        if (!mounted) return;
+        permissionStatus = result;
+        setMicPermission(result.state);
+        result.onchange = () => {
+          if (mounted) setMicPermission(result.state);
+        };
+      })
+      .catch(() => {
+        if (mounted) setMicPermission("prompt");
+      });
+
+    return () => {
+      mounted = false;
+      if (permissionStatus) permissionStatus.onchange = null;
+    };
+  }, []);
 
   async function handlePhotosSelected(event) {
     const files = Array.from(event.target.files || []);
@@ -94,6 +129,7 @@ export function NewMemoryPage({
     setFeedback("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicPermission("granted");
       const recorder = new MediaRecorder(stream);
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
@@ -123,7 +159,37 @@ export function NewMemoryPage({
         });
       }, 1000);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setMicPermission("denied");
+        setFeedback(t.feedbackMicPermissionDenied);
+        return;
+      }
       setFeedback(t.feedbackMicUnavailable);
+    }
+  }
+
+  async function requestMicrophonePermission() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setFeedback(t.feedbackMicUnavailable);
+      setMicPermission("unavailable");
+      return;
+    }
+
+    setRequestingMicPermission(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicPermission("granted");
+      setFeedback(t.feedbackMicPermissionGranted);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setMicPermission("denied");
+        setFeedback(t.feedbackMicPermissionDenied);
+        return;
+      }
+      setFeedback(t.feedbackMicUnavailable);
+    } finally {
+      setRequestingMicPermission(false);
     }
   }
 
@@ -287,6 +353,23 @@ export function NewMemoryPage({
             {MAX_RECORD_SECONDS}
             {t.voiceTitleSuffix}
           </p>
+          {micPermission !== "granted" ? (
+            <div style={styles.voicePermissionBox}>
+              <p style={styles.voicePermissionHint}>
+                {micPermission === "denied"
+                  ? t.micPermissionDeniedHint
+                  : t.micPermissionPromptHint}
+              </p>
+              <button
+                type="button"
+                onClick={requestMicrophonePermission}
+                disabled={requestingMicPermission}
+                style={styles.secondaryButton}
+              >
+                {requestingMicPermission ? t.requestingMicPermission : t.requestMicPermission}
+              </button>
+            </div>
+          ) : null}
           <div style={styles.voiceActions}>
             {!isRecording ? (
               <button type="button" onClick={startRecording} style={styles.secondaryButton}>
@@ -544,6 +627,17 @@ const styles = {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
+  },
+  voicePermissionBox: {
+    display: "grid",
+    gap: 8,
+    justifyItems: "start",
+  },
+  voicePermissionHint: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 12,
+    lineHeight: 1.5,
   },
   secondaryButton: {
     border: "1px solid #d9a67a",

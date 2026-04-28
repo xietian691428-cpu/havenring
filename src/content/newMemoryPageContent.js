@@ -15,6 +15,11 @@ const EN = {
   photosCountSuffix: ")",
   voiceTitlePrefix: "Voice note (max ",
   voiceTitleSuffix: "s)",
+  micPermissionPromptHint: "Microphone permission is required to record voice notes.",
+  micPermissionDeniedHint:
+    "Microphone access is blocked. Tap Enable Microphone, then allow access in your browser or app settings.",
+  requestMicPermission: "Enable Microphone",
+  requestingMicPermission: "Requesting permission...",
   record: "Record Voice",
   stopPrefix: "Stop (",
   stopSuffix: "s)",
@@ -33,6 +38,9 @@ const EN = {
   feedbackMaxPhotosSuffix: " photos allowed.",
   feedbackPhotoError: "Could not process photos. Please try again.",
   feedbackVoiceCaptured: "Voice note captured.",
+  feedbackMicPermissionGranted: "Microphone access enabled.",
+  feedbackMicPermissionDenied:
+    "Microphone permission denied. Please enable microphone access in browser/app settings.",
   feedbackMicUnavailable: "Microphone unavailable. Please check permissions.",
   feedbackNeedContent: "Add some memory content before saving.",
   feedbackSavingLocal: "Saving locally...",
