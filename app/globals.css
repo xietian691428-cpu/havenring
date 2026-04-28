@@ -34,24 +34,92 @@ body.high-contrast [class*="border-white/"] {
   border-color: rgba(255, 255, 255, 0.78) !important;
 }
 
-/* Make OFF state visibly softer for a clearer toggle effect. */
+/* Apply high-contrast mapping to inline-styled app pages as well. */
+body.high-contrast [style*="radial-gradient(circle at top"] {
+  background: radial-gradient(circle at top, #1c1f26 0%, #000000 64%) !important;
+}
+
+body.high-contrast [style*="background: #171210"],
+body.high-contrast [style*="background:#171210"],
+body.high-contrast [style*="background: #1f1816"],
+body.high-contrast [style*="background:#1f1816"],
+body.high-contrast [style*="background: #1b1512"],
+body.high-contrast [style*="background:#1b1512"],
+body.high-contrast [style*="background: #1a1412"],
+body.high-contrast [style*="background:#1a1412"] {
+  background: #07080a !important;
+}
+
+body.high-contrast [style*="#f8efe7"],
+body.high-contrast [style*="#f2d8c5"],
+body.high-contrast [style*="#f3c6a5"],
+body.high-contrast [style*="#f0c29e"],
+body.high-contrast [style*="#d9c3b3"],
+body.high-contrast [style*="#e4ccbc"] {
+  color: #ffffff !important;
+}
+
+body.high-contrast [style*="#3a2d28"],
+body.high-contrast [style*="#5a3b30"],
+body.high-contrast [style*="#6b4a39"],
+body.high-contrast [style*="#7d3f34"] {
+  border-color: #ffffff !important;
+}
+
+/* Make OFF state visibly softer across the whole page. */
 body:not(.high-contrast) {
-  --background: #0d0d10;
-  --foreground: #d8d8d8;
+  --background: #14161b;
+  --foreground: #d0d5df;
 }
 
 body:not(.high-contrast) [class*="text-white/"] {
-  color: rgba(235, 235, 235, 0.7) !important;
+  color: rgba(216, 222, 232, 0.68) !important;
 }
 
 body:not(.high-contrast) [class*="placeholder:text-white/"]::placeholder {
-  color: rgba(210, 210, 210, 0.45) !important;
+  color: rgba(185, 194, 208, 0.46) !important;
 }
 
 body:not(.high-contrast) [class*="border-white/"] {
-  border-color: rgba(200, 200, 200, 0.3) !important;
+  border-color: rgba(146, 157, 176, 0.35) !important;
 }
 
 body:not(.high-contrast) [class*="bg-black/"] {
-  background-color: rgba(24, 24, 28, 0.68) !important;
+  background-color: rgba(45, 50, 60, 0.72) !important;
+}
+
+body:not(.high-contrast) [style*="radial-gradient(circle at top"] {
+  background: radial-gradient(circle at top, #323846 0%, #1a1d25 68%) !important;
+}
+
+body:not(.high-contrast) [style*="background: #171210"],
+body:not(.high-contrast) [style*="background:#171210"],
+body:not(.high-contrast) [style*="background: #1f1816"],
+body:not(.high-contrast) [style*="background:#1f1816"],
+body:not(.high-contrast) [style*="background: #1b1512"],
+body:not(.high-contrast) [style*="background:#1b1512"],
+body:not(.high-contrast) [style*="background: #1a1412"],
+body:not(.high-contrast) [style*="background:#1a1412"] {
+  background: #2f3441 !important;
+}
+
+body:not(.high-contrast) [style*="#f8efe7"],
+body:not(.high-contrast) [style*="#f2d8c5"],
+body:not(.high-contrast) [style*="#f3c6a5"],
+body:not(.high-contrast) [style*="#f0c29e"],
+body:not(.high-contrast) [style*="#d9c3b3"],
+body:not(.high-contrast) [style*="#e4ccbc"] {
+  color: #c7cfdd !important;
+}
+
+body:not(.high-contrast) [style*="#3a2d28"],
+body:not(.high-contrast) [style*="#5a3b30"],
+body:not(.high-contrast) [style*="#6b4a39"],
+body:not(.high-contrast) [style*="#7d3f34"] {
+  border-color: #5f6980 !important;
+}
+
+body:not(.high-contrast) [style*="linear-gradient(180deg, #e6b48d, #d9a67a)"] {
+  background: linear-gradient(180deg, #b8c3d7, #9eabc4) !important;
+  color: #132034 !important;
 }

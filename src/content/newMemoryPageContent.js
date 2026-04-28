@@ -18,6 +18,12 @@ const EN = {
   micPermissionPromptHint: "Microphone permission is required to record voice notes.",
   micPermissionDeniedHint:
     "Microphone access is blocked. Tap Enable Microphone, then allow access in your browser or app settings.",
+  micUnavailableNoGetUserMedia:
+    "This browser does not support microphone capture (getUserMedia). Try Safari or Chrome on a newer OS.",
+  micUnavailableNoMediaRecorder:
+    "This browser can open microphone but cannot record audio (MediaRecorder unavailable). Please update browser/OS or switch browser.",
+  micUnavailableInsecureContext:
+    "Microphone recording requires HTTPS (or localhost). Open Haven from a secure URL.",
   requestMicPermission: "Enable Microphone",
   requestingMicPermission: "Requesting permission...",
   record: "Record Voice",
@@ -25,12 +31,12 @@ const EN = {
   stopSuffix: "s)",
   removeVoice: "Remove Voice",
   saving: "Saving...",
-  save: "Save to Haven",
+  save: "Save Draft",
   haptic: "Haptic feedback",
   sound: "Success sound",
   soundSaveOnly: "Sound only on save success",
   privacyHint:
-    "Ring is your key to open Haven. Save to Haven stores memories locally only, with no ring rewrite.",
+    "Saving creates a local draft only. Final seal requires touching your ring.",
   feedbackCompressing: "Compressing photos...",
   feedbackAddedPhotosPrefix: "Added ",
   feedbackAddedPhotosSuffix: " photo(s).",
@@ -41,10 +47,13 @@ const EN = {
   feedbackMicPermissionGranted: "Microphone access enabled.",
   feedbackMicPermissionDenied:
     "Microphone permission denied. Please enable microphone access in browser/app settings.",
+  feedbackMicNeedPermissionFirst: "Please tap Enable Microphone first.",
+  feedbackMicBusy:
+    "Microphone is currently busy or blocked by another app/tab. Close other recording apps and try again.",
   feedbackMicUnavailable: "Microphone unavailable. Please check permissions.",
   feedbackNeedContent: "Add some memory content before saving.",
-  feedbackSavingLocal: "Saving locally...",
-  feedbackSaved: "Saved to Haven locally.",
+  feedbackSavingLocal: "Saving draft locally...",
+  feedbackSaved: "Draft saved. Touch your ring to seal.",
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
   untitled: "Untitled memory",

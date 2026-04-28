@@ -35,6 +35,7 @@ export function NewMemoryPage({
   const [feedback, setFeedback] = useState("");
   const [micPermission, setMicPermission] = useState("unknown");
   const [requestingMicPermission, setRequestingMicPermission] = useState(false);
+  const [micUnsupportedReason, setMicUnsupportedReason] = useState("");
   const { soundEnabled, hapticEnabled, soundScope, updateFeedbackPrefs } =
     useFeedbackPrefs();
   const [saveDialog, setSaveDialog] = useState({
@@ -57,6 +58,17 @@ export function NewMemoryPage({
   useEffect(() => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setMicPermission("unavailable");
+      setMicUnsupportedReason(t.micUnavailableNoGetUserMedia);
+      return;
+    }
+    if (!window.isSecureContext) {
+      setMicPermission("unavailable");
+      setMicUnsupportedReason(t.micUnavailableInsecureContext);
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      setMicPermission("unavailable");
+      setMicUnsupportedReason(t.micUnavailableNoMediaRecorder);
       return;
     }
     if (!navigator.permissions?.query) {
@@ -127,6 +139,14 @@ export function NewMemoryPage({
 
   async function startRecording() {
     setFeedback("");
+    if (micPermission !== "granted") {
+      setFeedback(t.feedbackMicNeedPermissionFirst);
+      return;
+    }
+    if (micUnsupportedReason) {
+      setFeedback(micUnsupportedReason);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicPermission("granted");
@@ -164,6 +184,10 @@ export function NewMemoryPage({
         setFeedback(t.feedbackMicPermissionDenied);
         return;
       }
+      if (error instanceof DOMException && error.name === "NotReadableError") {
+        setFeedback(t.feedbackMicBusy);
+        return;
+      }
       setFeedback(t.feedbackMicUnavailable);
     }
   }
@@ -171,6 +195,11 @@ export function NewMemoryPage({
   async function requestMicrophonePermission() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setFeedback(t.feedbackMicUnavailable);
+      setMicPermission("unavailable");
+      return;
+    }
+    if (micUnsupportedReason) {
+      setFeedback(micUnsupportedReason);
       setMicPermission("unavailable");
       return;
     }
@@ -360,10 +389,13 @@ export function NewMemoryPage({
                   ? t.micPermissionDeniedHint
                   : t.micPermissionPromptHint}
               </p>
+              {micPermission === "unavailable" && micUnsupportedReason ? (
+                <p style={styles.voicePermissionHint}>{micUnsupportedReason}</p>
+              ) : null}
               <button
                 type="button"
                 onClick={requestMicrophonePermission}
-                disabled={requestingMicPermission}
+                disabled={requestingMicPermission || micPermission === "unavailable"}
                 style={styles.secondaryButton}
               >
                 {requestingMicPermission ? t.requestingMicPermission : t.requestMicPermission}
@@ -372,7 +404,12 @@ export function NewMemoryPage({
           ) : null}
           <div style={styles.voiceActions}>
             {!isRecording ? (
-              <button type="button" onClick={startRecording} style={styles.secondaryButton}>
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={micPermission !== "granted"}
+                style={styles.secondaryButton}
+              >
                 {t.record}
               </button>
             ) : (

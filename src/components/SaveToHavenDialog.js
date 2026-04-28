@@ -51,7 +51,7 @@ export function SaveToHavenDialog({
         {status === "success" ? (
           <div style={styles.actions}>
             <button type="button" onClick={onViewTimeline} style={styles.primaryButton}>
-              {t.viewTimeline}
+              {t.touchRingToSeal}
             </button>
             <button type="button" onClick={onCreateAnother} style={styles.secondaryButton}>
               {t.createAnother}
