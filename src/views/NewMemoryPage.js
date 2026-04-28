@@ -7,6 +7,7 @@ import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
 
 const MAX_RECORD_SECONDS = 45;
+const MAX_PHOTOS = 6;
 
 /**
  * New Memory Page
@@ -54,11 +55,19 @@ export function NewMemoryPage({
   async function handlePhotosSelected(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
+    const remainingSlots = Math.max(0, MAX_PHOTOS - photos.length);
+    if (remainingSlots === 0) {
+      setFeedback(`${t.feedbackMaxPhotosPrefix}${MAX_PHOTOS}${t.feedbackMaxPhotosSuffix}`);
+      event.target.value = "";
+      return;
+    }
+
+    const allowedFiles = files.slice(0, remainingSlots);
     setFeedback(t.feedbackCompressing);
 
     try {
       const compressed = await Promise.all(
-        files.map((file) => compressImage(file, 1600, 0.78, t))
+        allowedFiles.map((file) => compressImage(file, 1600, 0.78, t))
       );
       const newPhotos = await Promise.all(
         compressed.map(async (blob, index) => ({
@@ -68,8 +77,11 @@ export function NewMemoryPage({
         }))
       );
       setPhotos((prev) => [...prev, ...newPhotos]);
+      const overLimit = files.length > allowedFiles.length;
       setFeedback(
-        `${t.feedbackAddedPhotosPrefix}${newPhotos.length}${t.feedbackAddedPhotosSuffix}`
+        overLimit
+          ? `${t.feedbackAddedPhotosPrefix}${newPhotos.length}${t.feedbackAddedPhotosSuffix} ${t.feedbackMaxPhotosPrefix}${MAX_PHOTOS}${t.feedbackMaxPhotosSuffix}`
+          : `${t.feedbackAddedPhotosPrefix}${newPhotos.length}${t.feedbackAddedPhotosSuffix}`
       );
     } catch (error) {
       setFeedback(t.feedbackPhotoError);
@@ -237,9 +249,12 @@ export function NewMemoryPage({
               {t.choosePhotos}
             </button>
             <span style={styles.filePickerStatus}>
-              {photos.length
-                ? `${photos.length}${t.photosSelectedSuffix}`
-                : t.noPhotosSelected}
+              {photos.length ? `${photos.length}${t.photosSelectedSuffix}` : t.noPhotosSelected}
+              <span style={styles.filePickerMeta}>
+                {t.photosCountPrefix}
+                {photos.length}/{MAX_PHOTOS}
+                {t.photosCountSuffix}
+              </span>
             </span>
           </div>
           <input
@@ -486,6 +501,15 @@ const styles = {
   filePickerStatus: {
     color: "#d9c3b3",
     fontSize: 13,
+    display: "inline-flex",
+    alignItems: "baseline",
+    gap: 10,
+  },
+  filePickerMeta: {
+    color: "rgba(248, 239, 231, 0.65)",
+    fontSize: 12,
+    fontWeight: 500,
+    letterSpacing: "0.02em",
   },
   hint: {
     margin: 0,

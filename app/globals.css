@@ -23,13 +23,35 @@ body {
 
 /* High-contrast mode is ON by default and can be toggled off in UI. */
 body.high-contrast [class*="text-white/"] {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: rgba(255, 255, 255, 1) !important;
 }
 
 body.high-contrast [class*="placeholder:text-white/"]::placeholder {
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
 }
 
 body.high-contrast [class*="border-white/"] {
-  border-color: rgba(255, 255, 255, 0.45) !important;
+  border-color: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* Make OFF state visibly softer for a clearer toggle effect. */
+body:not(.high-contrast) {
+  --background: #0d0d10;
+  --foreground: #d8d8d8;
+}
+
+body:not(.high-contrast) [class*="text-white/"] {
+  color: rgba(235, 235, 235, 0.7) !important;
+}
+
+body:not(.high-contrast) [class*="placeholder:text-white/"]::placeholder {
+  color: rgba(210, 210, 210, 0.45) !important;
+}
+
+body:not(.high-contrast) [class*="border-white/"] {
+  border-color: rgba(200, 200, 200, 0.3) !important;
+}
+
+body:not(.high-contrast) [class*="bg-black/"] {
+  background-color: rgba(24, 24, 28, 0.68) !important;
 }
