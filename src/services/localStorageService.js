@@ -22,7 +22,7 @@ const STORE_MEMORIES = "memories";
 /**
  * Memory input contract.
  * photo and story are encrypted by default.
- * voice can be encrypted or stored as-is depending on `encryptVoice`.
+ * attachments are encrypted alongside story/photo content.
  */
 function normalizeMemoryInput(input = {}) {
   const now = Date.now();
@@ -33,7 +33,8 @@ function normalizeMemoryInput(input = {}) {
     title: input.title || "",
     story: input.story || "",
     photo: input.photo || null, // e.g. data URL or binary metadata object
-    voice: input.voice || null, // e.g. Blob metadata / base64 / URL reference
+    voice: input.voice || null, // legacy field kept for backward compatibility
+    attachments: Array.isArray(input.attachments) ? input.attachments : [],
     timelineAt: input.timelineAt || now,
     tags: Array.isArray(input.tags) ? input.tags : [],
     encryptVoice: input.encryptVoice !== false,
@@ -77,14 +78,16 @@ function toRecord(memory, encrypted) {
     photoEnc: encrypted.photoEnc,
     voiceEnc: encrypted.voiceEnc,
     voicePlain: encrypted.voicePlain,
+    attachmentsEnc: encrypted.attachmentsEnc,
     metaEnc: encrypted.metaEnc,
   };
 }
 
 async function encryptMemoryFields(memory) {
-  const [storyEnc, photoEnc, metaEnc] = await Promise.all([
+  const [storyEnc, photoEnc, attachmentsEnc, metaEnc] = await Promise.all([
     encryptValue(memory.story || ""),
     encryptJson(memory.photo),
+    encryptJson(memory.attachments || []),
     encryptJson({
       createdAt: memory.createdAt,
       updatedAt: memory.updatedAt,
@@ -100,6 +103,7 @@ async function encryptMemoryFields(memory) {
       photoEnc,
       voiceEnc,
       voicePlain: null,
+      attachmentsEnc,
       metaEnc,
     };
   }
@@ -109,6 +113,7 @@ async function encryptMemoryFields(memory) {
     photoEnc,
     voiceEnc: null,
     voicePlain: memory.voice,
+    attachmentsEnc,
     metaEnc,
   };
 }
@@ -119,6 +124,9 @@ async function decryptRecord(record) {
     decryptJson(record.photoEnc),
     decryptJson(record.metaEnc),
   ]);
+  const attachments = record.attachmentsEnc
+    ? await decryptJson(record.attachmentsEnc)
+    : [];
 
   const voice =
     record.voiceEnc != null ? await decryptJson(record.voiceEnc) : record.voicePlain ?? null;
@@ -129,6 +137,7 @@ async function decryptRecord(record) {
     story,
     photo,
     voice,
+    attachments: Array.isArray(attachments) ? attachments : [],
     createdAt: meta.createdAt ?? record.createdAt,
     updatedAt: meta.updatedAt ?? record.updatedAt,
     timelineAt: meta.timelineAt ?? record.timelineAt,

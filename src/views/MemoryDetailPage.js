@@ -8,7 +8,7 @@ import { MEMORY_DETAIL_PAGE_CONTENT } from "../content/memoryDetailPageContent";
  * Memory Detail Page
  * - Photo carousel
  * - Full story
- * - Voice player
+ * - Attachment preview
  */
 export function MemoryDetailPage({
   memory,
@@ -27,7 +27,22 @@ export function MemoryDetailPage({
     return [memory.photo];
   }, [memory]);
 
-  const voiceSrc = memory?.voice || "";
+  const attachments = useMemo(() => {
+    const fromMemory = Array.isArray(memory?.attachments) ? memory.attachments : [];
+    if (fromMemory.length) return fromMemory;
+    if (memory?.voice) {
+      return [
+        {
+          id: "legacy-voice",
+          name: "voice-note.webm",
+          mimeType: "audio/webm",
+          dataUrl: memory.voice,
+          size: 0,
+        },
+      ];
+    }
+    return [];
+  }, [memory]);
   const currentPhoto = photos[index]?.dataUrl || photos[index] || "";
 
   function nextPhoto() {
@@ -105,11 +120,29 @@ export function MemoryDetailPage({
             </section>
 
             <section style={styles.card}>
-              <h2 style={styles.sectionTitle}>{t.voiceTitle}</h2>
-              {voiceSrc ? (
-                <audio controls src={voiceSrc} style={{ width: "100%" }} />
+              <h2 style={styles.sectionTitle}>{t.attachmentsTitle}</h2>
+              {attachments.length ? (
+                <ul style={styles.attachmentList}>
+                  {attachments.map((item) => (
+                    <li key={item.id || item.name} style={styles.attachmentItem}>
+                      <p style={styles.attachmentName}>{item.name || t.untitledAttachment}</p>
+                      {String(item.mimeType || "").startsWith("audio/") ? (
+                        <audio controls src={item.dataUrl} style={{ width: "100%" }} />
+                      ) : null}
+                      {String(item.mimeType || "").startsWith("video/") ? (
+                        <video controls src={item.dataUrl} style={{ width: "100%", borderRadius: 10 }} />
+                      ) : null}
+                      {!String(item.mimeType || "").startsWith("audio/") &&
+                      !String(item.mimeType || "").startsWith("video/") ? (
+                        <a href={item.dataUrl} download={item.name || "attachment"} style={styles.downloadLink}>
+                          {t.downloadAttachment}
+                        </a>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <p style={styles.empty}>{t.noVoice}</p>
+                <p style={styles.empty}>{t.noAttachments}</p>
               )}
             </section>
           </>
@@ -216,6 +249,30 @@ const styles = {
   empty: {
     margin: 0,
     color: "#d9c3b3",
+  },
+  attachmentList: {
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+    display: "grid",
+    gap: 10,
+  },
+  attachmentItem: {
+    border: "1px solid #3a2d28",
+    borderRadius: 10,
+    padding: 10,
+    display: "grid",
+    gap: 8,
+  },
+  attachmentName: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 13,
+  },
+  downloadLink: {
+    color: "#f0c29e",
+    textDecoration: "underline",
+    fontSize: 14,
   },
   feedback: {
     margin: 0,

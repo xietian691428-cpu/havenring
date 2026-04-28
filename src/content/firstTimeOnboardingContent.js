@@ -12,7 +12,7 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     steps: [
       { id: "welcome", icon: "💛", title: "Your ring is the key to your memories", body: "Think of your ring like a tiny door key. It opens your private Haven anytime." },
       { id: "entry-url", icon: "🔗", title: "Set one fixed entry once", body: "For first setup, write one fixed Haven entry on your ring. After that, no rewrite for each memory." },
-      { id: "create-first", icon: "✍️", title: "Create your first memory", body: "Add photos, a short story, and voice if you want. Tap Save to keep it in your local Haven." },
+      { id: "create-first", icon: "✍️", title: "Create your first memory", body: "Add photos, a short story, and optional files (audio, video, documents). Tap Save to keep it in your local Haven." },
       { id: "daily", icon: "✨", title: "Daily use is simple", body: "Just lightly tap your ring to open Haven and revisit your moments with one touch." },
     ],
   },

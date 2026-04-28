@@ -9,14 +9,16 @@ const EN = {
   noPhotos: "No photos in this memory.",
   storyTitle: "Story",
   noStory: "No written story.",
-  voiceTitle: "Voice",
-  noVoice: "No voice note.",
+  attachmentsTitle: "Attachments",
+  noAttachments: "No attachments.",
+  downloadAttachment: "Download file",
+  untitledAttachment: "Attachment",
 };
 
 export const MEMORY_DETAIL_PAGE_CONTENT = {
   en: EN,
-  fr: { ...EN, brand: "Souvenir", defaultTitle: "Details du souvenir", back: "Retour a la timeline", loading: "Chargement du souvenir...", noMemory: "Souvenir introuvable.", previous: "Precedent", next: "Suivant", noPhotos: "Aucune photo dans ce souvenir.", storyTitle: "Histoire", noStory: "Aucun texte ecrit.", voiceTitle: "Voix", noVoice: "Aucune note vocale." },
-  es: { ...EN, brand: "Recuerdo", defaultTitle: "Detalles del recuerdo", back: "Volver a la timeline", loading: "Cargando recuerdo...", noMemory: "Recuerdo no encontrado.", previous: "Anterior", next: "Siguiente", noPhotos: "No hay fotos en este recuerdo.", storyTitle: "Historia", noStory: "Sin historia escrita.", voiceTitle: "Voz", noVoice: "Sin nota de voz." },
-  de: { ...EN, brand: "Erinnerung", defaultTitle: "Erinnerungsdetails", back: "Zuruck zur Timeline", loading: "Erinnerung wird geladen...", noMemory: "Erinnerung nicht gefunden.", previous: "Zuruck", next: "Weiter", noPhotos: "Keine Fotos in dieser Erinnerung.", storyTitle: "Geschichte", noStory: "Keine geschriebene Geschichte.", voiceTitle: "Stimme", noVoice: "Keine Sprachnotiz." },
-  it: { ...EN, brand: "Ricordo", defaultTitle: "Dettagli del ricordo", back: "Torna alla timeline", loading: "Caricamento ricordo...", noMemory: "Ricordo non trovato.", previous: "Precedente", next: "Successivo", noPhotos: "Nessuna foto in questo ricordo.", storyTitle: "Storia", noStory: "Nessuna storia scritta.", voiceTitle: "Voce", noVoice: "Nessuna nota vocale." },
+  fr: { ...EN, brand: "Souvenir", defaultTitle: "Details du souvenir", back: "Retour a la timeline", loading: "Chargement du souvenir...", noMemory: "Souvenir introuvable.", previous: "Precedent", next: "Suivant", noPhotos: "Aucune photo dans ce souvenir.", storyTitle: "Histoire", noStory: "Aucun texte ecrit." },
+  es: { ...EN, brand: "Recuerdo", defaultTitle: "Detalles del recuerdo", back: "Volver a la timeline", loading: "Cargando recuerdo...", noMemory: "Recuerdo no encontrado.", previous: "Anterior", next: "Siguiente", noPhotos: "No hay fotos en este recuerdo.", storyTitle: "Historia", noStory: "Sin historia escrita." },
+  de: { ...EN, brand: "Erinnerung", defaultTitle: "Erinnerungsdetails", back: "Zuruck zur Timeline", loading: "Erinnerung wird geladen...", noMemory: "Erinnerung nicht gefunden.", previous: "Zuruck", next: "Weiter", noPhotos: "Keine Fotos in dieser Erinnerung.", storyTitle: "Geschichte", noStory: "Keine geschriebene Geschichte." },
+  it: { ...EN, brand: "Ricordo", defaultTitle: "Dettagli del ricordo", back: "Torna alla timeline", loading: "Caricamento ricordo...", noMemory: "Ricordo non trovato.", previous: "Precedente", next: "Successivo", noPhotos: "Nessuna foto in questo ricordo.", storyTitle: "Storia", noStory: "Nessuna storia scritta." },
 };

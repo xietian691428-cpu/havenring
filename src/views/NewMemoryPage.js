@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createMemory } from "../services/localStorageService";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
@@ -6,16 +6,23 @@ import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
 
-const MAX_RECORD_SECONDS = 45;
 const MAX_PHOTOS = 6;
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_MB = 25;
+const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
+
+function clearDraftSnapshot() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+}
 
 /**
  * New Memory Page
  * - Title
  * - Multi-photo upload with compression
  * - Story editor
- * - Timed voice recording
+ * - File attachments (audio/video/documents)
  * - Save locally (no ring write)
  */
 export function NewMemoryPage({
@@ -29,14 +36,9 @@ export function NewMemoryPage({
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [photos, setPhotos] = useState([]);
-  const [voiceBlob, setVoiceBlob] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [attachments, setAttachments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [micPermission, setMicPermission] = useState("unknown");
-  const [requestingMicPermission, setRequestingMicPermission] = useState(false);
-  const [micUnsupportedReason, setMicUnsupportedReason] = useState("");
   const { soundEnabled, hapticEnabled, soundScope, updateFeedbackPrefs } =
     useFeedbackPrefs();
   const [saveDialog, setSaveDialog] = useState({
@@ -46,19 +48,11 @@ export function NewMemoryPage({
   });
   const [sealPromptOpen, setSealPromptOpen] = useState(false);
 
-  const mediaRecorderRef = useRef(null);
-  const mediaStreamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const timerRef = useRef(null);
   const photoInputRef = useRef(null);
-
-  const voicePreviewUrl = useMemo(
-    () => (voiceBlob ? URL.createObjectURL(voiceBlob) : ""),
-    [voiceBlob]
-  );
+  const attachmentInputRef = useRef(null);
 
   const hasDraftContent = Boolean(
-    title.trim() || story.trim() || photos.length > 0 || voiceBlob
+    title.trim() || story.trim() || photos.length > 0 || attachments.length > 0
   );
 
   function setFeedbackNotice(message) {
@@ -74,7 +68,13 @@ export function NewMemoryPage({
       if (draft?.title) setTitle(String(draft.title));
       if (draft?.story) setStory(String(draft.story));
       if (Array.isArray(draft?.photos)) setPhotos(draft.photos);
-      if (draft?.title || draft?.story || (Array.isArray(draft?.photos) && draft.photos.length)) {
+      if (Array.isArray(draft?.attachments)) setAttachments(draft.attachments);
+      if (
+        draft?.title ||
+        draft?.story ||
+        (Array.isArray(draft?.photos) && draft.photos.length) ||
+        (Array.isArray(draft?.attachments) && draft.attachments.length)
+      ) {
         setFeedbackNotice(t.feedbackDraftRestored);
       }
     } catch {
@@ -84,16 +84,17 @@ export function NewMemoryPage({
 
   useEffect(() => {
     if (!hasDraftContent) {
-      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      clearDraftSnapshot();
       return;
     }
     const payload = JSON.stringify({
       title,
       story,
       photos,
+      attachments,
     });
     window.localStorage.setItem(DRAFT_STORAGE_KEY, payload);
-  }, [title, story, photos, hasDraftContent]);
+  }, [title, story, photos, attachments, hasDraftContent]);
 
   useEffect(() => {
     const onBeforeUnload = (event) => {
@@ -104,50 +105,6 @@ export function NewMemoryPage({
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [hasDraftContent]);
-
-  useEffect(() => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setMicPermission("unavailable");
-      setMicUnsupportedReason(t.micUnavailableNoGetUserMedia);
-      return;
-    }
-    if (!window.isSecureContext) {
-      setMicPermission("unavailable");
-      setMicUnsupportedReason(t.micUnavailableInsecureContext);
-      return;
-    }
-    if (typeof MediaRecorder === "undefined") {
-      setMicPermission("unavailable");
-      setMicUnsupportedReason(t.micUnavailableNoMediaRecorder);
-      return;
-    }
-    if (!navigator.permissions?.query) {
-      setMicPermission("prompt");
-      return;
-    }
-
-    let mounted = true;
-    let permissionStatus = null;
-
-    navigator.permissions
-      .query({ name: "microphone" })
-      .then((result) => {
-        if (!mounted) return;
-        permissionStatus = result;
-        setMicPermission(result.state);
-        result.onchange = () => {
-          if (mounted) setMicPermission(result.state);
-        };
-      })
-      .catch(() => {
-        if (mounted) setMicPermission("prompt");
-      });
-
-    return () => {
-      mounted = false;
-      if (permissionStatus) permissionStatus.onchange = null;
-    };
-  }, []);
 
   async function handlePhotosSelected(event) {
     const files = Array.from(event.target.files || []);
@@ -187,123 +144,53 @@ export function NewMemoryPage({
     }
   }
 
-  async function startRecording() {
-    setFeedback("");
-    if (micUnsupportedReason) {
-      setFeedback(micUnsupportedReason);
+  async function handleAttachmentsSelected(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    const remainingSlots = Math.max(0, MAX_ATTACHMENTS - attachments.length);
+    if (remainingSlots === 0) {
+      setFeedback(
+        `${t.feedbackMaxAttachmentsPrefix}${MAX_ATTACHMENTS}${t.feedbackMaxAttachmentsSuffix}`
+      );
+      event.target.value = "";
       return;
     }
-    if (micPermission !== "granted") {
-      await requestMicrophonePermission({ startAfterGrant: true });
-      return;
-    }
+
+    const allowedFiles = files.slice(0, remainingSlots);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMicPermission("granted");
-      beginRecording(stream);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotAllowedError") {
-        setMicPermission("denied");
-        setFeedbackNotice(t.feedbackMicPermissionDenied);
-        return;
-      }
-      if (error instanceof DOMException && error.name === "NotReadableError") {
-        setFeedback(t.feedbackMicBusy);
-        return;
-      }
-      setFeedback(t.feedbackMicUnavailable);
-    }
-  }
-
-  function beginRecording(stream) {
-    const recorder = new MediaRecorder(stream);
-    mediaStreamRef.current = stream;
-    mediaRecorderRef.current = recorder;
-    chunksRef.current = [];
-    setRecordSeconds(0);
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-      setVoiceBlob(blob);
-      cleanupRecordingResources();
-      setFeedback(t.feedbackVoiceCaptured);
-    };
-
-    recorder.start();
-    setIsRecording(true);
-    timerRef.current = window.setInterval(() => {
-      setRecordSeconds((prev) => {
-        if (prev + 1 >= MAX_RECORD_SECONDS) {
-          stopRecording();
-          return MAX_RECORD_SECONDS;
+      const converted = [];
+      for (const file of allowedFiles) {
+        if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+          setFeedback(
+            `${t.feedbackAttachmentTooLargePrefix}${file.name}${t.feedbackAttachmentTooLargeSuffix}`
+          );
+          continue;
         }
-        return prev + 1;
-      });
-    }, 1000);
-  }
-
-  async function requestMicrophonePermission(options = {}) {
-    const { startAfterGrant = false } = options;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setFeedback(t.feedbackMicUnavailable);
-      setMicPermission("unavailable");
-      return;
-    }
-    if (micUnsupportedReason) {
-      setFeedback(micUnsupportedReason);
-      setMicPermission("unavailable");
-      return;
-    }
-
-    setRequestingMicPermission(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMicPermission("granted");
-      if (startAfterGrant) {
-        setFeedback("");
-        beginRecording(stream);
-      } else {
-        stream.getTracks().forEach((track) => track.stop());
-        setFeedback(t.feedbackMicPermissionGranted);
+        converted.push(await fileToAttachment(file, t));
       }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "NotAllowedError") {
-        setMicPermission("denied");
-        setFeedbackNotice(t.feedbackMicPermissionDenied);
+      if (!converted.length) {
+        event.target.value = "";
         return;
       }
-      setFeedback(t.feedbackMicUnavailable);
+      setAttachments((prev) => [...prev, ...converted]);
+      setFeedback(
+        `${t.feedbackAttachmentAddedPrefix}${converted.length}${t.feedbackAttachmentAddedSuffix}`
+      );
+    } catch {
+      setFeedback(t.feedbackAttachmentError);
     } finally {
-      setRequestingMicPermission(false);
+      event.target.value = "";
     }
-  }
-
-  function stopRecording() {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setIsRecording(false);
-  }
-
-  function cleanupRecordingResources() {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    mediaRecorderRef.current = null;
   }
 
   async function handleSave(options = {}) {
     const { openSealPromptOnSuccess = false, showDialogOnSuccess = true } = options;
-    if (!title.trim() && !story.trim() && photos.length === 0 && !voiceBlob) {
+    if (
+      !title.trim() &&
+      !story.trim() &&
+      photos.length === 0 &&
+      attachments.length === 0
+    ) {
       setFeedback(t.feedbackNeedContent);
       return;
     }
@@ -316,8 +203,8 @@ export function NewMemoryPage({
         title: title.trim() || t.untitled,
         story: story.trim(),
         photo: photos,
-        voice: voiceBlob ? await blobToDataUrl(voiceBlob, t) : null,
-        encryptVoice: true,
+        voice: null,
+        attachments,
         tags: [],
       };
       if (typeof onSaveMemory === "function") {
@@ -336,6 +223,8 @@ export function NewMemoryPage({
         setSealPromptOpen(true);
         setFeedbackNotice(t.feedbackReadyToSeal);
       }
+      // A saved memory must not be restored as "editing draft".
+      clearDraftSnapshot();
       triggerSuccessFeedback({
         soundEnabled,
         hapticEnabled,
@@ -358,9 +247,9 @@ export function NewMemoryPage({
     setTitle("");
     setStory("");
     setPhotos([]);
-    setVoiceBlob(null);
+    setAttachments([]);
     setFeedback(t.feedbackReadyNext);
-    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    clearDraftSnapshot();
   }
 
   function handleViewTimeline() {
@@ -459,60 +348,50 @@ export function NewMemoryPage({
           </div>
         ) : null}
 
-        <section style={styles.voiceBox}>
-          <p style={styles.voiceTitle}>
-            {t.voiceTitlePrefix}
-            {MAX_RECORD_SECONDS}
-            {t.voiceTitleSuffix}
-          </p>
-          {micPermission !== "granted" ? (
-            <div style={styles.voicePermissionBox}>
-              <p style={styles.voicePermissionHint}>
-                {micPermission === "denied"
-                  ? t.micPermissionDeniedHint
-                  : t.micPermissionPromptHint}
-              </p>
-              {micPermission === "unavailable" && micUnsupportedReason ? (
-                <p style={styles.voicePermissionHint}>{micUnsupportedReason}</p>
-              ) : null}
-              <button
-                type="button"
-                onClick={requestMicrophonePermission}
-                disabled={requestingMicPermission || micPermission === "unavailable"}
-                style={styles.secondaryButton}
-              >
-                {requestingMicPermission ? t.requestingMicPermission : t.requestMicPermission}
-              </button>
-            </div>
-          ) : null}
-          <div style={styles.voiceActions}>
-            {!isRecording ? (
-              <button
-                type="button"
-                onClick={startRecording}
-                style={styles.secondaryButton}
-              >
-                {t.record}
-              </button>
-            ) : (
-              <button type="button" onClick={stopRecording} style={styles.secondaryButton}>
-                {t.stopPrefix}
-                {recordSeconds}
-                {t.stopSuffix}
-              </button>
-            )}
-            {voiceBlob ? (
-              <button
-                type="button"
-                onClick={() => setVoiceBlob(null)}
-                style={styles.clearButton}
-              >
-                {t.removeVoice}
-              </button>
-            ) : null}
+        <label style={styles.label}>
+          {t.attachmentsLabel}
+          <div style={styles.filePickerRow}>
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              style={styles.filePickerButton}
+            >
+              {t.chooseAttachments}
+            </button>
+            <span style={styles.filePickerStatus}>
+              {attachments.length
+                ? `${attachments.length}${t.attachmentsSelectedSuffix}`
+                : t.noAttachmentsSelected}
+            </span>
           </div>
-          {voicePreviewUrl ? <audio controls src={voicePreviewUrl} style={{ width: "100%" }} /> : null}
-        </section>
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
+            multiple
+            onChange={handleAttachmentsSelected}
+            style={styles.hiddenFileInput}
+          />
+          <small style={styles.hint}>{t.attachmentsHint}</small>
+          {attachments.length ? (
+            <ul style={styles.attachmentList}>
+              {attachments.map((item) => (
+                <li key={item.id} style={styles.attachmentItem}>
+                  <span style={styles.attachmentName}>{item.name}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttachments((prev) => prev.filter((it) => it.id !== item.id))
+                    }
+                    style={styles.clearButton}
+                  >
+                    {t.removeAttachment}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </label>
 
         <button type="button" onClick={handleSave} disabled={saving} style={styles.primaryButton}>
           {saving ? t.saving : t.save}
@@ -638,6 +517,16 @@ function blobToDataUrl(blob, t) {
   });
 }
 
+async function fileToAttachment(file, t) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name || "attachment",
+    mimeType: file.type || "application/octet-stream",
+    size: file.size || 0,
+    dataUrl: await blobToDataUrl(file, t),
+  };
+}
+
 const styles = {
   page: {
     minHeight: "100vh",
@@ -761,33 +650,30 @@ const styles = {
     borderRadius: 10,
     border: "1px solid #3a2d28",
   },
-  voiceBox: {
-    border: "1px solid #3a2d28",
-    borderRadius: 12,
-    padding: 12,
-    display: "grid",
-    gap: 8,
-    background: "#1b1512",
-  },
-  voiceTitle: {
+  attachmentList: {
     margin: 0,
-    color: "#d9c3b3",
+    padding: 0,
+    listStyle: "none",
+    display: "grid",
+    gap: 6,
   },
   voiceActions: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
   },
-  voicePermissionBox: {
-    display: "grid",
-    gap: 8,
-    justifyItems: "start",
+  attachmentItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
-  voicePermissionHint: {
-    margin: 0,
+  attachmentName: {
     color: "#d9c3b3",
-    fontSize: 12,
-    lineHeight: 1.5,
+    fontSize: 13,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   secondaryButton: {
     border: "1px solid #d9a67a",
