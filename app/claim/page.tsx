@@ -2,7 +2,7 @@ import {
   getPreferredLocale,
   isSupportedLocale,
 } from "@/lib/i18n";
-import { ClaimClient } from "./claim-client";
+import { redirect } from "next/navigation";
 
 type ClaimReason =
   | "ring_inactive"
@@ -28,5 +28,10 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
   const tokenParam = Array.isArray(sp.token) ? sp.token[0] : sp.token;
   const locale = isSupportedLocale(lang) ? lang : getPreferredLocale(null);
   const reason = getReason(reasonParam);
-  return <ClaimClient locale={locale} reason={reason} initialToken={tokenParam} />;
+  const next = new URLSearchParams();
+  next.set("ring", "signin");
+  next.set("lang", locale);
+  next.set("reason", reason);
+  if (tokenParam) next.set("token", tokenParam);
+  redirect(`/?${next.toString()}`);
 }

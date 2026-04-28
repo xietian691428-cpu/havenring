@@ -41,7 +41,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "hub.error.missing_token": "Missing token.",
     "hub.error.generic": "Unknown error.",
     "hub.error.ring_inactive":
-      "This ring is not active yet. Continue to claim.",
+      "Ring quick access is unavailable right now. Please continue with sign-in.",
     "claim.title": "Continue to Haven",
     "claim.subtitle": "Quick access",
     "claim.reason.ring_inactive":
