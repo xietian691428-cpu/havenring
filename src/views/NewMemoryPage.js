@@ -68,12 +68,10 @@ export function NewMemoryPage({
       if (draft?.title) setTitle(String(draft.title));
       if (draft?.story) setStory(String(draft.story));
       if (Array.isArray(draft?.photos)) setPhotos(draft.photos);
-      if (Array.isArray(draft?.attachments)) setAttachments(draft.attachments);
       if (
         draft?.title ||
         draft?.story ||
-        (Array.isArray(draft?.photos) && draft.photos.length) ||
-        (Array.isArray(draft?.attachments) && draft.attachments.length)
+        (Array.isArray(draft?.photos) && draft.photos.length)
       ) {
         setFeedbackNotice(t.feedbackDraftRestored);
       }
@@ -87,14 +85,19 @@ export function NewMemoryPage({
       clearDraftSnapshot();
       return;
     }
-    const payload = JSON.stringify({
-      title,
-      story,
-      photos,
-      attachments,
-    });
-    window.localStorage.setItem(DRAFT_STORAGE_KEY, payload);
-  }, [title, story, photos, attachments, hasDraftContent]);
+    try {
+      // Keep draft snapshots small and resilient.
+      // Attachments can be large binary payloads and must NOT be written to localStorage.
+      const payload = JSON.stringify({
+        title,
+        story,
+        photos,
+      });
+      window.localStorage.setItem(DRAFT_STORAGE_KEY, payload);
+    } catch {
+      // Quota exceeded or serialization issue should not break editing flow.
+    }
+  }, [title, story, photos, hasDraftContent]);
 
   useEffect(() => {
     const onBeforeUnload = (event) => {
