@@ -19,6 +19,7 @@ import {
   hasRingAccessGrant,
   requiresReverificationCurrentDevice,
 } from "@/src/services/deviceTrustService";
+import { isSealFlowArmed } from "@/lib/seal-flow";
 
 type HubState =
   | { kind: "deciding" }
@@ -35,7 +36,10 @@ export function HubRouter() {
   const fallbackToHome = useCallback(
     (reason: string) => {
       const next = new URL("/", window.location.origin);
-      next.searchParams.set("ring", "signin");
+      next.searchParams.set(
+        "ring",
+        reason === "seal_not_ready" ? "sealhelp" : "signin"
+      );
       next.searchParams.set("reason", reason);
       next.searchParams.set("lang", locale);
       if (token) next.searchParams.set("token", token);
@@ -89,6 +93,13 @@ export function HubRouter() {
     const decide = async (pending: PendingMoment | null) => {
       const supabase = getSupabaseBrowserClient();
       const effectivePending = pending ?? readPendingMomentSnapshot();
+      const hasDraftSnapshot = Boolean(
+        window.localStorage.getItem("haven.new_memory_draft")
+      );
+      if (hasDraftSnapshot && !isSealFlowArmed()) {
+        fallbackToHome("seal_not_ready");
+        return;
+      }
       const security = getSecuritySummary();
       if (!security.initialized) {
         fallbackToHome("device_setup_required");

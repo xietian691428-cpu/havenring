@@ -5,6 +5,7 @@ import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
+import { armSealFlow, clearSealFlowArm } from "../../lib/seal-flow";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
@@ -224,6 +225,7 @@ export function NewMemoryPage({
       );
       if (openSealPromptOnSuccess) {
         setSealPromptOpen(true);
+        armSealFlow();
         setFeedbackNotice(t.feedbackReadyToSeal);
       }
       // A saved memory must not be restored as "editing draft".
@@ -252,18 +254,21 @@ export function NewMemoryPage({
     setPhotos([]);
     setAttachments([]);
     setFeedback(t.feedbackReadyNext);
+    clearSealFlowArm();
     clearDraftSnapshot();
   }
 
   function handleViewTimeline() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(false);
+    clearSealFlowArm();
     onViewTimeline?.();
   }
 
   function handleOpenSealPrompt() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(true);
+    armSealFlow();
     setFeedbackNotice(t.feedbackReadyToSeal);
   }
 
@@ -412,7 +417,10 @@ export function NewMemoryPage({
               </button>
               <button
                 type="button"
-                onClick={() => setSealPromptOpen(false)}
+                onClick={() => {
+                  setSealPromptOpen(false);
+                  clearSealFlowArm();
+                }}
                 style={styles.secondaryButton}
               >
                 {t.sealPromptClose}

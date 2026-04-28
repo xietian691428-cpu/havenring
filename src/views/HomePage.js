@@ -33,6 +33,7 @@ export function HomePage({
     token: "",
     reason: "",
   });
+  const [sealHelp, setSealHelp] = useState(false);
   const [platformSignInProvider, setPlatformSignInProvider] = useState("apple");
   const [securityMode, setSecurityMode] = useState("none");
   const [password, setPassword] = useState("");
@@ -57,6 +58,13 @@ export function HomePage({
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     const ring = url.searchParams.get("ring");
+    if (ring === "sealhelp") {
+      setSealHelp(true);
+      url.searchParams.delete("ring");
+      url.searchParams.delete("reason");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      return;
+    }
     if (ring !== "signin") return;
     setRingSignIn({
       needed: true,
@@ -285,6 +293,19 @@ export function HomePage({
                 {securityError ? <p style={styles.feedback}>{securityError}</p> : null}
               </section>
             ) : null}
+          </section>
+        ) : null}
+        {sealHelp ? (
+          <section style={styles.ringSignInCard}>
+            <p style={styles.ringSignInTitle}>{t.sealHelpTitle}</p>
+            <p style={styles.howItWorksBody}>{t.sealHelpBody}</p>
+            <button
+              type="button"
+              onClick={onCreateMemory}
+              style={styles.secondaryButton}
+            >
+              {t.sealHelpAction}
+            </button>
           </section>
         ) : null}
 

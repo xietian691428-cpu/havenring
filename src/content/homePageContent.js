@@ -30,6 +30,10 @@ const EN = {
   ringSecurityPasswordMismatch: "Passwords do not match.",
   ringSecuritySetupFailed: "Could not set up device protection. Please try again.",
   ringSecurityVerifyFailed: "Verification failed. Check your password or recovery code.",
+  sealHelpTitle: "Finish save before ring tap",
+  sealHelpBody:
+    "You tapped your ring before starting the sealing step. Return to your draft, tap Seal with Ring Now, then tap ring from that screen.",
+  sealHelpAction: "Back to draft",
   open: "Open My Haven",
   opening: "Opening...",
   create: "Create New Memory",
