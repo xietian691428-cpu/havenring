@@ -37,6 +37,12 @@ export function ClaimClient({ locale, reason, initialToken }: ClaimClientProps) 
 
   function resolveClaimErrorMessage(payload: ClaimErrorPayload): string {
     const code = payload?.code;
+    if (code === "AUTH_REQUIRED") {
+      return t("claim.error.auth_required");
+    }
+    if (code === "AUTH_UPGRADE_REQUIRED") {
+      return t("claim.error.auth_upgrade_required");
+    }
     if (code === "RING_OWNED_BY_ANOTHER") {
       return t("claim.error.owned_by_another");
     }

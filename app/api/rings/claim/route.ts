@@ -212,7 +212,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (ring.owner_id && (!user || ring.owner_id !== user.id)) {
+    if (ring.owner_id && !user) {
+      return NextResponse.json(
+        {
+          error: "Authentication required.",
+          code: "AUTH_REQUIRED",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (ring.owner_id && user && ring.owner_id !== user.id) {
       return NextResponse.json(
         {
           error: "This ring is already linked to another account.",
