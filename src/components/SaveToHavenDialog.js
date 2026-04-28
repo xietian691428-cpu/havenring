@@ -10,7 +10,7 @@ export function SaveToHavenDialog({
   locale = "en",
   status = "saving", // saving | success | error
   errorMessage = "",
-  onViewTimeline,
+  onSealNow,
   onCreateAnother,
 }) {
   const t = SAVE_TO_HAVEN_DIALOG_CONTENT[locale] || SAVE_TO_HAVEN_DIALOG_CONTENT.en;
@@ -50,7 +50,7 @@ export function SaveToHavenDialog({
 
         {status === "success" ? (
           <div style={styles.actions}>
-            <button type="button" onClick={onViewTimeline} style={styles.primaryButton}>
+            <button type="button" onClick={onSealNow} style={styles.primaryButton}>
               {t.touchRingToSeal}
             </button>
             <button type="button" onClick={onCreateAnother} style={styles.secondaryButton}>

@@ -32,6 +32,7 @@ const EN = {
   removeVoice: "Remove Voice",
   saving: "Saving...",
   save: "Save Draft",
+  sealNow: "Seal with Ring Now",
   haptic: "Haptic feedback",
   sound: "Success sound",
   soundSaveOnly: "Sound only on save success",
@@ -54,6 +55,7 @@ const EN = {
   feedbackNeedContent: "Add some memory content before saving.",
   feedbackSavingLocal: "Saving draft locally...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
+  feedbackReadyToSeal: "Ready to seal. Touch your ring now.",
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
   untitled: "Untitled memory",
@@ -61,6 +63,11 @@ const EN = {
   compressionFailed: "Compression failed.",
   invalidImage: "Invalid image file.",
   readBinaryFailed: "Failed to read binary data.",
+  sealPromptTitle: "Final step: touch your ring",
+  sealPromptBody:
+    "Hold your ring near the back of your phone now. Sealing is completed only after the ring touch is detected.",
+  sealPromptDone: "I touched the ring",
+  sealPromptClose: "Close",
 };
 
 export const NEW_MEMORY_PAGE_CONTENT = {

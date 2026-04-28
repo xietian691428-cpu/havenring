@@ -43,6 +43,7 @@ export function NewMemoryPage({
     status: "saving",
     errorMessage: "",
   });
+  const [sealPromptOpen, setSealPromptOpen] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -139,45 +140,18 @@ export function NewMemoryPage({
 
   async function startRecording() {
     setFeedback("");
-    if (micPermission !== "granted") {
-      setFeedback(t.feedbackMicNeedPermissionFirst);
-      return;
-    }
     if (micUnsupportedReason) {
       setFeedback(micUnsupportedReason);
+      return;
+    }
+    if (micPermission !== "granted") {
+      await requestMicrophonePermission({ startAfterGrant: true });
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicPermission("granted");
-      const recorder = new MediaRecorder(stream);
-      mediaStreamRef.current = stream;
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-      setRecordSeconds(0);
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        setVoiceBlob(blob);
-        cleanupRecordingResources();
-        setFeedback(t.feedbackVoiceCaptured);
-      };
-
-      recorder.start();
-      setIsRecording(true);
-      timerRef.current = window.setInterval(() => {
-        setRecordSeconds((prev) => {
-          if (prev + 1 >= MAX_RECORD_SECONDS) {
-            stopRecording();
-            return MAX_RECORD_SECONDS;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+      beginRecording(stream);
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setMicPermission("denied");
@@ -192,7 +166,39 @@ export function NewMemoryPage({
     }
   }
 
-  async function requestMicrophonePermission() {
+  function beginRecording(stream) {
+    const recorder = new MediaRecorder(stream);
+    mediaStreamRef.current = stream;
+    mediaRecorderRef.current = recorder;
+    chunksRef.current = [];
+    setRecordSeconds(0);
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      setVoiceBlob(blob);
+      cleanupRecordingResources();
+      setFeedback(t.feedbackVoiceCaptured);
+    };
+
+    recorder.start();
+    setIsRecording(true);
+    timerRef.current = window.setInterval(() => {
+      setRecordSeconds((prev) => {
+        if (prev + 1 >= MAX_RECORD_SECONDS) {
+          stopRecording();
+          return MAX_RECORD_SECONDS;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+  }
+
+  async function requestMicrophonePermission(options = {}) {
+    const { startAfterGrant = false } = options;
     if (!navigator.mediaDevices?.getUserMedia) {
       setFeedback(t.feedbackMicUnavailable);
       setMicPermission("unavailable");
@@ -207,9 +213,14 @@ export function NewMemoryPage({
     setRequestingMicPermission(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
       setMicPermission("granted");
-      setFeedback(t.feedbackMicPermissionGranted);
+      if (startAfterGrant) {
+        setFeedback("");
+        beginRecording(stream);
+      } else {
+        stream.getTracks().forEach((track) => track.stop());
+        setFeedback(t.feedbackMicPermissionGranted);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setMicPermission("denied");
@@ -241,7 +252,8 @@ export function NewMemoryPage({
     mediaRecorderRef.current = null;
   }
 
-  async function handleSave() {
+  async function handleSave(options = {}) {
+    const { openSealPromptOnSuccess = false, showDialogOnSuccess = true } = options;
     if (!title.trim() && !story.trim() && photos.length === 0 && !voiceBlob) {
       setFeedback(t.feedbackNeedContent);
       return;
@@ -266,7 +278,15 @@ export function NewMemoryPage({
       }
 
       setFeedback(t.feedbackSaved);
-      setSaveDialog({ open: true, status: "success", errorMessage: "" });
+      setSaveDialog(
+        showDialogOnSuccess
+          ? { open: true, status: "success", errorMessage: "" }
+          : { open: false, status: "saving", errorMessage: "" }
+      );
+      if (openSealPromptOnSuccess) {
+        setSealPromptOpen(true);
+        setFeedback(t.feedbackReadyToSeal);
+      }
       triggerSuccessFeedback({
         soundEnabled,
         hapticEnabled,
@@ -285,6 +305,7 @@ export function NewMemoryPage({
 
   function handleCreateAnother() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSealPromptOpen(false);
     setTitle("");
     setStory("");
     setPhotos([]);
@@ -294,7 +315,18 @@ export function NewMemoryPage({
 
   function handleViewTimeline() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSealPromptOpen(false);
     onViewTimeline?.();
+  }
+
+  function handleOpenSealPrompt() {
+    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSealPromptOpen(true);
+    setFeedback(t.feedbackReadyToSeal);
+  }
+
+  async function handleSealNow() {
+    await handleSave({ openSealPromptOnSuccess: true, showDialogOnSuccess: false });
   }
 
   return (
@@ -407,7 +439,6 @@ export function NewMemoryPage({
               <button
                 type="button"
                 onClick={startRecording}
-                disabled={micPermission !== "granted"}
                 style={styles.secondaryButton}
               >
                 {t.record}
@@ -435,6 +466,27 @@ export function NewMemoryPage({
         <button type="button" onClick={handleSave} disabled={saving} style={styles.primaryButton}>
           {saving ? t.saving : t.save}
         </button>
+        <button type="button" onClick={handleSealNow} disabled={saving} style={styles.secondaryButton}>
+          {t.sealNow}
+        </button>
+        {sealPromptOpen ? (
+          <section style={styles.sealPromptBox}>
+            <p style={styles.sealPromptTitle}>{t.sealPromptTitle}</p>
+            <p style={styles.sealPromptBody}>{t.sealPromptBody}</p>
+            <div style={styles.voiceActions}>
+              <button type="button" onClick={handleViewTimeline} style={styles.primaryButton}>
+                {t.sealPromptDone}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSealPromptOpen(false)}
+                style={styles.secondaryButton}
+              >
+                {t.sealPromptClose}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <div style={styles.feedbackToggles}>
           <label style={styles.toggleLabel}>
@@ -481,7 +533,7 @@ export function NewMemoryPage({
         open={saveDialog.open}
         status={saveDialog.status}
         errorMessage={saveDialog.errorMessage}
-        onViewTimeline={handleViewTimeline}
+        onSealNow={handleOpenSealPrompt}
         onCreateAnother={handleCreateAnother}
       />
     </main>
@@ -691,6 +743,25 @@ const styles = {
     color: "#f3c6a5",
     padding: "8px 12px",
     cursor: "pointer",
+  },
+  sealPromptBox: {
+    border: "1px solid #d9a67a",
+    borderRadius: 12,
+    padding: 12,
+    display: "grid",
+    gap: 8,
+    background: "#1b1512",
+  },
+  sealPromptTitle: {
+    margin: 0,
+    color: "#f8efe7",
+    fontSize: 16,
+    fontWeight: 600,
+  },
+  sealPromptBody: {
+    margin: 0,
+    color: "#d9c3b3",
+    lineHeight: 1.6,
   },
   primaryButton: {
     border: "1px solid #d9a67a",
