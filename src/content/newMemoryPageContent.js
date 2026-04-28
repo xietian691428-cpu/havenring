@@ -20,7 +20,7 @@ const EN = {
   noAttachmentsSelected: "No files selected",
   attachmentsSelectedSuffix: " file(s)",
   attachmentsHint:
-    "Upload audio, video, or document files. Max 25 MB per file, up to 5 files.",
+    "Upload audio, video, or document files. Max 10 MB per file, up to 5 files.",
   removeAttachment: "Remove",
   saving: "Saving...",
   save: "Save Draft",
@@ -37,7 +37,7 @@ const EN = {
   feedbackMaxPhotosSuffix: " photos allowed.",
   feedbackPhotoError: "Could not process photos. Please try again.",
   feedbackAttachmentTooLargePrefix: "File too large: ",
-  feedbackAttachmentTooLargeSuffix: ". Max size is 25 MB.",
+  feedbackAttachmentTooLargeSuffix: ". Max size is 10 MB.",
   feedbackAttachmentAddedPrefix: "Added ",
   feedbackAttachmentAddedSuffix: " file(s).",
   feedbackAttachmentError: "Could not process selected files. Please try again.",

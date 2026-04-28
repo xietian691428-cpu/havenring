@@ -8,7 +8,7 @@ import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
-const MAX_ATTACHMENT_SIZE_MB = 25;
+const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
 
@@ -161,7 +161,7 @@ export function NewMemoryPage({
 
     const allowedFiles = files.slice(0, remainingSlots);
     try {
-      const converted = [];
+      const selected = [];
       for (const file of allowedFiles) {
         if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
           setFeedback(
@@ -169,15 +169,15 @@ export function NewMemoryPage({
           );
           continue;
         }
-        converted.push(await fileToAttachment(file, t));
+        selected.push(fileToAttachmentCandidate(file));
       }
-      if (!converted.length) {
+      if (!selected.length) {
         event.target.value = "";
         return;
       }
-      setAttachments((prev) => [...prev, ...converted]);
+      setAttachments((prev) => [...prev, ...selected]);
       setFeedback(
-        `${t.feedbackAttachmentAddedPrefix}${converted.length}${t.feedbackAttachmentAddedSuffix}`
+        `${t.feedbackAttachmentAddedPrefix}${selected.length}${t.feedbackAttachmentAddedSuffix}`
       );
     } catch {
       setFeedback(t.feedbackAttachmentError);
@@ -207,7 +207,7 @@ export function NewMemoryPage({
         story: story.trim(),
         photo: photos,
         voice: null,
-        attachments,
+        attachments: await prepareAttachmentsForSave(attachments, t),
         tags: [],
       };
       if (typeof onSaveMemory === "function") {
@@ -520,14 +520,33 @@ function blobToDataUrl(blob, t) {
   });
 }
 
-async function fileToAttachment(file, t) {
+function fileToAttachmentCandidate(file) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name || "attachment",
     mimeType: file.type || "application/octet-stream",
     size: file.size || 0,
-    dataUrl: await blobToDataUrl(file, t),
+    file,
   };
+}
+
+async function prepareAttachmentsForSave(attachments, t) {
+  const prepared = [];
+  for (const item of attachments) {
+    if (item?.dataUrl) {
+      prepared.push(item);
+      continue;
+    }
+    if (!item?.file) continue;
+    prepared.push({
+      id: item.id,
+      name: item.name,
+      mimeType: item.mimeType,
+      size: item.size,
+      dataUrl: await blobToDataUrl(item.file, t),
+    });
+  }
+  return prepared;
 }
 
 const styles = {
