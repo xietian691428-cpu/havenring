@@ -11,6 +11,16 @@ const EN = {
   estimatedStorageLabel: "Estimated storage",
   exportBackup: "Export Backup",
   clearAll: "Clear All Memories",
+  deviceSecuritySectionTitle: "Trusted devices",
+  deviceSecurityEnabled:
+    "This Haven is protected by a password on new devices. Trusted devices can open with ring tap only.",
+  deviceSecurityNotEnabled:
+    "Device protection is not initialized yet. Complete setup from ring quick access flow.",
+  deviceTrustedAtLabel: "Trusted on",
+  revokeDevice: "Revoke",
+  confirmRevokeDevice:
+    "Remove this device trust? It will require password or recovery code next time.",
+  deviceRevoked: "Device access revoked.",
   cloudSectionTitle: "Optional cloud backup",
   cloudToggleLabel:
     "Enable Cloud Backup (Sign in with Apple, can be turned off anytime)",

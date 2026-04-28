@@ -14,6 +14,11 @@ import {
   clearPendingMomentSnapshot,
   readPendingMomentSnapshot,
 } from "@/lib/pending-moment";
+import {
+  getSecuritySummary,
+  hasRingAccessGrant,
+  requiresReverificationCurrentDevice,
+} from "@/src/services/deviceTrustService";
 
 type HubState =
   | { kind: "deciding" }
@@ -84,6 +89,25 @@ export function HubRouter() {
     const decide = async (pending: PendingMoment | null) => {
       const supabase = getSupabaseBrowserClient();
       const effectivePending = pending ?? readPendingMomentSnapshot();
+      const security = getSecuritySummary();
+      if (!security.initialized) {
+        fallbackToHome("device_setup_required");
+        return;
+      }
+      if (!security.trustedCurrentDevice) {
+        const granted = await hasRingAccessGrant(token);
+        if (!granted) {
+          fallbackToHome("device_verification_required");
+          return;
+        }
+      }
+      if (security.trustedCurrentDevice && requiresReverificationCurrentDevice()) {
+        const granted = await hasRingAccessGrant(token);
+        if (!granted) {
+          fallbackToHome("device_verification_required");
+          return;
+        }
+      }
 
       // Scenario A: there's something waiting to be sealed on this device.
       if (effectivePending) {

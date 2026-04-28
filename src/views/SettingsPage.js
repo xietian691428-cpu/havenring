@@ -13,6 +13,10 @@ import {
   signOutCloudBackup,
 } from "../services/cloudBackupService";
 import { SETTINGS_CONTENT } from "../content/settingsContent";
+import {
+  getSecuritySummary,
+  revokeTrustedDevice,
+} from "../services/deviceTrustService";
 
 /**
  * Settings Page
@@ -28,6 +32,7 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
   const [localCount, setLocalCount] = useState(0);
   const [storageText, setStorageText] = useState(localeCopy.loadingStats);
   const [cloud, setCloud] = useState(() => getCloudBackupSettings());
+  const [security, setSecurity] = useState(() => getSecuritySummary());
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -37,6 +42,10 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
 
   useEffect(() => {
     void refreshLocalStats();
+  }, []);
+
+  useEffect(() => {
+    setSecurity(getSecuritySummary());
   }, []);
 
   async function refreshLocalStats() {
@@ -173,6 +182,14 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
     setStatus(localeCopy.unlinkDone);
   }
 
+  function handleRevokeDevice(deviceId) {
+    const confirmed = window.confirm(localeCopy.confirmRevokeDevice);
+    if (!confirmed) return;
+    revokeTrustedDevice(deviceId);
+    setSecurity(getSecuritySummary());
+    setStatus(localeCopy.deviceRevoked);
+  }
+
   return (
     <main style={styles.page}>
       <section style={styles.shell}>
@@ -216,6 +233,34 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
               {localeCopy.clearAll}
             </button>
           </div>
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.deviceSecuritySectionTitle}</h2>
+          <p style={styles.copy}>
+            {security.initialized
+              ? localeCopy.deviceSecurityEnabled
+              : localeCopy.deviceSecurityNotEnabled}
+          </p>
+          <ul style={styles.deviceList}>
+            {security.trustedDevices.map((device) => (
+              <li key={device.id} style={styles.deviceItem}>
+                <div>
+                  <p style={styles.copy}>{device.label}</p>
+                  <p style={styles.status}>
+                    {localeCopy.deviceTrustedAtLabel}: {new Date(device.trustedAt).toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRevokeDevice(device.id)}
+                  style={styles.secondaryButton}
+                >
+                  {localeCopy.revokeDevice}
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section style={styles.card}>
@@ -387,6 +432,22 @@ const styles = {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
+  },
+  deviceList: {
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+    display: "grid",
+    gap: 8,
+  },
+  deviceItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    border: "1px solid #3a2d28",
+    borderRadius: 10,
+    padding: 10,
   },
   secondaryButton: {
     border: "1px solid #5a3b30",

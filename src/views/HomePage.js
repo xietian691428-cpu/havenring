@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { FirstTimeOnboarding } from "../components/FirstTimeOnboarding";
 import { HOME_PAGE_CONTENT } from "../content/homePageContent";
+import {
+  getSecuritySummary,
+  grantRingAccess,
+  initializeSecurity,
+  verifyAndTrustCurrentDevice,
+} from "../services/deviceTrustService";
 
 const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
 /**
@@ -28,6 +34,13 @@ export function HomePage({
     reason: "",
   });
   const [platformSignInProvider, setPlatformSignInProvider] = useState("apple");
+  const [securityMode, setSecurityMode] = useState("none");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [recoveryCodeInput, setRecoveryCodeInput] = useState("");
+  const [setupRecoveryCode, setSetupRecoveryCode] = useState("");
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [securityError, setSecurityError] = useState("");
 
   useEffect(() => {
     if (ringHandledRef.current) return;
@@ -50,6 +63,15 @@ export function HomePage({
       token: url.searchParams.get("token") || "",
       reason: url.searchParams.get("reason") || "",
     });
+    const security = getSecuritySummary();
+    const reason = url.searchParams.get("reason") || "";
+    if (!security.initialized || reason === "device_setup_required") {
+      setSecurityMode("setup");
+    } else if (!security.trustedCurrentDevice || reason === "device_verification_required") {
+      setSecurityMode("verify");
+    } else {
+      setSecurityMode("none");
+    }
     url.searchParams.delete("ring");
     url.searchParams.delete("token");
     url.searchParams.delete("reason");
@@ -85,6 +107,50 @@ export function HomePage({
       window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
     }
     setOnboardingOpen(false);
+  }
+
+  async function continueAfterSecurity() {
+    if (!ringSignIn.token) return;
+    await grantRingAccess(ringSignIn.token);
+    window.location.href = `/hub?token=${encodeURIComponent(ringSignIn.token)}`;
+  }
+
+  async function handleSetupSecurity() {
+    if (password.length < 6) {
+      setSecurityError(t.ringSecurityPasswordTooShort);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setSecurityError(t.ringSecurityPasswordMismatch);
+      return;
+    }
+    setSecurityBusy(true);
+    setSecurityError("");
+    try {
+      const result = await initializeSecurity(password);
+      setSetupRecoveryCode(result.recoveryCode);
+      setSecurityMode("setup_done");
+    } catch {
+      setSecurityError(t.ringSecuritySetupFailed);
+    } finally {
+      setSecurityBusy(false);
+    }
+  }
+
+  async function handleVerifySecurity() {
+    setSecurityBusy(true);
+    setSecurityError("");
+    try {
+      await verifyAndTrustCurrentDevice({
+        password,
+        recoveryCode: recoveryCodeInput,
+      });
+      await continueAfterSecurity();
+    } catch {
+      setSecurityError(t.ringSecurityVerifyFailed);
+    } finally {
+      setSecurityBusy(false);
+    }
   }
 
   return (
@@ -148,6 +214,77 @@ export function HomePage({
                 {t.ringSignInGoogle}
               </button>
             </div>
+            {securityMode === "setup" ? (
+              <section style={styles.securityBox}>
+                <p style={styles.ringSignInTitle}>{t.ringSecuritySetupTitle}</p>
+                <input
+                  type="password"
+                  placeholder={t.ringSecurityPasswordPlaceholder}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={styles.inlineInput}
+                />
+                <input
+                  type="password"
+                  placeholder={t.ringSecurityConfirmPasswordPlaceholder}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={styles.inlineInput}
+                />
+                <button
+                  type="button"
+                  disabled={securityBusy}
+                  onClick={handleSetupSecurity}
+                  style={styles.secondaryButton}
+                >
+                  {securityBusy ? t.ringSecurityWorking : t.ringSecuritySetupAction}
+                </button>
+                {securityError ? <p style={styles.feedback}>{securityError}</p> : null}
+              </section>
+            ) : null}
+            {securityMode === "setup_done" ? (
+              <section style={styles.securityBox}>
+                <p style={styles.ringSignInTitle}>{t.ringSecurityRecoveryTitle}</p>
+                <p style={styles.howItWorksBody}>{setupRecoveryCode}</p>
+                <p style={styles.feedback}>{t.ringSecurityRecoveryHint}</p>
+                <button
+                  type="button"
+                  disabled={securityBusy}
+                  onClick={continueAfterSecurity}
+                  style={styles.secondaryButton}
+                >
+                  {t.ringSecurityContinue}
+                </button>
+              </section>
+            ) : null}
+            {securityMode === "verify" ? (
+              <section style={styles.securityBox}>
+                <p style={styles.ringSignInTitle}>{t.ringSecurityVerifyTitle}</p>
+                <input
+                  type="password"
+                  placeholder={t.ringSecurityPasswordPlaceholder}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={styles.inlineInput}
+                />
+                <input
+                  type="text"
+                  placeholder={t.ringSecurityRecoveryPlaceholder}
+                  value={recoveryCodeInput}
+                  onChange={(e) => setRecoveryCodeInput(e.target.value)}
+                  style={styles.inlineInput}
+                />
+                <button
+                  type="button"
+                  disabled={securityBusy}
+                  onClick={handleVerifySecurity}
+                  style={styles.secondaryButton}
+                >
+                  {securityBusy ? t.ringSecurityWorking : t.ringSecurityVerifyAction}
+                </button>
+                {securityError ? <p style={styles.feedback}>{securityError}</p> : null}
+              </section>
+            ) : null}
           </section>
         ) : null}
 
@@ -276,6 +413,20 @@ const styles = {
     padding: 14,
     display: "grid",
     gap: 8,
+  },
+  securityBox: {
+    border: "1px solid #5a3b30",
+    borderRadius: 10,
+    padding: 10,
+    display: "grid",
+    gap: 8,
+  },
+  inlineInput: {
+    border: "1px solid #3a2d28",
+    borderRadius: 10,
+    background: "#1f1816",
+    color: "#f8efe7",
+    padding: "10px 12px",
   },
   ringSignInTitle: {
     margin: 0,
