@@ -2,18 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppChrome } from "./components/AppChrome";
+import {
+  RingSetupWizard,
+  RING_SETUP_DISMISSED_KEY,
+} from "./components/RingSetupWizard";
 import { HomePage } from "./views/HomePage";
 import { TimelinePage } from "./views/TimelinePage";
+import { ExplorePage } from "./views/ExplorePage";
+import { RingsPage } from "./views/RingsPage";
 import { NewMemoryPage } from "./views/NewMemoryPage";
 import { MemoryDetailPage } from "./views/MemoryDetailPage";
 import { SettingsPage } from "./views/SettingsPage";
 import { HelpCenterPage } from "./views/HelpCenterPage";
 import { useMemories } from "./hooks/useMemories";
+import { useSupabaseSession } from "./hooks/useSupabaseSession";
 import { usePwaLocale } from "./i18n/pwaLocale";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
+import { getBoundRingCount } from "./services/ringRegistryService";
+import { scheduleWelcomeToast } from "./utils/welcomeToast";
 
 export default function App() {
-  const [route, setRoute] = useState({ name: "home", memoryId: null });
+  const [route, setRoute] = useState({ name: "timeline", memoryId: null });
   const [transitionDirection, setTransitionDirection] = useState("forward");
   const [swipeDx, setSwipeDx] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
@@ -23,26 +32,74 @@ export default function App() {
     memories,
     loading,
     saving,
+    syncing,
     error,
+    integrityWarning,
+    cloudPlaceholders,
+    syncIssues,
+    syncMeta,
     refresh,
+    syncNow,
+    syncActiveRingNow,
     createMemory,
   } = useMemories();
+  const { session: supabaseSession, loading: sessionLoading } =
+    useSupabaseSession();
+  const [hideNfcPrompt, setHideNfcPrompt] = useState(false);
   const [quickSigningIn, setQuickSigningIn] = useState(false);
+  const [quickSignInError, setQuickSignInError] = useState("");
+  const [ringSetupOpen, setRingSetupOpen] = useState(false);
+  const [ringSetupKey, setRingSetupKey] = useState(0);
+  const loginSyncDoneForSessionRef = useRef("");
 
   const selectedMemory = useMemo(
     () => memories.find((m) => m.id === route.memoryId) || null,
     [memories, route.memoryId]
   );
 
+  function openRingSetup() {
+    setRingSetupKey((k) => k + 1);
+    setRingSetupOpen(true);
+  }
+
+  function handleAfterOnboarding() {
+    if (typeof window === "undefined") return;
+    const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
+    if (!dismissed && getBoundRingCount() === 0) {
+      openRingSetup();
+    }
+  }
+
+  function handleRingSetupFinished(payload) {
+    const nickname = payload?.nickname || "friend";
+    scheduleWelcomeToast({ nickname });
+    setRingSetupOpen(false);
+    navigateTo({ name: "timeline", memoryId: null }, "forward");
+    void refresh();
+  }
+
+  const activeTab = useMemo(() => {
+    if (route.name === "explore") return "explore";
+    if (route.name === "rings") return "rings";
+    if (route.name === "new") return "seal";
+    return "timeline";
+  }, [route.name]);
+
+  const showBottomNav = !["new", "detail", "help"].includes(route.name);
+
   const shellProps = {
     locale,
-    current: route.name,
-    onNavigateHome: () => navigateTo({ name: "home", memoryId: null }, "back"),
-    onNavigateTimeline: async () => {
+    showBottomNav,
+    activeTab,
+    onTabTimeline: async () => {
       await refresh();
       navigateTo({ name: "timeline", memoryId: null }, "back");
     },
-    onNavigateSettings: () => navigateTo({ name: "settings", memoryId: null }, "forward"),
+    onTabExplore: () => navigateTo({ name: "explore", memoryId: null }, "forward"),
+    onTabSeal: () => navigateTo({ name: "new", memoryId: null }, "forward"),
+    onTabRings: () => navigateTo({ name: "rings", memoryId: null }, "forward"),
+    onNavigateSettings: () =>
+      navigateTo({ name: "settings", memoryId: null }, "forward"),
     onNavigateHelp: () => navigateTo({ name: "help", memoryId: null }, "forward"),
   };
 
@@ -73,15 +130,31 @@ export default function App() {
 
   async function handleQuickSignIn(provider, token) {
     setQuickSigningIn(true);
+    setQuickSignInError("");
     try {
+      const ua = navigator.userAgent.toLowerCase();
+      const isAppleDevice =
+        /iphone|ipad|ipod/.test(ua) ||
+        (ua.includes("macintosh") && "ontouchend" in window);
+      if (provider === "apple" && !isAppleDevice) {
+        setQuickSignInError(
+          "Apple Sign In is unavailable on this device. Use Google instead."
+        );
+        return;
+      }
       const supabase = getSupabaseBrowserClient();
       const redirectTo = token
         ? `${window.location.origin}/hub?token=${encodeURIComponent(token)}`
         : `${window.location.origin}/`;
-      await supabase.auth.signInWithOAuth({
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },
       });
+      if (oauthError) {
+        setQuickSignInError(
+          "Sign-in could not start. Please try again or switch sign-in method."
+        );
+      }
     } finally {
       setQuickSigningIn(false);
     }
@@ -93,33 +166,57 @@ export default function App() {
     navigateTo({ name: "detail", memoryId }, "forward");
   }
 
-  // Fixed ring URL entrypoint support: /hub?memoryId=... or /?memory=...
-  // Ring remains a long-term key and does not need per-save rewrites.
+  useEffect(() => {
+    const done = localStorage.getItem("haven.onboarding.completed.v1") === "1";
+    if (done) return;
+    queueMicrotask(() => {
+      setRoute({ name: "home", memoryId: null });
+    });
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const memoryId = params.get("memoryId") || params.get("memory") || params.get("m");
+    const memoryId =
+      params.get("memoryId") || params.get("memory") || params.get("m");
     if (!memoryId) return;
     void openMemoryFromRingParams(memoryId);
-    // Intentionally run once on first mount for entry URL handling.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (sessionLoading) return;
+    queueMicrotask(() => {
+      setHideNfcPrompt(Boolean(supabaseSession));
+    });
+    if (!supabaseSession) {
+      loginSyncDoneForSessionRef.current = "";
+      return;
+    }
+    const sessionKey = String(supabaseSession.access_token || "");
+    if (sessionKey && loginSyncDoneForSessionRef.current !== sessionKey) {
+      loginSyncDoneForSessionRef.current = sessionKey;
+      void (async () => {
+        await syncNow().catch(() => null);
+        await refresh().catch(() => null);
+      })();
+    }
+  }, [supabaseSession, sessionLoading, syncNow, refresh]);
 
   function goBackByRoute() {
     if (route.name === "detail" || route.name === "new") {
       navigateTo({ name: "timeline", memoryId: null }, "back");
       return;
     }
-    if (route.name === "timeline") {
-      navigateTo({ name: "home", memoryId: null }, "back");
+    if (route.name === "help") {
+      navigateTo({ name: "timeline", memoryId: null }, "back");
     }
   }
 
   function handleTouchStart(event) {
-    if (route.name === "home") return;
+    if (!["detail", "new", "help"].includes(route.name)) return;
     const touch = event.changedTouches?.[0];
     if (!touch) return;
-    // Edge swipe only: avoids accidental back while interacting with content.
     if (touch.clientX > 32) {
       touchStartRef.current = null;
       return;
@@ -134,35 +231,28 @@ export default function App() {
   }
 
   function handleTouchMove(event) {
-    if (route.name === "home") return;
     const start = touchStartRef.current;
     if (!start) return;
-
     const touch = event.changedTouches?.[0];
     if (!touch) return;
-
     const deltaX = Math.max(0, touch.clientX - start.x);
     const deltaY = Math.abs(touch.clientY - start.y);
     if (deltaY > 64) {
       setSwipeDx(0);
       return;
     }
-
     setSwipeDx(Math.min(deltaX, 120));
   }
 
   function handleTouchEnd(event) {
-    if (route.name === "home") return;
     const start = touchStartRef.current;
     touchStartRef.current = null;
     if (!start) return;
     const touch = event.changedTouches?.[0];
     if (!touch) return;
-
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
     const elapsed = Date.now() - start.ts;
-
     const isHorizontalSwipe = deltaX > 72 && Math.abs(deltaY) < 48;
     const isFastEnough = elapsed < 700;
     if (isHorizontalSwipe && isFastEnough) {
@@ -171,7 +261,6 @@ export default function App() {
       goBackByRoute();
       return;
     }
-
     setSwipeDx(0);
     setIsSwiping(false);
   }
@@ -182,98 +271,145 @@ export default function App() {
     setIsSwiping(false);
   }
 
+  let mainContent = null;
+
   if (route.name === "timeline") {
-    return renderWithShell(
-        <FadePage pageKey="timeline" direction={transitionDirection}>
-          <TimelinePage
-            locale={locale}
-            memories={memories}
-            loading={loading}
-            error={error}
-            onBackHome={() => navigateTo({ name: "home", memoryId: null }, "back")}
-            onCreateNew={() => navigateTo({ name: "new", memoryId: null }, "forward")}
-            onOpenSettings={() => navigateTo({ name: "settings", memoryId: null }, "forward")}
-            onOpenMemory={(memoryId) =>
-              navigateTo({ name: "detail", memoryId }, "forward")
-            }
-            onOpenMemoryFromRing={openMemoryFromRingParams}
-          />
-        </FadePage>
+    mainContent = (
+      <FadePage pageKey="timeline" direction={transitionDirection}>
+        <TimelinePage
+          locale={locale}
+          memories={memories}
+          loading={loading}
+          error={error}
+          syncing={syncing}
+          integrityWarning={integrityWarning}
+          cloudPlaceholders={cloudPlaceholders}
+          syncIssues={syncIssues}
+          syncMeta={syncMeta}
+          onResyncNow={syncNow}
+          onResyncActiveRing={syncActiveRingNow}
+          onRecoverNow={syncNow}
+          onOpenMemory={(memoryId) =>
+            navigateTo({ name: "detail", memoryId }, "forward")
+          }
+          onOpenMemoryFromRing={openMemoryFromRingParams}
+          showRingSignIn={!sessionLoading && !supabaseSession && !hideNfcPrompt}
+          onRingSignedIn={async () => {
+            setHideNfcPrompt(true);
+            await refresh();
+            await syncNow().catch(() => null);
+            navigateTo({ name: "timeline", memoryId: null }, "forward");
+          }}
+        />
+      </FadePage>
     );
-  }
-
-  if (route.name === "new") {
-    return renderWithShell(
-        <FadePage pageKey="new" direction={transitionDirection}>
-          <NewMemoryPage
-            locale={locale}
-            onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-            onSaveMemory={createMemory}
-            onSaved={async () => {
-              await refresh();
-            }}
-            onViewTimeline={() =>
-              navigateTo({ name: "timeline", memoryId: null }, "back")
-            }
-          />
-        </FadePage>
+  } else if (route.name === "explore") {
+    mainContent = (
+      <FadePage pageKey="explore" direction={transitionDirection}>
+        <ExplorePage locale={locale} memories={memories} />
+      </FadePage>
     );
-  }
-
-  if (route.name === "detail") {
-    return renderWithShell(
-        <FadePage pageKey="detail" direction={transitionDirection}>
-          <MemoryDetailPage
-            locale={locale}
-            memory={selectedMemory}
-            loading={loading && !selectedMemory}
-            error=""
-            onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-          />
-        </FadePage>
+  } else if (route.name === "rings") {
+    mainContent = (
+      <FadePage pageKey="rings" direction={transitionDirection}>
+        <RingsPage
+          locale={locale}
+          onOpenRingSetup={openRingSetup}
+          onOpenSettings={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
+          }
+        />
+      </FadePage>
     );
-  }
-
-  if (route.name === "settings") {
-    return renderWithShell(
+  } else if (route.name === "new") {
+    mainContent = (
+      <FadePage pageKey="new" direction={transitionDirection}>
+        <NewMemoryPage
+          locale={locale}
+          onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+          onSaveMemory={createMemory}
+          onSaved={async () => {
+            await refresh();
+          }}
+          onViewTimeline={() =>
+            navigateTo({ name: "timeline", memoryId: null }, "back")
+          }
+        />
+      </FadePage>
+    );
+  } else if (route.name === "detail") {
+    mainContent = (
+      <FadePage pageKey="detail" direction={transitionDirection}>
+        <MemoryDetailPage
+          locale={locale}
+          memory={selectedMemory}
+          loading={loading && !selectedMemory}
+          error=""
+          onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+        />
+      </FadePage>
+    );
+  } else if (route.name === "settings") {
+    mainContent = (
       <FadePage pageKey="settings" direction={transitionDirection}>
         <SettingsPage
           locale={locale}
-          onBack={() => navigateTo({ name: "home", memoryId: null }, "back")}
+          onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
         />
       </FadePage>
     );
-  }
-
-  if (route.name === "help") {
-    return renderWithShell(
+  } else if (route.name === "help") {
+    mainContent = (
       <FadePage pageKey="help" direction={transitionDirection}>
         <HelpCenterPage
           locale={locale}
-          onBack={() => navigateTo({ name: "home", memoryId: null }, "back")}
+          onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+        />
+      </FadePage>
+    );
+  } else {
+    mainContent = (
+      <FadePage pageKey="home" direction={transitionDirection}>
+        <HomePage
+          locale={locale}
+          loading={loading || saving}
+          message={error || ""}
+          quickSignInError={quickSignInError}
+          quickSigningIn={quickSigningIn}
+          onQuickSignIn={handleQuickSignIn}
+          onAfterOnboarding={handleAfterOnboarding}
+          onOpenRingSetup={openRingSetup}
+          onOpenTimeline={async () => {
+            await refresh();
+            navigateTo({ name: "timeline", memoryId: null }, "forward");
+          }}
+          onCreateMemory={() =>
+            navigateTo({ name: "new", memoryId: null }, "forward")
+          }
+          onOpenSettings={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
+          }
+          onOpenMemoryFromRing={openMemoryFromRingParams}
         />
       </FadePage>
     );
   }
 
-  return renderWithShell(
-    <FadePage pageKey="home" direction={transitionDirection}>
-      <HomePage
+  return (
+    <>
+      {renderWithShell(mainContent)}
+      <RingSetupWizard
+        key={ringSetupKey}
+        open={ringSetupOpen}
         locale={locale}
-        loading={loading || saving}
-        message={error || ""}
-        quickSigningIn={quickSigningIn}
-        onQuickSignIn={handleQuickSignIn}
-        onOpenTimeline={async () => {
-          await refresh();
-          navigateTo({ name: "timeline", memoryId: null }, "forward");
-        }}
-        onCreateMemory={() => navigateTo({ name: "new", memoryId: null }, "forward")}
-        onOpenSettings={() => navigateTo({ name: "settings", memoryId: null }, "forward")}
-        onOpenMemoryFromRing={openMemoryFromRingParams}
+        onClose={() => setRingSetupOpen(false)}
+        onFinished={handleRingSetupFinished}
+        onOpenSettings={() =>
+          navigateTo({ name: "settings", memoryId: null }, "forward")
+        }
       />
-    </FadePage>
+    </>
   );
 }
 

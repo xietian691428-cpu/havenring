@@ -14,9 +14,13 @@ import {
 } from "../services/cloudBackupService";
 import { SETTINGS_CONTENT } from "../content/settingsContent";
 import {
+  getKeepSignedInPreference,
   getSecuritySummary,
   revokeTrustedDevice,
+  setKeepSignedInPreference,
 } from "../services/deviceTrustService";
+import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
  * Settings Page
@@ -33,6 +37,9 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
   const [storageText, setStorageText] = useState(localeCopy.loadingStats);
   const [cloud, setCloud] = useState(() => getCloudBackupSettings());
   const [security, setSecurity] = useState(() => getSecuritySummary());
+  const [keepSignedIn, setKeepSignedIn] = useState(() =>
+    getKeepSignedInPreference()
+  );
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -190,8 +197,50 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
     setStatus(localeCopy.deviceRevoked);
   }
 
+  function handleKeepSignedInChange(enabled) {
+    setKeepSignedInPreference(enabled);
+    setKeepSignedIn(enabled);
+    setStatus("");
+  }
+
+  async function handleRevokeAllNfc() {
+    const confirmed = window.confirm(localeCopy.confirmRevokeAllNfc);
+    if (!confirmed) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setStatus(localeCopy.revokeAllNfcNeedSignIn);
+        return;
+      }
+      const res = await fetch("/api/nfc/revoke-all", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+          "X-Haven-Secondary-Verified": "1",
+        },
+        body: JSON.stringify({}),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.error || "revoke_all_failed");
+      }
+      const n = Number(payload.revoked_count ?? 0);
+      setStatus(localeCopy.revokeAllNfcDone.replace("{n}", String(n)));
+    } catch {
+      setStatus(localeCopy.revokeAllNfcFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <main style={styles.page}>
+    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
@@ -314,12 +363,47 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
         </section>
 
         <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.sessionSectionTitle}</h2>
+          <label style={styles.toggleRow}>
+            <span style={styles.copy}>{localeCopy.keepSignedInLabel}</span>
+            <input
+              type="checkbox"
+              checked={keepSignedIn}
+              disabled={busy}
+              onChange={(e) => handleKeepSignedInChange(e.target.checked)}
+            />
+          </label>
+          <h3 style={styles.subheading}>{localeCopy.revokeAllNfcTitle}</h3>
+          <p style={styles.copy}>{localeCopy.revokeAllNfcBody}</p>
+          <button
+            type="button"
+            onClick={() => void handleRevokeAllNfc()}
+            disabled={busy}
+            style={styles.dangerButton}
+          >
+            {localeCopy.revokeAllNfcButton}
+          </button>
+        </section>
+
+        <section style={styles.card}>
           <h2 style={styles.sectionTitle}>{localeCopy.privacySectionTitle}</h2>
           <p style={styles.copy}>
             {localeCopy.privacyLine1}
           </p>
           <p style={styles.copy}>
             {localeCopy.privacyLine2}
+          </p>
+          <p style={styles.copy}>
+            {localeCopy.privacyNfcLine}
+          </p>
+          <p style={styles.copy}>
+            {localeCopy.privacyUnbindLine}
+          </p>
+          <p style={styles.copy}>
+            {localeCopy.privacyLegacyLine}
+          </p>
+          <p style={styles.copy}>
+            {localeCopy.privacyE2eLine}
           </p>
           <a
             href="/privacy-policy"
@@ -374,9 +458,8 @@ const styles = {
   page: {
     minHeight: "100vh",
     padding: 20,
-    background: "radial-gradient(circle at top, #281d18 0%, #120f0e 56%)",
-    color: "#f8efe7",
-    fontFamily: "Inter, system-ui, sans-serif",
+    color: sanctuaryTheme.cream,
+    fontFamily: sanctuaryTheme.font,
   },
   shell: {
     maxWidth: 860,
@@ -392,7 +475,7 @@ const styles = {
   },
   brand: {
     margin: 0,
-    color: "#d9c3b3",
+    color: sanctuaryTheme.accentSoft,
     fontSize: 12,
     letterSpacing: "0.2em",
     textTransform: "uppercase",
@@ -412,9 +495,9 @@ const styles = {
     cursor: "pointer",
   },
   card: {
-    border: "1px solid #3a2d28",
+    border: "1px solid rgba(232, 220, 208, 0.14)",
     borderRadius: 14,
-    background: "#171210",
+    background: "rgba(26, 21, 18, 0.42)",
     padding: 14,
     display: "grid",
     gap: 10,
@@ -422,6 +505,11 @@ const styles = {
   sectionTitle: {
     margin: 0,
     fontSize: 18,
+  },
+  subheading: {
+    margin: "12px 0 0",
+    fontSize: 15,
+    fontWeight: 600,
   },
   copy: {
     margin: 0,

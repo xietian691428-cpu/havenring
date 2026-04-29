@@ -6,6 +6,7 @@ import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { HELP_FAQ } from "../content/helpFaq";
 import { getHelpCenterContent } from "../content/helpCenterContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
+import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
  * HelpCenterPage
@@ -20,7 +21,7 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
 
   return (
     <>
-      <main style={styles.page}>
+      <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
         <section style={styles.shell}>
           <header style={styles.header}>
             <div>
@@ -107,9 +108,8 @@ const styles = {
   page: {
     minHeight: "100vh",
     padding: 20,
-    background: "radial-gradient(circle at top, #281d18 0%, #120f0e 56%)",
-    color: "#f8efe7",
-    fontFamily: "Inter, system-ui, sans-serif",
+    color: sanctuaryTheme.cream,
+    fontFamily: sanctuaryTheme.font,
   },
   shell: {
     maxWidth: 900,
@@ -125,7 +125,7 @@ const styles = {
   },
   brand: {
     margin: 0,
-    color: "#d9c3b3",
+    color: sanctuaryTheme.accentSoft,
     fontSize: 12,
     letterSpacing: "0.2em",
     textTransform: "uppercase",
@@ -152,9 +152,9 @@ const styles = {
     cursor: "pointer",
   },
   card: {
-    border: "1px solid #3a2d28",
+    border: "1px solid rgba(232, 220, 208, 0.14)",
     borderRadius: 14,
-    background: "#171210",
+    background: "rgba(26, 21, 18, 0.42)",
     padding: 14,
     display: "grid",
     gap: 10,

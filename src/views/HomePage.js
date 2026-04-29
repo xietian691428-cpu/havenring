@@ -20,7 +20,10 @@ export function HomePage({
   onCreateMemory,
   onOpenSettings,
   onOpenMemoryFromRing,
+  onAfterOnboarding,
+  onOpenRingSetup,
   onQuickSignIn,
+  quickSignInError = "",
   loading = false,
   quickSigningIn = false,
   message = "",
@@ -42,7 +45,6 @@ export function HomePage({
   const [setupRecoveryCode, setSetupRecoveryCode] = useState("");
   const [securityBusy, setSecurityBusy] = useState(false);
   const [securityError, setSecurityError] = useState("");
-
   useEffect(() => {
     if (ringHandledRef.current) return;
     if (typeof window === "undefined") return;
@@ -115,6 +117,7 @@ export function HomePage({
       window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
     }
     setOnboardingOpen(false);
+    onAfterOnboarding?.();
   }
 
   async function continueAfterSecurity() {
@@ -207,7 +210,7 @@ export function HomePage({
             <div style={styles.altSignInRow}>
               <button
                 type="button"
-                disabled={quickSigningIn}
+                disabled={quickSigningIn || platformSignInProvider === "google"}
                 onClick={() => onQuickSignIn?.("apple", ringSignIn.token)}
                 style={styles.tertiaryButton}
               >
@@ -222,6 +225,9 @@ export function HomePage({
                 {t.ringSignInGoogle}
               </button>
             </div>
+            {platformSignInProvider === "google" ? (
+              <p style={styles.feedback}>{t.ringSignInAppleUnavailableHint}</p>
+            ) : null}
             {securityMode === "setup" ? (
               <section style={styles.securityBox}>
                 <p style={styles.ringSignInTitle}>{t.ringSecuritySetupTitle}</p>
@@ -342,9 +348,18 @@ export function HomePage({
             >
               {t.start}
             </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => onOpenRingSetup?.()}
+              style={styles.tertiaryButton}
+            >
+              {t.ringSetupCta}
+            </button>
           </div>
 
           <p style={styles.feedback}>{message || "\u00A0"}</p>
+          {quickSignInError ? <p style={styles.feedback}>{quickSignInError}</p> : null}
         </section>
       </main>
       <FirstTimeOnboarding

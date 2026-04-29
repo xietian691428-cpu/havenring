@@ -20,6 +20,24 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Variables
+
+Copy `.env.example` to your runtime environment and fill required values.
+
+Required for NFC cloud login path:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_JWT_SECRET`
+
+Optional but recommended:
+
+- `SUPABASE_JWT_ISS` (explicit JWT issuer claim; defaults to `<NEXT_PUBLIC_SUPABASE_URL>/auth/v1`)
+- `NFC_ACCESS_TOKEN_SECONDS`
+- `NFC_LONG_SESSION_MAX_SECONDS`
+- `NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS`
+- `NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS`
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

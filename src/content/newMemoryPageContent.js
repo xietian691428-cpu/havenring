@@ -60,6 +60,10 @@ const EN = {
     "Hold your ring near the back of your phone now. Sealing is completed only after the ring touch is detected.",
   sealPromptDone: "I touched the ring",
   sealPromptClose: "Close",
+  backlogTitle: "Planned enhancements (backlog)",
+  backlogTimeCapsule: "Time capsule scheduling UI (deferred release time).",
+  backlogTags: "Richer tag editor (multi-tag suggestions and quick chips).",
+  backlogGeo: "Optional location marker with explicit permission flow.",
 };
 
 export const NEW_MEMORY_PAGE_CONTENT = {

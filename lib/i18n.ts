@@ -27,10 +27,12 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.cta.write_new": "Write new",
     "home.claim.hint": "Not linked yet?",
     "home.claim.cta": "Tap your ring to claim",
-    "home.vault.hint": "Tap your ring anytime to revisit your sealed moments.",
+    "home.vault.hint":
+      "Tap your ring anytime for quick access to your sealed moments. Your account—not the ring alone—protects everything.",
     "home.vault.cta": "Tap ring to open your Haven",
     "home.vault.open": "Open Haven history",
-    "home.seal.hint": "Prepare to seal, then tap your ring to confirm.",
+    "home.seal.hint":
+      "Prepare to seal, then tap your ring to confirm. The ring is a shortcut; serious changes still need your account and this device checks.",
     "home.state.encrypting": "Encrypting...",
     "home.state.awaiting.title": "Touch your ring to seal",
     "home.state.awaiting.body":
@@ -69,16 +71,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.state_unsupported":
       "Ring quick access is temporarily unavailable. Please continue with sign-in.",
     "claim.success": "Done. Returning to home...",
-    "help.title": "Recovery and account policy",
+    "help.title": "Rings, privacy, and your account",
     "help.local_only.title": "Local-first by default",
     "help.local_only.body":
-      "All configuration is stored on this device for speed and privacy.",
-    "help.recovery.title": "Self-recovery with your ring",
+      "Sealed content is encrypted on this device for speed and privacy. The ring is a quick-access shortcut, not a replacement for your account.",
+    "help.recovery.title": "If something is lost or broken",
     "help.recovery.body":
-      "Lost local configuration? Hold your ring near your phone and use wipe/reissue to reset and write a fresh URL.",
-    "help.optional_cloud.title": "Future optional cloud backup",
+      "Your account still holds your haven. For a ring or device issue, use recovery in the app to reissue or unlink a ring. Revoke a lost ring from a trusted device as soon as you can.",
+    "help.optional_cloud.title": "Optional cross-device backup",
     "help.optional_cloud.body":
-      "A future update may add optional Sign in with Apple / Google for cross-device backup, without forcing accounts for everyone.",
+      "You can turn on optional Sign in with Apple or Google in Settings to sync backup across devices. Your account remains the source of trust—not the physical ring alone.",
   },
   fr: {
     "common.return": "Retour",
@@ -100,11 +102,11 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.claim.hint": "Pas encore liée ?",
     "home.claim.cta": "Touchez votre bague pour la lier",
     "home.vault.hint":
-      "Touchez votre bague à tout moment pour retrouver vos moments scellés.",
+      "Touchez votre bague pour un acces rapide a vos moments scelles. C'est votre compte — pas la bague seule — qui protege le tout.",
     "home.vault.cta": "Touchez la bague pour ouvrir votre Haven",
     "home.vault.open": "Ouvrir l'historique Haven",
     "home.seal.hint":
-      "Préparez le scellement, puis touchez votre bague pour confirmer.",
+      "Préparez le scellement, puis touchez la bague pour confirmer. La bague est un raccourci; les changements importants exigent compte et verifications sur cet appareil.",
     "home.state.encrypting": "Chiffrement...",
     "home.state.awaiting.title": "Touchez votre bague pour sceller",
     "home.state.awaiting.body":
@@ -136,6 +138,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.generic":
       "Impossible d'associer cette bague pour le moment.",
     "claim.success": "Bague associée. Retour à l'accueil...",
+    "help.title": "Bagues, confidentialite et compte",
+    "help.local_only.title": "Local d'abord",
+    "help.local_only.body":
+      "Le contenu scelle est chiffre sur cet appareil. La bague est un raccourci d'acces, pas un remplacant de compte.",
+    "help.recovery.title": "En cas de perte ou de panne",
+    "help.recovery.body":
+      "Votre compte conserve votre Haven. Pour un probleme de bague ou d'appareil, utilisez la recuperation pour reemettre ou retirer une bague. Revoguez une bague perdue depuis un appareil de confiance rapidement.",
+    "help.optional_cloud.title": "Sauvegarde optionnelle multi-appareils",
+    "help.optional_cloud.body":
+      "Vous pouvez activer la connexion Apple ou Google dans les reglages pour une sauvegarde multi-appareils. Le compte reste la source de confiance, pas seulement la bague.",
   },
   es: {
     "common.return": "Volver",
@@ -157,10 +169,11 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.claim.hint": "¿Aún no está vinculado?",
     "home.claim.cta": "Toca tu anillo para vincularlo",
     "home.vault.hint":
-      "Toca tu anillo en cualquier momento para volver a tus momentos sellados.",
+      "Toca el anillo para acceso rapido a tus momentos sellados. Tu cuenta — no solo el anillo — protege todo.",
     "home.vault.cta": "Toca el anillo para abrir tu Haven",
     "home.vault.open": "Abrir historial de Haven",
-    "home.seal.hint": "Prepara el sellado y luego toca tu anillo para confirmar.",
+    "home.seal.hint":
+      "Prepara el sellado y toca el anillo para confirmar. El anillo es un atajo; los cambios serios siguen pidiendo tu cuenta y comprobaciones en este dispositivo.",
     "home.state.encrypting": "Cifrando...",
     "home.state.awaiting.title": "Toca tu anillo para sellar",
     "home.state.awaiting.body":
@@ -192,6 +205,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.generic":
       "No se pudo vincular este anillo en este momento.",
     "claim.success": "Anillo vinculado. Volviendo al inicio...",
+    "help.title": "Anillos, privacidad y tu cuenta",
+    "help.local_only.title": "Local primero",
+    "help.local_only.body":
+      "El contenido sellado se cifra en este dispositivo. El anillo es un atajo, no sustituye a la cuenta.",
+    "help.recovery.title": "Si pierdes o rompes algo",
+    "help.recovery.body":
+      "Tu cuenta sigue guardando tu Haven. Si falla anillo o dispositivo, usa recuperacion en la app para reemitir o desvincular. Revoca un anillo perdido desde un dispositivo de confianza en cuanto puedas.",
+    "help.optional_cloud.title": "Copia de seguridad opcional",
+    "help.optional_cloud.body":
+      "Puedes activar inicio con Apple o Google en ajustes para copia entre dispositivos. La cuenta sigue siendo la base de confianza, no solo el anillo.",
   },
   de: {
     "common.return": "Zurück",
@@ -213,11 +236,11 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.claim.hint": "Noch nicht verknüpft?",
     "home.claim.cta": "Berühre deinen Ring zum Verknüpfen",
     "home.vault.hint":
-      "Berühre deinen Ring jederzeit, um deine versiegelten Momente wiederzusehen.",
+      "Beruhre den Ring fur schnellen Zugriff auf versiegelte Momente. Dein Konto — nicht der Ring allein — schutzt alles.",
     "home.vault.cta": "Ring berühren, um dein Haven zu öffnen",
     "home.vault.open": "Haven-Verlauf öffnen",
     "home.seal.hint":
-      "Versiegelung vorbereiten und dann deinen Ring zur Bestätigung berühren.",
+      "Versiegelung vorbereiten, dann Ring beruhren. Der Ring ist ein Kurzbefehl; wichtige Anderungen brauchen Konto und Prufungen auf diesem Gerat.",
     "home.state.encrypting": "Verschlüsselung...",
     "home.state.awaiting.title": "Berühre deinen Ring zum Versiegeln",
     "home.state.awaiting.body":
@@ -249,6 +272,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.generic":
       "Dieser Ring kann derzeit nicht verknüpft werden.",
     "claim.success": "Ring verknüpft. Zurück zur Startseite...",
+    "help.title": "Ringe, Privatsphäre und Konto",
+    "help.local_only.title": "Lokal zuerst",
+    "help.local_only.body":
+      "Versiegelter Inhalt ist auf diesem Gerat verschlusselt. Der Ring ist Kurzzugang, kein Ersatz furs Konto.",
+    "help.recovery.title": "Bei Verlust oder Defekt",
+    "help.recovery.body":
+      "Dein Konto behalt dein Haven. Bei Ring- oder Gerateproblem nutze Wiederherstellung in der App fur neu ausstellen oder entknupfen. Verlorene Ringe schnell von einem vertrauten Gerat widerrufen.",
+    "help.optional_cloud.title": "Optionales Backup mehrerer Gerate",
+    "help.optional_cloud.body":
+      "Apple- oder Google-Anmeldung in den Einstellungen fur gerateubergreifendes Backup. Vertrauen bleibt beim Konto, nicht allein am Ring.",
   },
   it: {
     "common.return": "Torna",
@@ -270,11 +303,11 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "home.claim.hint": "Non ancora collegato?",
     "home.claim.cta": "Tocca l'anello per associarlo",
     "home.vault.hint":
-      "Tocca l'anello in qualsiasi momento per ritrovare i tuoi momenti sigillati.",
+      "Tocca l'anello per accesso rapido ai momenti sigillati. E il tuo account — non il solo anello — a proteggere tutto.",
     "home.vault.cta": "Tocca l'anello per aprire il tuo Haven",
     "home.vault.open": "Apri cronologia Haven",
     "home.seal.hint":
-      "Prepara il sigillo, poi tocca l'anello per confermare.",
+      "Prepara il sigillo, poi tocca l'anello. L'anello e una scorciatoia; le operazioni importanti restano con account e verifiche su questo dispositivo.",
     "home.state.encrypting": "Cifratura...",
     "home.state.awaiting.title": "Tocca l'anello per sigillare",
     "home.state.awaiting.body":
@@ -306,6 +339,16 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.error.generic":
       "Impossibile associare questo anello in questo momento.",
     "claim.success": "Anello associato. Ritorno alla home...",
+    "help.title": "Anelli, privacy e account",
+    "help.local_only.title": "Prima il locale",
+    "help.local_only.body":
+      "Il contenuto sigillato e cifrato su questo dispositivo. L'anello e una scorciatoia, non sostituisce l'account.",
+    "help.recovery.title": "Se qualcosa si perde o si rompe",
+    "help.recovery.body":
+      "Il tuo account conserva il Haven. Per problemi ad anello o dispositivo usa il ripristino nell'app per riemettere o scollegare. Revoca un anello smarrito da un dispositivo fidato appena puoi.",
+    "help.optional_cloud.title": "Backup opzionale tra dispositivi",
+    "help.optional_cloud.body":
+      "Puoi attivare accesso con Apple o Google nelle impostazioni per il backup tra dispositivi. La fiducia resta sull'account, non solo sull'anello fisico.",
   },
 };
 

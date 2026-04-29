@@ -2,9 +2,12 @@
  * Haven Ring - Local Encryption Service
  *
  * Privacy model:
- * - Content is encrypted before local persistence.
- * - Key is device-local and auto-managed (no user password flow).
- * - This is transparent to users: encrypt/decrypt happens automatically.
+ * - Content is encrypted before local persistence using AES-GCM.
+ * - Default key is device-local (random); optionally wrapped with a user-derived
+ *   key when device protection / passphrase flows are enabled (see Haven security profile).
+ *
+ * Checklist: all durable local blobs SHOULD use keys derived from the user's
+ * passphrase via PBKDF2 before wrapping the AES data key — migrate incrementally.
  *
  * IMPORTANT:
  * "Your content is encrypted and stored locally on your device."
@@ -180,6 +183,36 @@ export async function decryptJson(payload) {
  * Optional utility for rotating local key.
  * Caller must re-encrypt existing records if used in production flows.
  */
+/**
+ * Derives a wrapping key from a user passphrase (PBKDF2-SHA256) for encrypting
+ * the local AES key material. Call when upgrading to user-bound local crypto.
+ */
+export async function deriveUserWrappingKey(passphrase, saltBytes) {
+  if (!crypto?.subtle) {
+    throw new Error("Web Crypto unavailable.");
+  }
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(String(passphrase)),
+    "PBKDF2",
+    false,
+    ["deriveBits", "deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: saltBytes,
+      iterations: 210_000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+}
+
 export async function rotateLocalKey() {
   const db = await openKeyDb();
   try {

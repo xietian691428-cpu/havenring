@@ -10,10 +10,10 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     start: "Start Using Now",
     openNfcGuide: "See ring position guide",
     steps: [
-      { id: "welcome", icon: "💛", title: "Your ring is the key to your memories", body: "Think of your ring like a tiny door key. It opens your private Haven anytime." },
+      { id: "welcome", icon: "💛", title: "Your account is home; the ring is a shortcut", body: "Haven belongs to your signed-in account. The ring is a quick tap to open or seal—like a favorite button, not a password. You can add more than one ring; all are equal backup-style shortcuts." },
       { id: "entry-url", icon: "🔗", title: "Set one fixed entry once", body: "For first setup, write one fixed Haven entry on your ring. After that, no rewrite for each memory." },
       { id: "create-first", icon: "✍️", title: "Create your first memory", body: "Add photos, a short story, and optional files (audio, video, documents). Tap Save to keep it in your local Haven." },
-      { id: "daily", icon: "✨", title: "Daily use is simple", body: "Just lightly tap your ring to open Haven and revisit your moments with one touch." },
+      { id: "daily", icon: "✨", title: "Daily use is simple", body: "Lightly tap your ring to open Haven. Any linked ring on this account works the same way—no main ring required." },
     ],
   },
   fr: {
@@ -25,10 +25,10 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     start: "Commencer maintenant",
     openNfcGuide: "Voir la position de la bague",
     steps: [
-      { id: "welcome", icon: "💛", title: "Votre bague est la clé de vos souvenirs", body: "Considérez votre bague comme une petite clé. Elle ouvre votre Haven privé à tout moment." },
+      { id: "welcome", icon: "💛", title: "Votre compte est la base ; la bague est un raccourci", body: "Haven repose sur votre compte connecte. La bague sert d'acces rapide pour ouvrir ou sceller — comme un favori, pas comme un mot de passe. Plusieurs bagues possibles, toutes egales." },
       { id: "entry-url", icon: "🔗", title: "Configurez une entrée fixe une seule fois", body: "Lors de la première configuration, écrivez une seule entrée Haven fixe sur la bague. Ensuite, aucune réécriture à chaque souvenir." },
       { id: "create-first", icon: "✍️", title: "Créez votre premier souvenir", body: "Ajoutez des photos, une histoire courte et une voix si vous voulez. Appuyez sur Enregistrer pour le garder dans votre Haven local." },
-      { id: "daily", icon: "✨", title: "L'usage quotidien est simple", body: "Touchez légèrement la bague pour ouvrir Haven et revivre vos moments en un geste." },
+      { id: "daily", icon: "✨", title: "L'usage quotidien est simple", body: "Un leger toucher ouvre Haven. Toute bague liee a ce compte fonctionne pareil — pas de bague principale obligatoire." },
     ],
   },
   es: {
@@ -40,10 +40,10 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     start: "Empezar ahora",
     openNfcGuide: "Ver guía de posición del anillo",
     steps: [
-      { id: "welcome", icon: "💛", title: "Tu anillo es la llave de tus recuerdos", body: "Piensa en tu anillo como una pequeña llave. Abre tu Haven privado en cualquier momento." },
+      { id: "welcome", icon: "💛", title: "Tu cuenta es el hogar; el anillo es un atajo", body: "Haven pertenece a tu cuenta iniciada. El anillo es un toque rapido para abrir o sellar — como un acceso directo, no tu contrasena. Puedes usar varios anillos; todos valen igual." },
       { id: "entry-url", icon: "🔗", title: "Configura una entrada fija una vez", body: "En la primera configuración, escribe una entrada fija de Haven en el anillo. Después, no necesitas reescribirlo." },
       { id: "create-first", icon: "✍️", title: "Crea tu primer recuerdo", body: "Añade fotos, una historia corta y voz si quieres. Pulsa Guardar para conservarlo en tu Haven local." },
-      { id: "daily", icon: "✨", title: "El uso diario es fácil", body: "Da un toque ligero con el anillo para abrir Haven y volver a tus recuerdos." },
+      { id: "daily", icon: "✨", title: "El uso diario es fácil", body: "Un toque ligero abre Haven. Cualquier anillo vinculado a esta cuenta funciona igual — no hace falta un anillo principal." },
     ],
   },
   de: {
@@ -55,10 +55,10 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     start: "Jetzt starten",
     openNfcGuide: "Ring-Position anzeigen",
     steps: [
-      { id: "welcome", icon: "💛", title: "Dein Ring ist der Schlüssel zu deinen Erinnerungen", body: "Sieh deinen Ring als kleinen Schlüssel. Er öffnet dein privates Haven jederzeit." },
+      { id: "welcome", icon: "💛", title: "Dein Konto ist die Basis; der Ring ist ein Kurzbefehl", body: "Haven gehort zu deinem angemeldeten Konto. Der Ring offnet oder versiegelt schnell — wie eine Verknupfung, nicht dein Passwort. Mehrere Ringe sind gleichwertig moglich." },
       { id: "entry-url", icon: "🔗", title: "Einmal festen Einstieg setzen", body: "Beim ersten Setup schreibst du einen festen Haven-Einstieg auf den Ring. Danach keine neue Schreibaktion pro Erinnerung." },
       { id: "create-first", icon: "✍️", title: "Erstelle deine erste Erinnerung", body: "Füge Fotos, eine kurze Geschichte und auf Wunsch Sprache hinzu. Mit Speichern bleibt alles in deinem lokalen Haven." },
-      { id: "daily", icon: "✨", title: "Tägliche Nutzung ist leicht", body: "Tippe den Ring leicht an, um Haven zu öffnen und Momente wiederzusehen." },
+      { id: "daily", icon: "✨", title: "Tägliche Nutzung ist leicht", body: "Ein leichter Tipp offnet Haven. Jeder mit diesem Konto verknupfte Ring funktioniert gleich — kein Pflicht-Haupt-Ring." },
     ],
   },
   it: {
@@ -70,10 +70,10 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     start: "Inizia ora",
     openNfcGuide: "Mostra guida posizione anello",
     steps: [
-      { id: "welcome", icon: "💛", title: "Il tuo anello è la chiave dei tuoi ricordi", body: "Pensa all'anello come a una piccola chiave. Apre il tuo Haven privato in ogni momento." },
+      { id: "welcome", icon: "💛", title: "Il tuo account e la base; l'anello e una scorciatoia", body: "Haven appartiene al tuo account. L'anello serve per aprire o sigillare in fretta — come un collegamento, non la password. Puoi avere piu anelli, tutti equivalenti." },
       { id: "entry-url", icon: "🔗", title: "Imposta un ingresso fisso una sola volta", body: "Alla prima configurazione scrivi un ingresso Haven fisso sull'anello. Poi non serve riscriverlo ogni volta." },
       { id: "create-first", icon: "✍️", title: "Crea il tuo primo ricordo", body: "Aggiungi foto, una breve storia e voce se vuoi. Premi Salva per conservarlo nel tuo Haven locale." },
-      { id: "daily", icon: "✨", title: "Uso quotidiano semplice", body: "Un leggero tocco dell'anello basta per aprire Haven e rivivere i tuoi momenti." },
+      { id: "daily", icon: "✨", title: "Uso quotidiano semplice", body: "Un leggero tocco apre Haven. Ogni anello collegato a questo account funziona allo stesso modo — nessun anello principale obbligatorio." },
     ],
   },
 };

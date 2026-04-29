@@ -1,3 +1,5 @@
+// Ring-scoped offline cache: `src/services/ringScopedCacheService.js` (IndexedDB in the PWA).
+// This worker only caches static shell assets; sync/integrity live in the app.
 const CACHE_VERSION = "haven-pwa-v1";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `runtime-${CACHE_VERSION}`;

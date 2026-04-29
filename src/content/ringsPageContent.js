@@ -1,0 +1,83 @@
+const EN = {
+  brand: "Haven",
+  title: "My rings",
+  subtitle:
+    "Quick access keys to your memory space. Any bound ring works equally for fast access.",
+  emptyTitle: "No rings registered yet",
+  emptyBody:
+    "Add your NFC rings and give them names. We recommend at least two: one for daily use and one backup in case of loss.",
+  addRing: "Add a ring",
+  maxRings: "Up to five rings per device registry.",
+  limitReachedHint:
+    "Ring limit reached (5). Revoke one ring before adding another.",
+  ringSince: "Added on",
+  boundAt: "Bound at",
+  lastUsedAt: "Last used",
+  linkedMemories: "Linked memories",
+  neverUsed: "Never used yet",
+  revoke: "Revoke ring",
+  revoking: "Revoking…",
+  syncLoading: "Loading cloud ring bindings…",
+  syncFailed: "Could not load cloud ring data. Check sign-in/network and retry.",
+  retrySync: "Retry",
+  verifyTitle: "Secondary verification required",
+  verifyHint:
+    "Before unbinding, confirm with device password or recovery code.",
+  verifyPassword: "Device password",
+  verifyRecovery: "Recovery code",
+  verifyConfirm: "Verify and revoke",
+  verifyCancel: "Cancel",
+  verifyError: "Verification failed. Check password/code and retry.",
+  revokeWarning:
+    "After unbinding, this ring will immediately stop working for login and sealing. All sealed content remains permanently and safely stored in the cloud.",
+  revokeDone: "Ring revoked successfully.",
+  revokeFailed: "Could not revoke this ring.",
+  cloudSignInRequired: "Sign in first to manage cloud-linked rings.",
+  cloudSignInAction: "Open Settings to sign in",
+  unknownDate: "—",
+  openSetup: "Register another ring",
+  settingsLink: "Privacy & backup",
+  privacyNote:
+    "Rings are quick tools, not your only account proof. Your precious memories remain permanently safe in cloud storage, protected with end-to-end encryption on supported devices.",
+};
+
+export const RINGS_PAGE_CONTENT = {
+  en: EN,
+  fr: {
+    ...EN,
+    title: "Mes bagues",
+    subtitle: "Cles d'acces rapide. Chaque bague est egale.",
+    emptyTitle: "Aucune bague enregistree",
+    emptyBody: "Ajoutez vos bagues NFC. Au moins deux sont recommandees.",
+    addRing: "Ajouter une bague",
+    openSetup: "Enregistrer une autre bague",
+    settingsLink: "Confidentialite et sauvegarde",
+  },
+  es: {
+    ...EN,
+    title: "Mis anillos",
+    subtitle: "Accesos rapidos. Cada anillo vale igual.",
+    emptyTitle: "Sin anillos registrados",
+    addRing: "Anadir anillo",
+    openSetup: "Registrar otro anillo",
+    settingsLink: "Privacidad y copia",
+  },
+  de: {
+    ...EN,
+    title: "Meine Ringe",
+    subtitle: "Schnellzugriff. Jeder Ring ist gleich.",
+    emptyTitle: "Noch keine Ringe",
+    addRing: "Ring hinzufugen",
+    openSetup: "Weiteren Ring registrieren",
+    settingsLink: "Datenschutz & Backup",
+  },
+  it: {
+    ...EN,
+    title: "I miei anelli",
+    subtitle: "Accesso rapido. Ogni anello e uguale.",
+    emptyTitle: "Nessun anello registrato",
+    addRing: "Aggiungi anello",
+    openSetup: "Registra un altro anello",
+    settingsLink: "Privacy e backup",
+  },
+};

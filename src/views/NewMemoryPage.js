@@ -468,6 +468,14 @@ export function NewMemoryPage({
         <p style={styles.hint}>
           {t.privacyHint}
         </p>
+        <section style={styles.backlogBox}>
+          <p style={styles.backlogTitle}>{t.backlogTitle}</p>
+          <ul style={styles.backlogList}>
+            <li>{t.backlogTimeCapsule}</li>
+            <li>{t.backlogTags}</li>
+            <li>{t.backlogGeo}</li>
+          </ul>
+        </section>
       </section>
       <SaveToHavenDialog
         locale={locale}
@@ -765,5 +773,30 @@ const styles = {
     gap: 8,
     color: "#d9c3b3",
     fontSize: 12,
+  },
+  backlogBox: {
+    marginTop: 2,
+    border: "1px dashed #5a3b30",
+    borderRadius: 10,
+    padding: "10px 12px",
+    background: "rgba(26, 21, 18, 0.38)",
+    display: "grid",
+    gap: 6,
+  },
+  backlogTitle: {
+    margin: 0,
+    color: "#f0c29e",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  },
+  backlogList: {
+    margin: 0,
+    paddingLeft: 18,
+    color: "#d9c3b3",
+    fontSize: 12,
+    lineHeight: 1.5,
+    display: "grid",
+    gap: 4,
   },
 };

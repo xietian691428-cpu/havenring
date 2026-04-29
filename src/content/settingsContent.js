@@ -34,6 +34,14 @@ const EN = {
   privacySectionTitle: "Privacy",
   privacyLine1: "All memories are stored locally on your device with encryption.",
   privacyLine2: "Cloud backup is completely optional.",
+  privacyNfcLine:
+    "NFC bind/unbind: we store only a secure fingerprint of the tag, not a naked UID. You can revoke a lost ring from another signed-in device.",
+  privacyUnbindLine:
+    "Unlinking a ring does not delete your sealed memories; it stops that ring from being used for quick access.",
+  privacyLegacyLine:
+    "Digital legacy options (if we offer them) require your explicit choice and are described in the privacy policy.",
+  privacyE2eLine:
+    "Your sealed memories are protected with end-to-end encryption on supported flows. Rings are shortcuts to your account, not the only proof of identity.",
   privacyPolicy: "View Privacy Policy",
   openHelp: "Open Help Center",
   confirmExport: "Export encrypted local backup file now?",
@@ -66,6 +74,18 @@ const EN = {
   confirmUnlink: "Unlink cloud backup account from this device?",
   unlinkDone: "Cloud backup account unlinked.",
   loadStatsFailed: "Could not load local storage stats.",
+  sessionSectionTitle: "Ring & session",
+  keepSignedInLabel:
+    "Stay signed in after NFC login (uses a longer server session until you sign out or revoke rings).",
+  revokeAllNfcTitle: "Cloud-linked NFC rings",
+  revokeAllNfcBody:
+    "Revoke every ring binding for your account. Lost rings stop working immediately; sign in from Settings if needed.",
+  revokeAllNfcButton: "Revoke all rings on this account",
+  confirmRevokeAllNfc:
+    "Revoke ALL NFC ring bindings for your cloud account? This cannot be undone from the ring side.",
+  revokeAllNfcNeedSignIn: "Sign in with cloud backup first, then try again.",
+  revokeAllNfcDone: "Revoked {n} ring binding(s). Cloud login may be required to add rings again.",
+  revokeAllNfcFailed: "Could not revoke all rings.",
 };
 
 export const SETTINGS_CONTENT = {

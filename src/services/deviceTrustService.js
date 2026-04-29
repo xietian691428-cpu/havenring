@@ -1,8 +1,40 @@
 const SECURITY_KEY = "haven.security.profile.v1";
 const DEVICE_ID_KEY = "haven.device.id.v1";
+const KEEP_SIGNED_IN_KEY = "haven.auth.keepSignedIn.v1";
 const ACCESS_GRANT_PREFIX = "haven.ring.access.grant.";
-const ACCESS_GRANT_TTL_MS = 10 * 60 * 1000;
+/** Default hub-token ring grant when “stay signed in” is off — aligns with NFC session. */
+const DEFAULT_ACCESS_GRANT_TTL_MS =
+  readPublicEnvMs("NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS", 90);
+/** Practical “forever” cap for keep-signed-in (session still ends on sign-out / revoke-all). */
+const LONG_ACCESS_GRANT_TTL_MS =
+  readPublicEnvMs("NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS", 3650);
 const DEVICE_REVERIFY_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readPublicEnvMs(name, fallbackDays) {
+  const fallback = fallbackDays * 24 * 60 * 60 * 1000;
+  if (typeof process === "undefined") return fallback;
+  const raw = process.env?.[name];
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n * 24 * 60 * 60 * 1000;
+}
+
+export function getKeepSignedInPreference() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(KEEP_SIGNED_IN_KEY) === "1";
+}
+
+export function setKeepSignedInPreference(enabled) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(KEEP_SIGNED_IN_KEY, enabled ? "1" : "0");
+}
+
+function accessGrantTtlMs() {
+  return getKeepSignedInPreference()
+    ? LONG_ACCESS_GRANT_TTL_MS
+    : DEFAULT_ACCESS_GRANT_TTL_MS;
+}
 
 function ensureWebCrypto() {
   if (!window.crypto?.subtle) {
@@ -196,7 +228,7 @@ async function tokenGrantKey(token) {
 export async function grantRingAccess(token) {
   const key = await tokenGrantKey(token);
   const payload = {
-    expiresAt: Date.now() + ACCESS_GRANT_TTL_MS,
+    expiresAt: Date.now() + accessGrantTtlMs(),
   };
   window.sessionStorage.setItem(key, JSON.stringify(payload));
 }

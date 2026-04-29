@@ -42,6 +42,15 @@ export function getRecentNfcErrors() {
 }
 
 export async function readRingTextRecord() {
+  const full = await readNfcScanFull();
+  return { text: full.text };
+}
+
+/**
+ * Reads first NDEF record plus optional tag serial (Android Chrome Web NFC).
+ * @returns {{ text: string, serialNumber: string | null, recordType?: string }}
+ */
+export async function readNfcScanFull() {
   try {
     ensureNdefSupport();
     const reader = new window.NDEFReader();
@@ -50,7 +59,7 @@ export async function readRingTextRecord() {
     return await new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         reject(new Error("Connection lost while reading NFC ring."));
-      }, 10_000);
+      }, 12_000);
 
       reader.onreadingerror = () => {
         window.clearTimeout(timeout);
@@ -61,13 +70,22 @@ export async function readRingTextRecord() {
         window.clearTimeout(timeout);
         try {
           const record = event.message.records?.[0];
-          if (!record) {
+          let text = "";
+          let recordType = "";
+          if (record) {
+            recordType = record.recordType || "";
+            const decoder = new TextDecoder(record.encoding || "utf-8");
+            text = decoder.decode(record.data);
+          }
+          const serialNumber =
+            typeof event.serialNumber === "string" && event.serialNumber.trim()
+              ? event.serialNumber.trim()
+              : null;
+          if (!text && !serialNumber) {
             reject(new Error("Nothing found on ring."));
             return;
           }
-          const decoder = new TextDecoder(record.encoding || "utf-8");
-          const text = decoder.decode(record.data);
-          resolve({ text });
+          resolve({ text, serialNumber, recordType });
         } catch (error) {
           reject(error);
         }

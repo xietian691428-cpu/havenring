@@ -375,3 +375,18 @@ Non-negotiable:
 - `token_hash` must never be returned by public API responses.
 - Frontend must never compute, store, or display `token_hash`.
 - RPCs must never include decryption logic; they only authorize and flip state.
+
+---
+
+## `user_nfc_rings` (NFC bind checklist)
+
+Applied via `supabase/migrations/0003_user_nfc_rings.sql`:
+
+- `nfc_uid_hash`: SHA-256 hex of normalized UID (never store raw UID).
+- Partial unique index on `(user_id, nfc_uid_hash) WHERE is_active` — max one active binding per fingerprint per user.
+
+API: `/api/nfc/bind`, `/api/nfc/list`, `/api/nfc/revoke`; login bootstrap `/api/auth/nfc-login` (JWT requires `SUPABASE_JWT_SECRET`).
+
+## `moments.content_sha256`
+
+Applied via `supabase/migrations/0004_moments_content_sha256.sql` — optional SHA-256 hex for sync integrity (`src/utils/memoryIntegrity.js`).

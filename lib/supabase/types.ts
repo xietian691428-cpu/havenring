@@ -24,6 +24,7 @@ export type MomentRow = {
   id: string;
   haven_id: string | null;
   ring_id: string;
+  created_by_user_id: string | null;
   text: string | null;
   image_url: string | null;
   audio_url: string | null;
@@ -32,6 +33,18 @@ export type MomentRow = {
   is_sealed: boolean;
   created_at: string;
   sealed_at: string | null;
+  content_sha256: string | null;
+};
+
+export type UserNfcRingRow = {
+  id: string;
+  user_id: string;
+  nfc_uid_hash: string;
+  nickname: string;
+  bound_at: string;
+  last_used_at: string | null;
+  is_active: boolean;
+  created_at: string;
 };
 
 export type HavenRow = {
@@ -174,6 +187,7 @@ export type Database = {
           id?: string;
           haven_id?: string | null;
           ring_id: string;
+          created_by_user_id?: string | null;
           text?: string | null;
           image_url?: string | null;
           audio_url?: string | null;
@@ -182,6 +196,7 @@ export type Database = {
           is_sealed?: boolean;
           created_at?: string;
           sealed_at?: string | null;
+          content_sha256?: string | null;
         };
         Update: Partial<MomentRow>;
         Relationships: [
@@ -200,6 +215,21 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      user_nfc_rings: {
+        Row: UserNfcRingRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          nfc_uid_hash: string;
+          nickname?: string;
+          bound_at?: string;
+          last_used_at?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<UserNfcRingRow>;
+        Relationships: [];
       };
       ring_events: {
         Row: RingEventRow;
