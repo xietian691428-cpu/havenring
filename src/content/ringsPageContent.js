@@ -48,6 +48,13 @@ const EN = {
   quickGuideTitle: "How Haven Works",
   quickGuideIntro:
     "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
+  quickGuideSummaryLines: [
+    "Open daily: ring touch is recommended, Face ID always works.",
+    "Quick drafts: start typing immediately, no ring required.",
+    "Seal memories: choose Seal with Ring or Save Securely.",
+  ],
+  quickGuideLearnMore: "Learn more",
+  quickGuideShowLess: "Show less",
   quickGuideOneLine:
     "The ring is your magical key for speed and ceremony. Face ID keeps everything secure.",
   quickGuideRows: [

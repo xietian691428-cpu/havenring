@@ -78,6 +78,7 @@ export function NewMemoryPage({
   const [selectedDraftIds, setSelectedDraftIds] = useState([]);
   const [editingDraftId, setEditingDraftId] = useState("");
   const [pendingSealIds, setPendingSealIds] = useState([]);
+  const [draftBoxOpen, setDraftBoxOpen] = useState(false);
   const [sealTicket, setSealTicket] = useState("");
   const [ringTapBusy, setRingTapBusy] = useState(false);
   const [ringTapError, setRingTapError] = useState("");
@@ -867,59 +868,70 @@ export function NewMemoryPage({
           {secureSaveBusy ? t.sealFallbackWorking : t.sealSecureQuickAction || t.sealFallbackAction}
         </button>
         <section style={styles.backlogBox}>
-          <p style={styles.backlogTitle}>{t.draftBoxTitle}</p>
-          {!visibleDraftItems.length ? (
-            <p style={styles.hint}>{t.draftBoxEmpty}</p>
-          ) : (
-            <>
-              <div style={styles.voiceActions}>
-                <button
-                  type="button"
-                  style={styles.secondaryButton}
-                  disabled={saving || !selectedDraftIds.length}
-                  onClick={() => void sealDraftItems(selectedDraftIds)}
-                >
-                  {t.draftSealSelected.replace("{n}", String(selectedDraftIds.length))}
-                </button>
-              </div>
-              <ul style={styles.attachmentList}>
-                {visibleDraftItems.map((item) => (
-                  <li key={item.id} style={styles.attachmentItem}>
-                    <label style={styles.toggleLabel}>
-                      <input
-                        type="checkbox"
-                        checked={selectedDraftIds.includes(item.id)}
-                        onChange={(e) => {
-                          setSelectedDraftIds((prev) =>
-                            e.target.checked
-                              ? [...prev, item.id]
-                              : prev.filter((id) => id !== item.id)
-                          );
-                        }}
-                      />
-                      {item.title || t.untitled}
-                    </label>
-                    <div style={styles.voiceActions}>
-                      <button
-                        type="button"
-                        style={styles.secondaryButton}
-                        onClick={() => editDraftItem(item)}
-                      >
-                        {t.draftEdit}
-                      </button>
-                      <button
-                        type="button"
-                        style={styles.secondaryButton}
-                        onClick={() => void sealDraftItems([item.id])}
-                      >
-                        {t.draftSealNow}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <div style={styles.voiceActions}>
+            <p style={styles.backlogTitle}>{t.draftBoxTitle}</p>
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => setDraftBoxOpen((v) => !v)}
+            >
+              {draftBoxOpen ? t.draftBoxHide || "Hide draft box" : t.draftBoxShow || "Show draft box"}
+            </button>
+          </div>
+          {draftBoxOpen ? (
+            !visibleDraftItems.length ? (
+              <p style={styles.hint}>{t.draftBoxEmpty}</p>
+            ) : (
+              <>
+                <div style={styles.voiceActions}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    disabled={saving || !selectedDraftIds.length}
+                    onClick={() => void sealDraftItems(selectedDraftIds)}
+                  >
+                    {t.draftSealSelected.replace("{n}", String(selectedDraftIds.length))}
+                  </button>
+                </div>
+                <ul style={styles.attachmentList}>
+                  {visibleDraftItems.map((item) => (
+                    <li key={item.id} style={styles.attachmentItem}>
+                      <label style={styles.toggleLabel}>
+                        <input
+                          type="checkbox"
+                          checked={selectedDraftIds.includes(item.id)}
+                          onChange={(e) => {
+                            setSelectedDraftIds((prev) =>
+                              e.target.checked
+                                ? [...prev, item.id]
+                                : prev.filter((id) => id !== item.id)
+                            );
+                          }}
+                        />
+                        {item.title || t.untitled}
+                      </label>
+                      <div style={styles.voiceActions}>
+                        <button
+                          type="button"
+                          style={styles.secondaryButton}
+                          onClick={() => editDraftItem(item)}
+                        >
+                          {t.draftEdit}
+                        </button>
+                        <button
+                          type="button"
+                          style={styles.secondaryButton}
+                          onClick={() => void sealDraftItems([item.id])}
+                        >
+                          {t.draftSealNow}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )
+          ) : null}
         </section>
         {sealPromptOpen ? (
           <section style={styles.sealPromptBox}>

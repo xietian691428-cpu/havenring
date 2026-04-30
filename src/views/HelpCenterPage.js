@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FirstTimeOnboarding } from "../components/FirstTimeOnboarding";
 import { NfcGuideModal } from "../components/NfcGuideModal";
 import { NfcTroubleshooting } from "../components/NfcTroubleshooting";
@@ -13,11 +13,24 @@ import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryThem
  * Warm one-stop support center for first-time and daily guidance.
  */
 export function HelpCenterPage({ onBack, locale = "en" }) {
+  const HOW_OPEN_STORAGE_KEY = "haven.help.how_open.v1";
   const platform = usePlatformTarget();
   const t = getHelpCenterContent(locale, platform);
   const faqItems = HELP_FAQ[locale] || HELP_FAQ.en;
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [nfcGuideOpen, setNfcGuideOpen] = useState(false);
+  const [howOpen, setHowOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(HOW_OPEN_STORAGE_KEY);
+    if (saved === "1") setHowOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(HOW_OPEN_STORAGE_KEY, howOpen ? "1" : "0");
+  }, [howOpen]);
 
   return (
     <>
@@ -40,24 +53,35 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
           <section style={styles.card}>
             <h2 style={styles.sectionTitle}>{t.howHavenWorksTitle}</h2>
             <p style={styles.copy}>{t.howHavenWorksIntro}</p>
-            <div style={styles.flowGrid}>
-              {(t.howHavenWorksRows || []).map((row) => (
-                <article key={row.operation} style={styles.flowRow}>
-                  <p style={styles.flowTitle}>{row.operation}</p>
-                  <p style={styles.flowMeta}>Ring Required: {row.ringRequired}</p>
-                  <p style={styles.flowHint}>Recommended: {row.recommended}</p>
-                </article>
-              ))}
-            </div>
-            <p style={styles.sectionTitle}>{t.howHavenWorksKeyPointsTitle}</p>
-            <div style={styles.faqList}>
-              {(t.howHavenWorksKeyPoints || []).map((point) => (
-                <p key={point} style={styles.copy}>
-                  {point}
-                </p>
-              ))}
-            </div>
-            <p style={styles.copy}>{t.howHavenWorksOneLine}</p>
+            <button
+              type="button"
+              style={styles.primaryButton}
+              onClick={() => setHowOpen((v) => !v)}
+            >
+              {howOpen ? "Hide details" : "Show details"}
+            </button>
+            {howOpen ? (
+              <>
+                <div style={styles.flowGrid}>
+                  {(t.howHavenWorksRows || []).map((row) => (
+                    <article key={row.operation} style={styles.flowRow}>
+                      <p style={styles.flowTitle}>{row.operation}</p>
+                      <p style={styles.flowMeta}>Ring Required: {row.ringRequired}</p>
+                      <p style={styles.flowHint}>Recommended: {row.recommended}</p>
+                    </article>
+                  ))}
+                </div>
+                <p style={styles.sectionTitle}>{t.howHavenWorksKeyPointsTitle}</p>
+                <div style={styles.faqList}>
+                  {(t.howHavenWorksKeyPoints || []).map((point) => (
+                    <p key={point} style={styles.copy}>
+                      {point}
+                    </p>
+                  ))}
+                </div>
+                <p style={styles.copy}>{t.howHavenWorksOneLine}</p>
+              </>
+            ) : null}
           </section>
 
           <section style={styles.card}>

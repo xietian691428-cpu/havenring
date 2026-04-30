@@ -18,6 +18,7 @@ export function RingsPage({
   onOpenRingSetup,
   onOpenSettings,
 }) {
+  const GUIDE_EXPANDED_STORAGE_KEY = "haven.rings.guide_expanded.v1";
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
   const platformGuidance = useMemo(() => getPlatformGuidance(), []);
   const [localRings, setLocalRings] = useState(() => getBoundRings());
@@ -32,6 +33,21 @@ export function RingsPage({
   const [verifyRecovery, setVerifyRecovery] = useState("");
   const [verifyError, setVerifyError] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState(null);
+  const [guideExpanded, setGuideExpanded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(GUIDE_EXPANDED_STORAGE_KEY);
+    if (saved === "1") setGuideExpanded(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      GUIDE_EXPANDED_STORAGE_KEY,
+      guideExpanded ? "1" : "0"
+    );
+  }, [guideExpanded]);
 
   const rings = useMemo(() => {
     const local = localRings || [];
@@ -223,17 +239,33 @@ export function RingsPage({
         ) : null}
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
-          <p style={styles.guideBody}>{t.quickGuideIntro}</p>
-          <div style={styles.guideTable}>
-            {(t.quickGuideRows || []).map((row) => (
-              <article key={row.action} style={styles.guideRow}>
-                <p style={styles.guideHead}>{row.action}</p>
-                <p style={styles.guideCell}>Ring Required: {row.required}</p>
-                <p style={styles.guideCell}>Recommended: {row.way}</p>
-              </article>
-            ))}
-          </div>
-          <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
+          {(t.quickGuideSummaryLines || []).slice(0, 3).map((line) => (
+            <p key={line} style={styles.guideBullet}>
+              {line}
+            </p>
+          ))}
+          <button
+            type="button"
+            style={styles.ghostBtn}
+            onClick={() => setGuideExpanded((v) => !v)}
+          >
+            {guideExpanded ? t.quickGuideShowLess || "Show less" : t.quickGuideLearnMore || "Learn more"}
+          </button>
+          {guideExpanded ? (
+            <>
+              <p style={styles.guideBody}>{t.quickGuideIntro}</p>
+              <div style={styles.guideTable}>
+                {(t.quickGuideRows || []).map((row) => (
+                  <article key={row.action} style={styles.guideRow}>
+                    <p style={styles.guideHead}>{row.action}</p>
+                    <p style={styles.guideCell}>Ring Required: {row.required}</p>
+                    <p style={styles.guideCell}>Recommended: {row.way}</p>
+                  </article>
+                ))}
+              </div>
+              <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
+            </>
+          ) : null}
         </section>
         <p style={styles.note}>
           {platformGuidance.isIos ? t.iosUsageHint : t.androidUsageHint}

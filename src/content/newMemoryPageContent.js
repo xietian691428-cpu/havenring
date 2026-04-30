@@ -113,6 +113,8 @@ const EN = {
   backlogTags: "Richer tag editor (multi-tag suggestions and quick chips).",
   backlogGeo: "Optional location marker with explicit permission flow.",
   draftBoxTitle: "Draft box",
+  draftBoxShow: "Show draft box",
+  draftBoxHide: "Hide draft box",
   draftBoxEmpty: "No saved drafts yet.",
   draftSealSelected: "Seal selected drafts ({n})",
   draftEdit: "Edit",
