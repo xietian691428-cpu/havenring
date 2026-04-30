@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createMemory } from "../services/localStorageService";
 import {
   listDraftItems,
@@ -24,6 +24,7 @@ import { readNfcScanFull } from "../services/nfcRingService";
 import { normalizeNfcUidInput } from "../../lib/nfc-uid-browser";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getSecuritySummary, verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
+import { getPlatformGuidance } from "../utils/platformGuidance";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
@@ -51,6 +52,8 @@ export function NewMemoryPage({
   onSaveMemory,
   onViewTimeline,
   locale = "en",
+  hasSession = false,
+  hasBoundRing = false,
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
   const [title, setTitle] = useState("");
@@ -69,6 +72,10 @@ export function NewMemoryPage({
   });
   const [sealPromptOpen, setSealPromptOpen] = useState(false);
   const [isIosLikeDevice, setIsIosLikeDevice] = useState(false);
+  const platformGuidance = useMemo(
+    () => getPlatformGuidance(isIosLikeDevice ? "ios" : "android"),
+    [isIosLikeDevice]
+  );
   const [draftItems, setDraftItems] = useState([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState([]);
   const [editingDraftId, setEditingDraftId] = useState("");
@@ -82,10 +89,13 @@ export function NewMemoryPage({
   const [sealSuccessToast, setSealSuccessToast] = useState("");
   const [isFirstMemoryMode, setIsFirstMemoryMode] = useState(false);
   const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [showFileQuickEntry, setShowFileQuickEntry] = useState(false);
+  const [showVideoQuickEntry, setShowVideoQuickEntry] = useState(false);
   const sealTimerRef = useRef(null);
 
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   const hasDraftContent = Boolean(
     title.trim() ||
@@ -666,19 +676,56 @@ export function NewMemoryPage({
           </div>
           <OnlineStatusBadge locale={locale} />
         </header>
-        <p style={styles.sealGuidance}>{t.sealGuidance}</p>
+        <p style={styles.sealGuidance}>
+          {isIosLikeDevice ? t.sealGuidanceIos || t.sealGuidance : t.sealGuidanceAndroid || t.sealGuidance}
+        </p>
+        <p style={styles.hint}>{t.layeredCoreLine || ""}</p>
+        <section style={styles.noticeBox}>
+          <p style={styles.noticeTitle}>{t.statusCardTitle || "Your current status"}</p>
+          <p style={styles.hint}>
+            {hasSession ? t.statusSignedIn || "Signed in to account" : t.statusSignedOut || "Not signed in yet"}
+          </p>
+          <p style={styles.hint}>
+            {hasBoundRing
+              ? t.statusRingLinked || "Ring linked to this account"
+              : t.statusRingNotLinked || "No ring linked yet"}
+          </p>
+          <p style={styles.hint}>
+            {hasBoundRing
+              ? t.statusSealRuleWithRing ||
+                "For precious memories: Ring is recommended for the ritual. Save Securely still works anytime."
+              : t.statusSealRuleNoRing ||
+                "Ring touch is not required. You can always finish with Save Securely with Face ID."}
+          </p>
+        </section>
         {isFirstMemoryMode ? (
           <section style={styles.noticeBox}>
             <p style={styles.noticeTitle}>{t.firstMemoryQuickTitle}</p>
             <p style={styles.hint}>{t.firstMemoryQuickBody}</p>
             {!showAdvancedDetails ? (
-              <button
-                type="button"
-                onClick={() => setShowAdvancedDetails(true)}
-                style={styles.secondaryButton}
-              >
-                {t.firstMemoryShowAdvanced}
-              </button>
+              <div style={styles.voiceActions}>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedDetails(true)}
+                  style={styles.secondaryButton}
+                >
+                  {t.firstMemoryShowAdvanced}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFileQuickEntry(true)}
+                  style={styles.secondaryButton}
+                >
+                  {t.firstMemoryAddFiles || "Add files (optional)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowVideoQuickEntry(true)}
+                  style={styles.secondaryButton}
+                >
+                  {t.firstMemoryAddVideo || "Add video (optional)"}
+                </button>
+              </div>
             ) : null}
           </section>
         ) : null}
@@ -764,7 +811,7 @@ export function NewMemoryPage({
           </div>
         ) : null}
 
-        {showAdvancedDetails ? (
+        {showAdvancedDetails || showFileQuickEntry || showVideoQuickEntry ? (
           <label style={styles.label}>
             {t.attachmentsLabel}
             <div style={styles.filePickerRow}>
@@ -774,6 +821,13 @@ export function NewMemoryPage({
                 style={styles.filePickerButton}
               >
                 {t.chooseAttachments}
+              </button>
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                style={styles.filePickerButton}
+              >
+                {t.chooseVideo || "Choose video"}
               </button>
               <span style={styles.filePickerStatus}>
                 {attachments.length
@@ -785,6 +839,14 @@ export function NewMemoryPage({
               ref={attachmentInputRef}
               type="file"
               accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
+              multiple
+              onChange={handleAttachmentsSelected}
+              style={styles.hiddenFileInput}
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
               multiple
               onChange={handleAttachmentsSelected}
               style={styles.hiddenFileInput}
@@ -815,7 +877,7 @@ export function NewMemoryPage({
           {saving ? t.saving : t.save}
         </button>
         <button type="button" onClick={handleSealNow} disabled={saving} style={styles.secondaryButton}>
-          {t.sealNow}
+          {isIosLikeDevice ? t.sealNowOptionalIos || t.sealNow : t.sealNow}
         </button>
         <section style={styles.backlogBox}>
           <p style={styles.backlogTitle}>{t.draftBoxTitle}</p>
@@ -889,15 +951,23 @@ export function NewMemoryPage({
               <button
                 type="button"
                 onClick={() => void requestSealTicketFromRingTap()}
-                style={styles.primaryButton}
+                style={platformGuidance.isIos ? styles.secondaryButton : styles.primaryButton}
                 disabled={ringTapBusy || saving || secureSaveBusy}
               >
                 {ringTapBusy ? t.sealTouchWorking : t.sealTouchRetry}
               </button>
               <button
                 type="button"
+                onClick={() => void handleSecureSave()}
+                style={platformGuidance.isIos ? styles.primaryButton : styles.secondaryButton}
+                disabled={secureSaveBusy || saving || ringTapBusy}
+              >
+                {secureSaveBusy ? t.sealFallbackWorking : t.sealSecureQuickAction || t.sealFallbackAction}
+              </button>
+              <button
+                type="button"
                 onClick={handleViewTimeline}
-                style={styles.primaryButton}
+                style={platformGuidance.isIos ? styles.secondaryButton : styles.primaryButton}
                 disabled={!sealTicket || saving || ringTapBusy || secureSaveBusy}
               >
                 {t.sealConfirmButton}
@@ -933,7 +1003,7 @@ export function NewMemoryPage({
               <button
                 type="button"
                 onClick={() => void handleSecureSave()}
-                style={styles.secondaryButton}
+                style={platformGuidance.isIos ? styles.primaryButton : styles.secondaryButton}
                 disabled={secureSaveBusy || saving || ringTapBusy}
               >
                 {secureSaveBusy ? t.sealFallbackWorking : t.sealFallbackAction}

@@ -11,6 +11,7 @@ import {
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
+import { getPlatformGuidance } from "../utils/platformGuidance";
 
 export function RingsPage({
   locale = "en",
@@ -18,6 +19,7 @@ export function RingsPage({
   onOpenSettings,
 }) {
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
+  const platformGuidance = useMemo(() => getPlatformGuidance(), []);
   const [localRings, setLocalRings] = useState(() => getBoundRings());
   const [cloudRings, setCloudRings] = useState([]);
   const [memoryCountByRingId, setMemoryCountByRingId] = useState({});
@@ -209,6 +211,7 @@ export function RingsPage({
             <p style={styles.brand}>{t.brand}</p>
             <h1 style={styles.title}>{t.title}</h1>
             <p style={styles.subtitle}>{t.subtitle}</p>
+            <p style={styles.note}>{t.layeredCoreLine}</p>
           </div>
           <OnlineStatusBadge locale={locale} />
         </header>
@@ -220,6 +223,9 @@ export function RingsPage({
           <p style={styles.note}>{t.limitReachedHint}</p>
         ) : null}
         <p style={styles.privacyNote}>{t.privacyNote}</p>
+        <p style={styles.note}>
+          {platformGuidance.isIos ? t.iosUsageHint : t.androidUsageHint}
+        </p>
         {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
         {syncError ? (
           <div style={styles.errorRow}>
@@ -294,6 +300,11 @@ export function RingsPage({
           <button type="button" onClick={onOpenRingSetup} style={styles.secondaryBtn}>
             {t.openSetup}
           </button>
+          {platformGuidance.isAndroid ? (
+            <button type="button" onClick={onOpenRingSetup} style={styles.secondaryBtn}>
+              {t.rewriteLinkAction}
+            </button>
+          ) : null}
           <button type="button" onClick={onOpenSettings} style={styles.ghostBtn}>
             {t.settingsLink}
           </button>

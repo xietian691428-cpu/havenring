@@ -3,6 +3,8 @@ const EN = {
   title: "Help & Support",
   subtitle:
     "You are not alone here. This page walks you through everything step by step, like a friend beside you.",
+  layeredCoreLine:
+    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
   back: "Back",
   quickTitle: "Quick Start Guide",
   quickBody: "New to Haven Ring? Start here for a calm, guided walkthrough.",
@@ -19,6 +21,9 @@ const EN = {
   tapCta: "Open NFC Tap Guide",
   troubleshootingTitle: "Troubleshooting",
   troubleshootingBody: "If something feels off, start with these quick fixes.",
+  riskOpsTitle: "High-risk actions",
+  riskOpsBody:
+    "Ring management, sealed-memory deletion, and export or migration always require strong secondary verification.",
   troubleshootingBodyByPlatform: {
     ios: "iPhone-focused quick fixes are shown first.",
     android: "Android-focused quick fixes are shown first.",

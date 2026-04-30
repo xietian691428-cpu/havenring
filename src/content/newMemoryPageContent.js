@@ -3,10 +3,27 @@ const EN = {
   title: "Capture this moment",
   sealGuidance:
     "Do not tap your ring while editing. Tap only after pressing Seal with Ring Now.",
+  layeredCoreLine:
+    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
+  sealGuidanceIos:
+    "On iPhone, Save Securely is the smooth default. Seal with Ring remains available as an optional ritual.",
+  sealGuidanceAndroid:
+    "On Android, Seal with Ring works well for daily ritual use. Save Securely stays available anytime.",
+  statusCardTitle: "Your current status",
+  statusSignedIn: "Signed in to account",
+  statusSignedOut: "Not signed in yet",
+  statusRingLinked: "Ring linked to this account",
+  statusRingNotLinked: "No ring linked yet",
+  statusSealRuleWithRing:
+    "For precious memories: Ring is recommended for the ritual. Save Securely still works anytime.",
+  statusSealRuleNoRing:
+    "Ring touch is not required. You can always finish with Save Securely with Face ID.",
   firstMemoryQuickTitle: "Your first memory can be simple",
   firstMemoryQuickBody:
     "Start with a short title and one sentence. You can add files and advanced options later.",
   firstMemoryShowAdvanced: "Add optional details",
+  firstMemoryAddFiles: "Add files (optional)",
+  firstMemoryAddVideo: "Add video (optional)",
   back: "Back",
   titleLabel: "Title",
   titlePlaceholder: "A quiet title...",
@@ -24,6 +41,7 @@ const EN = {
   photosCountSuffix: ")",
   attachmentsLabel: "Attachments",
   chooseAttachments: "Choose files",
+  chooseVideo: "Choose video",
   noAttachmentsSelected: "No files selected",
   attachmentsSelectedSuffix: " file(s)",
   attachmentsHint:
@@ -31,7 +49,8 @@ const EN = {
   removeAttachment: "Remove",
   saving: "Saving...",
   save: "Save Draft",
-  sealNow: "Seal with Ring Now",
+  sealNow: "Seal with Ring - Make this memory sacred",
+  sealNowOptionalIos: "Seal with Ring - Make this memory sacred",
   haptic: "Haptic feedback",
   sound: "Success sound",
   soundSaveOnly: "Sound only on save success",
@@ -72,7 +91,7 @@ const EN = {
   sealPromptDone: "I touched the ring",
   sealTouchInstruction:
     "Touch your ring to your phone to confirm identity and get a one-time seal ticket.",
-  sealTouchRetry: "Touch ring now",
+  sealTouchRetry: "Seal with Ring - Make this memory sacred",
   sealTouchWorking: "Reading ring...",
   sealTicketReady: "Ring verified. You can confirm sealing now.",
   sealConfirmButton: "Confirm seal",
@@ -87,7 +106,8 @@ const EN = {
     "If ring touch is not convenient right now, you can still finish safely with device verification.",
   sealFallbackPassword: "Device password",
   sealFallbackRecovery: "Or recovery code",
-  sealFallbackAction: "Save Securely",
+  sealFallbackAction: "Save Securely with Face ID",
+  sealSecureQuickAction: "Save Securely with Face ID",
   sealFallbackWorking: "Saving securely...",
   sealPromptClose: "Close",
   errInvalidTicket: "Please touch your ring again to confirm your identity.",

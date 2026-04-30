@@ -17,6 +17,7 @@ import {
   getSecuritySummary,
   revokeTrustedDevice,
   setKeepSignedInPreference,
+  verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
 import {
   isTemporaryDeviceModeEnabled,
@@ -52,6 +53,11 @@ export function SettingsPage({
   const [temporaryMode, setTemporaryMode] = useState(() =>
     isTemporaryDeviceModeEnabled()
   );
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyPassword, setVerifyPassword] = useState("");
+  const [verifyRecoveryCode, setVerifyRecoveryCode] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [pendingProtectedAction, setPendingProtectedAction] = useState("");
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -77,10 +83,22 @@ export function SettingsPage({
     }
   }
 
+  function openVerificationFor(actionName) {
+    setPendingProtectedAction(actionName);
+    setVerifyPassword("");
+    setVerifyRecoveryCode("");
+    setVerifyError("");
+    setVerifyOpen(true);
+  }
+
   async function handleExportBackup() {
     const confirmed = window.confirm(localeCopy.confirmExport);
     if (!confirmed) return;
 
+    openVerificationFor("export_backup");
+  }
+
+  async function runExportBackup() {
     setBusy(true);
     setStatus(localeCopy.preparingExport);
     try {
@@ -113,6 +131,10 @@ export function SettingsPage({
     const confirmed = window.confirm(localeCopy.confirmClear);
     if (!confirmed) return;
 
+    openVerificationFor("clear_all");
+  }
+
+  async function runClearAll() {
     setBusy(true);
     setStatus(localeCopy.clearing);
     try {
@@ -216,6 +238,10 @@ export function SettingsPage({
   async function handleTemporaryExitNow() {
     const confirmed = window.confirm(localeCopy.confirmTemporaryExit);
     if (!confirmed) return;
+    openVerificationFor("temporary_exit");
+  }
+
+  async function runTemporaryExitNow() {
     setBusy(true);
     setStatus("");
     try {
@@ -238,6 +264,15 @@ export function SettingsPage({
     setStatus(localeCopy.deviceRevoked);
   }
 
+  function buttonLabelWithBadge(label) {
+    return (
+      <span style={styles.buttonLabelRow}>
+        <span>{label}</span>
+        <span style={styles.verifyBadge}>{localeCopy.requiresVerificationBadge}</span>
+      </span>
+    );
+  }
+
   function handleKeepSignedInChange(enabled) {
     setKeepSignedInPreference(enabled);
     setKeepSignedIn(enabled);
@@ -247,6 +282,10 @@ export function SettingsPage({
   async function handleRevokeAllNfc() {
     const confirmed = window.confirm(localeCopy.confirmRevokeAllNfc);
     if (!confirmed) return;
+    openVerificationFor("revoke_all_nfc");
+  }
+
+  async function runRevokeAllNfc() {
     setBusy(true);
     setStatus("");
     try {
@@ -276,6 +315,38 @@ export function SettingsPage({
     } catch {
       setStatus(localeCopy.revokeAllNfcFailed);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmVerification() {
+    setVerifyError("");
+    setBusy(true);
+    try {
+      await verifyAndTrustCurrentDevice({
+        password: verifyPassword,
+        recoveryCode: verifyRecoveryCode,
+      });
+      setVerifyOpen(false);
+      const action = pendingProtectedAction;
+      setPendingProtectedAction("");
+      if (action === "export_backup") {
+        await runExportBackup();
+        return;
+      }
+      if (action === "clear_all") {
+        await runClearAll();
+        return;
+      }
+      if (action === "temporary_exit") {
+        await runTemporaryExitNow();
+        return;
+      }
+      if (action === "revoke_all_nfc") {
+        await runRevokeAllNfc();
+      }
+    } catch {
+      setVerifyError(localeCopy.verifyActionFailed);
       setBusy(false);
     }
   }
@@ -312,7 +383,7 @@ export function SettingsPage({
               disabled={busy || loading}
               style={styles.secondaryButton}
             >
-              {localeCopy.exportBackup}
+              {buttonLabelWithBadge(localeCopy.exportBackup)}
             </button>
             <button
               type="button"
@@ -320,7 +391,7 @@ export function SettingsPage({
               disabled={busy || loading}
               style={styles.dangerButton}
             >
-              {localeCopy.clearAll}
+              {buttonLabelWithBadge(localeCopy.clearAll)}
             </button>
           </div>
         </section>
@@ -346,7 +417,7 @@ export function SettingsPage({
                   onClick={() => handleRevokeDevice(device.id)}
                   style={styles.secondaryButton}
                 >
-                  {localeCopy.revokeDevice}
+                  {buttonLabelWithBadge(localeCopy.revokeDevice)}
                 </button>
               </li>
             ))}
@@ -422,7 +493,7 @@ export function SettingsPage({
             disabled={busy}
             style={styles.dangerButton}
           >
-            {localeCopy.revokeAllNfcButton}
+            {buttonLabelWithBadge(localeCopy.revokeAllNfcButton)}
           </button>
         </section>
 
@@ -444,8 +515,27 @@ export function SettingsPage({
             disabled={busy}
             style={styles.dangerButton}
           >
-            {localeCopy.temporaryExitButton}
+            {buttonLabelWithBadge(localeCopy.temporaryExitButton)}
           </button>
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.riskOpsTitle}</h2>
+          <p style={styles.copy}>{localeCopy.riskOpsBody}</p>
+          <ul style={styles.deviceList}>
+            <li style={styles.deviceItem}>
+              <p style={styles.copy}>{localeCopy.riskOpRingManage}</p>
+            </li>
+            <li style={styles.deviceItem}>
+              <p style={styles.copy}>{localeCopy.riskOpExportMigrate}</p>
+            </li>
+            <li style={styles.deviceItem}>
+              <p style={styles.copy}>{localeCopy.riskOpDeleteSealed}</p>
+            </li>
+            <li style={styles.deviceItem}>
+              <p style={styles.copy}>{localeCopy.riskOpRemoteRevoke}</p>
+            </li>
+          </ul>
         </section>
 
         <section style={styles.card}>
@@ -483,6 +573,49 @@ export function SettingsPage({
         </section>
 
         <p style={styles.status}>{status || "\u00A0"}</p>
+        {verifyOpen ? (
+          <section style={styles.verifyBox}>
+            <p style={styles.sectionTitle}>{localeCopy.verifyModalTitle}</p>
+            <p style={styles.copy}>{localeCopy.verifyModalBody}</p>
+            <input
+              type="password"
+              value={verifyPassword}
+              onChange={(e) => setVerifyPassword(e.target.value)}
+              placeholder={localeCopy.verifyPasswordPlaceholder}
+              style={styles.input}
+            />
+            <input
+              type="text"
+              value={verifyRecoveryCode}
+              onChange={(e) => setVerifyRecoveryCode(e.target.value)}
+              placeholder={localeCopy.verifyRecoveryPlaceholder}
+              style={styles.input}
+            />
+            {verifyError ? <p style={styles.status}>{verifyError}</p> : null}
+            <div style={styles.actions}>
+              <button
+                type="button"
+                onClick={() => void handleConfirmVerification()}
+                disabled={busy}
+                style={styles.secondaryButton}
+              >
+                {localeCopy.verifyActionConfirm}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVerifyOpen(false);
+                  setPendingProtectedAction("");
+                  setVerifyError("");
+                }}
+                disabled={busy}
+                style={styles.ghostButton}
+              >
+                {localeCopy.verifyActionCancel}
+              </button>
+            </div>
+          </section>
+        ) : null}
       </section>
     </main>
   );
@@ -628,5 +761,44 @@ const styles = {
     minHeight: 18,
     color: "#f2d8c5",
     fontSize: 13,
+  },
+  buttonLabelRow: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  verifyBadge: {
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    border: "1px solid rgba(240, 194, 158, 0.45)",
+    borderRadius: 999,
+    padding: "2px 6px",
+    color: "#f0c29e",
+    whiteSpace: "nowrap",
+  },
+  verifyBox: {
+    border: "1px solid rgba(240, 194, 158, 0.35)",
+    borderRadius: 14,
+    background: "rgba(44, 36, 31, 0.42)",
+    padding: 14,
+    display: "grid",
+    gap: 10,
+  },
+  input: {
+    border: "1px solid rgba(196, 149, 106, 0.45)",
+    borderRadius: 10,
+    background: "rgba(18, 13, 13, 0.45)",
+    color: sanctuaryTheme.cream,
+    padding: "10px 12px",
+  },
+  ghostButton: {
+    border: "none",
+    background: "transparent",
+    color: sanctuaryTheme.inkSoft,
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontSize: 14,
+    padding: "10px 8px",
   },
 };

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { readNfcScanFull, writeFixedEntryUrlToRing } from "../services/nfcRingService";
+import {
+  readNfcScanFull,
+  readRingTextRecord,
+  writeFixedEntryUrlToRing,
+} from "../services/nfcRingService";
 import {
   addBoundRing,
   canAddAnotherRing,
@@ -16,6 +20,7 @@ import { RING_SETUP_CONTENT } from "../content/ringSetupContent";
 import { usePwaInstall } from "../hooks/usePwaInstall";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
+import { getPlatformGuidance } from "../utils/platformGuidance";
 import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 
 function privacyPolicyHref() {
@@ -72,13 +77,6 @@ function uidFromAnyUrlText(raw) {
   return "";
 }
 
-function startEntryUrl() {
-  if (typeof window === "undefined") return "https://havenring.me/start";
-  const configured = String(process.env.NEXT_PUBLIC_START_ENTRY_URL || "").trim();
-  if (/^https?:\/\//i.test(configured)) return configured;
-  return `${window.location.origin}/start`;
-}
-
 /**
  * Phase 1 setup: named rings, UID/fingerprint, secondary verification, success + backup nudge.
  */
@@ -101,6 +99,10 @@ export function RingSetupWizard({
   const t = useMemo(
     () => RING_SETUP_CONTENT[locale] || RING_SETUP_CONTENT.en,
     [locale]
+  );
+  const platformGuidance = useMemo(
+    () => getPlatformGuidance(isIosLike() ? "ios" : hasWebNfc() ? "android" : "other"),
+    []
   );
   const { canInstall, installStatus, install } = usePwaInstall({
     installPreparingTimeout: t.installPreparingTimeout,
@@ -125,9 +127,10 @@ export function RingSetupWizard({
   const [icon, setIcon] = useState(RING_ICON_OPTIONS[0]);
   const [showInstallSafetyDetails, setShowInstallSafetyDetails] = useState(false);
   const [iosInstallGuideOpen, setIosInstallGuideOpen] = useState(false);
-  const [writeBusy, setWriteBusy] = useState(false);
-  const [writeError, setWriteError] = useState("");
-  const [writeStatus, setWriteStatus] = useState("");
+  const [linkProvisionStatus, setLinkProvisionStatus] = useState("");
+  const [rewriteUrl, setRewriteUrl] = useState("https://havenring.me/start");
+  const [rewriteBusy, setRewriteBusy] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
   const openedUidFromUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     return uidFromAnyUrlText(window.location.href);
@@ -151,9 +154,10 @@ export function RingSetupWizard({
     setScanBusy(false);
     setShowInstallSafetyDetails(false);
     setIosInstallGuideOpen(false);
-    setWriteBusy(false);
-    setWriteError("");
-    setWriteStatus("");
+    setLinkProvisionStatus("");
+    setRewriteUrl("https://havenring.me/start");
+    setRewriteBusy(false);
+    setRewriteError("");
   }, []);
 
   function dismissWizard() {
@@ -306,34 +310,13 @@ export function RingSetupWizard({
           cloudLastUsedAt: json?.ring?.last_used_at || null,
         });
       }
-      if (hasWebNfc()) {
-        setWriteBusy(true);
-        setWriteError("");
-        setWriteStatus(t.writeStartPreparing);
-        try {
-          await writeFixedEntryUrlToRing(startEntryUrl());
-          setWriteStatus(t.writeStartSuccess);
-          void trackFirstRunEvent("ring_start_link_written_success", {
-            locale,
-            metadata: { source: "ring_setup_auto", step: "bind_success" },
-          });
-        } catch {
-          setWriteError(t.writeStartFailed);
-          setWriteStatus("");
-          void trackFirstRunEvent("ring_start_link_written_failed", {
-            locale,
-            metadata: { source: "ring_setup_auto", step: "bind_success" },
-          });
-        } finally {
-          setWriteBusy(false);
-        }
-      } else {
-        setWriteStatus(t.writeStartManualHint);
-        void trackFirstRunEvent("ring_start_link_manual_required", {
-          locale,
-          metadata: { source: "ring_setup_auto", reason: "no_web_nfc" },
-        });
-      }
+      setLinkProvisionStatus(
+        isIosLike() ? t.factoryStartLinkReadyIos : t.factoryStartLinkReadyAndroid
+      );
+      void trackFirstRunEvent("ring_start_link_factory_ready", {
+        locale,
+        metadata: { source: "ring_setup_bind", strategy: "factory_prewritten_url" },
+      });
       setStep("success");
     } catch (e) {
       if (e?.code === "duplicate_ring") {
@@ -345,30 +328,6 @@ export function RingSetupWizard({
       }
     } finally {
       setVerifyBusy(false);
-    }
-  }
-
-  async function retryWriteStartLink() {
-    if (!hasWebNfc()) return;
-    setWriteBusy(true);
-    setWriteError("");
-    setWriteStatus(t.writeStartPreparing);
-    try {
-      await writeFixedEntryUrlToRing(startEntryUrl());
-      setWriteStatus(t.writeStartSuccess);
-      void trackFirstRunEvent("ring_start_link_written_success", {
-        locale,
-        metadata: { source: "ring_setup_retry", step: "success_screen_retry" },
-      });
-    } catch {
-      setWriteError(t.writeStartFailed);
-      setWriteStatus("");
-      void trackFirstRunEvent("ring_start_link_written_failed", {
-        locale,
-        metadata: { source: "ring_setup_retry", step: "success_screen_retry" },
-      });
-    } finally {
-      setWriteBusy(false);
     }
   }
 
@@ -385,6 +344,52 @@ export function RingSetupWizard({
       }
     }
     openIosInstallGuide();
+  }
+
+  async function rewriteRingLinkNow() {
+    const candidate = String(rewriteUrl || "").trim();
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      setRewriteError(t.rewriteInvalidUrl);
+      return;
+    }
+    if (parsed.protocol !== "https:") {
+      setRewriteError(t.rewriteInvalidUrl);
+      return;
+    }
+    setRewriteBusy(true);
+    setRewriteError("");
+    setStepNote("");
+    try {
+      const finalUrl = parsed.toString();
+      await writeFixedEntryUrlToRing(finalUrl);
+      setStepNote(t.rewriteDone);
+      const readBack = await readRingTextRecord();
+      const readBackText = String(readBack?.text || "").trim();
+      if (readBackText && readBackText === finalUrl) {
+        setStepNote(t.rewriteVerified || t.rewriteDone);
+      } else {
+        setRewriteError(t.rewriteVerifyFailed || t.rewriteFailed);
+      }
+      void trackFirstRunEvent("ring_start_link_rewritten_success", {
+        locale,
+        metadata: {
+          source: "ring_setup_rewrite",
+          platform: platformGuidance.platform,
+          verified: readBackText === finalUrl,
+        },
+      });
+    } catch {
+      setRewriteError(t.rewriteFailed);
+      void trackFirstRunEvent("ring_start_link_rewritten_failed", {
+        locale,
+        metadata: { source: "ring_setup_rewrite", platform: platformGuidance.platform },
+      });
+    } finally {
+      setRewriteBusy(false);
+    }
   }
 
   function onInstallEntryClick() {
@@ -426,6 +431,7 @@ export function RingSetupWizard({
               {t.title}
             </h2>
             <p style={styles.body}>{t.introBody}</p>
+            <p style={styles.hint}>{platformGuidance.ringClaimLine}</p>
             <p style={styles.privacyFine}>
               {t.privacyBindNotice}{" "}
               <a href={privacyPolicyHref()} target="_blank" rel="noreferrer" style={styles.privacyLink}>
@@ -568,7 +574,7 @@ export function RingSetupWizard({
                 </ol>
                 <div style={styles.screenshotMock} aria-hidden>
                   <p style={styles.screenshotTitle}>Safari</p>
-                  <p style={styles.screenshotRow}>Share -> Add to Home Screen</p>
+                  <p style={styles.screenshotRow}>{"Share -> Add to Home Screen"}</p>
                   <p style={styles.screenshotRow}>Haven icon appears on Home Screen</p>
                 </div>
                 <p style={styles.hint}>{t.iosInstallGuideScreenshotHint1}</p>
@@ -654,7 +660,7 @@ export function RingSetupWizard({
                 </ol>
                 <div style={styles.screenshotMock} aria-hidden>
                   <p style={styles.screenshotTitle}>Safari</p>
-                  <p style={styles.screenshotRow}>Share -> Add to Home Screen</p>
+                  <p style={styles.screenshotRow}>{"Share -> Add to Home Screen"}</p>
                   <p style={styles.screenshotRow}>Haven icon appears on Home Screen</p>
                 </div>
                 <p style={styles.hint}>{t.iosInstallGuideScreenshotHint1}</p>
@@ -859,19 +865,30 @@ export function RingSetupWizard({
             <h2 style={styles.title}>{t.successTitle}</h2>
             <p style={styles.body}>{t.successBody}</p>
             <p style={styles.encourage}>{t.successEncourage}</p>
-            {writeStatus ? <p style={styles.hint}>{writeStatus}</p> : null}
-            {writeError ? <p style={styles.error}>{writeError}</p> : null}
-            <div style={styles.actions}>
-              {writeError && hasWebNfc() ? (
+            {linkProvisionStatus ? <p style={styles.hint}>{linkProvisionStatus}</p> : null}
+            {platformGuidance.isAndroid && hasWebNfc() ? (
+              <div style={styles.noticeBox}>
+                <p style={styles.noticeTitle}>{t.rewriteTitle}</p>
+                <p style={styles.hint}>{t.rewriteBody}</p>
+                <input
+                  type="url"
+                  value={rewriteUrl}
+                  onChange={(e) => setRewriteUrl(e.target.value)}
+                  placeholder="https://havenring.me/start"
+                  style={styles.input}
+                />
+                {rewriteError ? <p style={styles.error}>{rewriteError}</p> : null}
                 <button
                   type="button"
-                  onClick={() => void retryWriteStartLink()}
-                  disabled={writeBusy}
+                  onClick={() => void rewriteRingLinkNow()}
+                  disabled={rewriteBusy}
                   style={styles.secondaryBtn}
                 >
-                  {writeBusy ? t.writeStartWorking : t.writeStartRetry}
+                  {rewriteBusy ? t.rewriteWorking : t.rewriteAction}
                 </button>
-              ) : null}
+              </div>
+            ) : null}
+            <div style={styles.actions}>
               {canAddAnotherRing() ? (
                 <button
                   type="button"

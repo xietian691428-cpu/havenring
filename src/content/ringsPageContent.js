@@ -3,6 +3,8 @@ const EN = {
   title: "My rings",
   subtitle:
     "Quick access keys to your memory space. Any bound ring works equally for quick login and recommended sealing.",
+  layeredCoreLine:
+    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
   emptyTitle: "No rings registered yet",
   emptyBody:
     "Add your NFC rings and give them names. We recommend at least two: one for daily use and one backup in case of loss.",
@@ -39,6 +41,10 @@ const EN = {
   settingsLink: "Privacy & backup",
   privacyNote:
     "Every ring is equal: any one can be used for quick login and recommended sealing. Your account stays the owner of all memories.",
+  iosUsageHint:
+    "Touch your ring to quickly access your sanctuary. Advanced option: ring link rewrite is available on Android devices.",
+  androidUsageHint: "You can also rewrite the ring link here when needed.",
+  rewriteLinkAction: "Rewrite ring link",
 };
 
 export const RINGS_PAGE_CONTENT = {

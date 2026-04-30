@@ -4,6 +4,8 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     stepLabelPrefix: "Step ",
     stepLabelMiddle: " of ",
     subtitle: "Your first memory can be safe in just a few minutes.",
+    layeredCoreLine:
+      "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
     skip: "Skip for now",
     next: "Next",
     back: "Back",
@@ -36,7 +38,7 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
         id: "daily",
         icon: "✨",
         title: "Daily use stays simple",
-        body: "Open Haven, add memories, and seal when you want. Any linked ring works the same way. No master ring, no complicated choices.",
+        body: "Open Haven, add memories, and seal when you want. For precious moments, use Seal with Ring as your ritual, or Save Securely with Face ID as smooth fallback.",
       },
     ],
   },

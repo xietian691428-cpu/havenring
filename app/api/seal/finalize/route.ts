@@ -37,6 +37,20 @@ type DraftPayload = {
   releaseAt: number;
 };
 
+type SealTicketRow = {
+  id: string;
+  draft_ids: unknown;
+  ring_uid_hash: string | null;
+  expires_at: string | null;
+  consumed_at: string | null;
+};
+
+type SealFinalizeAtomicResult = {
+  saved_ids?: unknown;
+  sealed_by_ring_uid?: string | null;
+  consumed_at?: string | null;
+};
+
 function parseDraftPayloads(input: unknown): DraftPayload[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -103,12 +117,13 @@ export async function POST(req: NextRequest) {
 
     const ticketHash = sha256(ticket);
     const admin = getSupabaseAdminClient();
-    const { data: row, error: findErr } = await admin
+    const { data: ticketRow, error: findErr } = await admin
       .from("seal_tickets" as never)
       .select("id, draft_ids, ring_uid_hash, expires_at, consumed_at")
       .eq("ticket_hash", ticketHash)
       .eq("user_id", user.id)
       .maybeSingle();
+    const row = (ticketRow as SealTicketRow | null) ?? null;
     if (findErr) {
       await recordSealTelemetry(admin, {
         user_id: user.id,
@@ -220,7 +235,7 @@ export async function POST(req: NextRequest) {
         );
       }
       const { data: rpcData, error: rpcErr } = await admin.rpc(
-        "seal_finalize_atomic",
+        "seal_finalize_atomic" as never,
         {
           p_user_id: user.id,
           p_ticket_hash: ticketHash,
@@ -293,7 +308,9 @@ export async function POST(req: NextRequest) {
           { status: 500 }
         );
       }
-      const firstRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      const firstRow = (
+        Array.isArray(rpcData) ? rpcData[0] : rpcData
+      ) as SealFinalizeAtomicResult | null;
       await recordSealTelemetry(admin, {
         user_id: user.id,
         endpoint: "finalize",

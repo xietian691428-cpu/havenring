@@ -28,6 +28,7 @@ import {
 import { AppFlowProvider, useAppFlow } from "./state/appFlowContext";
 import { getFlowPrimaryUi, getRecoveryActionIntent } from "./state/appFlowSelectors";
 import { FIRST_MEMORY_DONE_KEY } from "./services/firstRunTelemetryService";
+import { getSecuritySummary } from "./services/deviceTrustService";
 
 export default function App() {
   return (
@@ -156,6 +157,7 @@ function AppOrchestrator() {
   }, [route.name]);
 
   const showBottomNav = !["new", "detail", "help"].includes(route.name);
+  const boundRingCount = getBoundRingCount();
 
   const shellProps = {
     locale,
@@ -172,6 +174,9 @@ function AppOrchestrator() {
       navigateTo({ name: "settings", memoryId: null }, "forward"),
     onNavigateHelp: () => navigateTo({ name: "help", memoryId: null }, "forward"),
     showTemporaryBanner: temporaryModeBanner,
+    statusSignedIn: Boolean(supabaseSession),
+    statusRingBound: boundRingCount > 0,
+    statusSealRequiresRing: boundRingCount > 0,
   };
 
   function renderWithShell(content) {
@@ -296,6 +301,7 @@ function AppOrchestrator() {
       window.matchMedia?.("(display-mode: standalone)")?.matches ||
         window.navigator?.standalone === true
     );
+    const security = getSecuritySummary();
     dispatchFlow({
       type: "BOOTSTRAP_DONE",
       hasSession: Boolean(supabaseSession),
@@ -303,6 +309,8 @@ function AppOrchestrator() {
       platform,
       webNfcAvailable,
       pwaInstalled,
+      trustedCurrentDevice: Boolean(security.trustedCurrentDevice),
+      requireSecondaryOnRingEntry: true,
     });
   }, [supabaseSession]);
 
@@ -538,6 +546,8 @@ function AppOrchestrator() {
       <FadePage pageKey="new" direction={transitionDirection}>
         <NewMemoryPage
           locale={locale}
+          hasSession={Boolean(supabaseSession)}
+          hasBoundRing={boundRingCount > 0}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onSaveMemory={createMemory}
           onSaved={async () => {

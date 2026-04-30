@@ -35,6 +35,8 @@ export const initialAppFlowState = {
   ftuxPwaDone: false,
   ftuxWelcomeDone: false,
   ftuxFirstMemoryDone: false,
+  trustedCurrentDevice: false,
+  requireSecondaryOnRingEntry: true,
   mainState: MAIN_STATES.BOOTSTRAP,
 };
 
@@ -50,6 +52,8 @@ export function appFlowReducer(state, event) {
       platform: event.platform || "other",
       webNfcAvailable: Boolean(event.webNfcAvailable),
       pwaInstalled: Boolean(event.pwaInstalled),
+      trustedCurrentDevice: Boolean(event.trustedCurrentDevice),
+      requireSecondaryOnRingEntry: Boolean(event.requireSecondaryOnRingEntry),
       mainState: MAIN_STATES.BOOTSTRAP,
     };
     return { ...next, mainState: resolveMainState(next) };

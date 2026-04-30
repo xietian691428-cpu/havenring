@@ -28,6 +28,7 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
               <p style={styles.brand}>{t.brand}</p>
               <h1 style={styles.title}>{t.title}</h1>
               <p style={styles.subtitle}>{t.subtitle}</p>
+              <p style={styles.copy}>{t.layeredCoreLine}</p>
             </div>
             <OnlineStatusBadge locale={locale} />
           </header>
@@ -64,6 +65,11 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
             <h2 style={styles.sectionTitle}>{t.troubleshootingTitle}</h2>
             <p style={styles.copy}>{t.troubleshootingBody}</p>
             <NfcTroubleshooting locale={locale} platform={platform} />
+          </section>
+
+          <section style={styles.card}>
+            <h2 style={styles.sectionTitle}>{t.riskOpsTitle}</h2>
+            <p style={styles.copy}>{t.riskOpsBody}</p>
           </section>
 
           <section style={styles.card}>

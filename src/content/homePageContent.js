@@ -18,6 +18,8 @@ const EN = {
     "Apple Sign In is available on iPhone/iPad/Mac. Use Google on this device.",
   ringSecuritySetupTitle: "Set device protection password",
   ringSecurityVerifyTitle: "Verify this new device",
+  ringSecurityVerifyBody:
+    "Touch detected. Please confirm with Face ID to enter your private memory sanctuary.",
   ringSecurityPasswordPlaceholder: "Enter password",
   ringSecurityConfirmPasswordPlaceholder: "Confirm password",
   ringSecurityRecoveryPlaceholder: "Or enter recovery code",

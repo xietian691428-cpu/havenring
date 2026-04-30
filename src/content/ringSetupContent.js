@@ -13,7 +13,7 @@ const EN = {
   scanRetry: "Try again",
   iosNfcTitle: "NFC setup on iPhone",
   iosNfcBody:
-    "On iPhone, we recommend ring link URL or manual assist first. Web NFC in browser can be limited.",
+    "Your ring has been pre-configured to open this sanctuary. We will now connect it to your account.",
   installRecommendedTitle: "Better full-screen experience from Home Screen",
   installRecommendedBody:
     "iOS needs manual Add to Home Screen. Once added, Haven feels much closer to a native app and is more stable for daily use.",
@@ -91,20 +91,26 @@ const EN = {
   colorLabel: "Color",
   iconLabel: "Icon",
   nameCta: "Save and finish",
+  rewriteTitle: "Advanced: Rewrite ring link (Android)",
+  rewriteBody:
+    "Optional for Android users. You can rewrite this ring to another trusted HTTPS link.",
+  rewriteAction: "Rewrite Ring URL",
+  rewriteWorking: "Rewriting ring link...",
+  rewriteDone: "Ring link updated.",
+  rewriteVerified: "Rewrite verified. The ring now opens the updated link.",
+  rewriteInvalidUrl: "Please enter a valid HTTPS URL.",
+  rewriteVerifyFailed:
+    "Write finished, but read-back verification did not match. Please try once more.",
+  rewriteFailed: "Could not rewrite ring link. Hold still and try again.",
   successTitle: "Ring linked",
   successBody:
-    "This ring is ready for quick sign-in and optional sealing. Any linked ring can bring you back to Haven.",
+    "This ring is now linked to your account for quick sign-in and optional sealing. Any linked ring can bring you back to Haven.",
   successEncourage:
     "Tip: add a second ring as backup. If one ring is lost, your memories are still safe in your account.",
-  writeStartPreparing: "Finishing setup: writing your secure start link to this ring...",
-  writeStartWorking: "Writing start link...",
-  writeStartSuccess:
-    "Done. This ring now opens your private Haven start page on any phone.",
-  writeStartFailed:
-    "Ring is linked, but writing the start link did not complete. You can retry now or do it later in Settings.",
-  writeStartRetry: "Retry writing start link",
-  writeStartManualHint:
-    "Ring is linked. On this device, ring-link writing may require manual setup from Settings.",
+  factoryStartLinkReadyIos:
+    "Factory setup note: this ring should already open https://havenring.me/start. On iPhone, no rewrite is needed during setup.",
+  factoryStartLinkReadyAndroid:
+    "Factory setup note: this ring should already open https://havenring.me/start. If needed, you can rewrite the link later in Settings on Android.",
   addAnother: "Add another ring",
   doneToHaven: "Go to my memory space",
   duplicateError: "This ring is already in your list.",
@@ -144,7 +150,7 @@ export const RING_SETUP_CONTENT = {
     scanRetry: "Reessayer",
     iosNfcTitle: "NFC sur iPhone",
     iosNfcBody:
-      "Le NFC Web n'est pas disponible sur Safari iPhone. Ajoutez Haven a l'ecran d'accueil et utilisez Chrome Android ou bureau pour l'enregistrement NFC dans le navigateur.",
+      "Votre bague est preconfiguree pour ouvrir ce sanctuaire. Nous allons maintenant la connecter a votre compte.",
     verifyTitle: "Confirmez votre identite",
     verifyBody:
       "Pour proteger votre compte, confirmez avec le mot de passe appareil ou le code de recuperation.",

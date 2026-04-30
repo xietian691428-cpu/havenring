@@ -335,6 +335,7 @@ export function HomePage({
             {securityMode === "verify" ? (
               <section style={styles.securityBox}>
                 <p style={styles.ringSignInTitle}>{t.ringSecurityVerifyTitle}</p>
+                <p style={styles.howItWorksBody}>{t.ringSecurityVerifyBody}</p>
                 <input
                   type="password"
                   placeholder={t.ringSecurityPasswordPlaceholder}

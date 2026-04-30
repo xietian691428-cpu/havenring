@@ -15,7 +15,7 @@ export function getFlowPrimaryUi(flowState, locale = "en") {
       title: isZh ? "需要登录" : "Sign-in required",
       body: isZh
         ? "请先完成账号登录，再继续使用你的记忆圣殿。"
-        : "Complete account sign-in to continue into your memory sanctuary.",
+        : "Complete account sign-in to continue into your memory sanctuary. Touch detection alone is not final proof on new or high-risk devices.",
       actionLabel: isZh ? "继续登录" : "Continue sign-in",
       enforceSingle: true,
     };
@@ -35,7 +35,7 @@ export function getFlowPrimaryUi(flowState, locale = "en") {
           ? "This device cannot use Web NFC in browser. Add to Home Screen first, then use Ring Link URL or manual bind fallback."
           : isIos
             ? "Session is valid but no ring is bound yet. On iOS, use Ring Link URL or manual bind fallback for first ring."
-          : "Session is valid but no ring is bound yet. Bind at least one ring.",
+          : "Session is valid but no ring is bound yet. Ring setup is strongly recommended for fast access, but your account remains the core owner.",
       actionLabel: isZh ? "去绑定戒指" : "Bind a ring",
       enforceSingle: true,
     };
@@ -60,7 +60,7 @@ export function getFlowPrimaryUi(flowState, locale = "en") {
           : "iOS 建议从主屏幕入口进入，体验更稳定、更接近原生 App。"
         : noWebNfcOnIos
           ? "Web NFC is unavailable in this browser. Add to Home Screen first for a more reliable daily entry."
-          : "On iOS, open Haven from your Home Screen icon for a smoother daily experience.",
+          : "On iOS, open Haven from your Home Screen icon for a smoother daily experience. Ring ritual remains optional.",
       actionLabel: isZh ? "查看安装指引" : "Open install guide",
       secondaryActionLabel: isZh ? "稍后再说" : "Skip for now",
       secondaryActionIntent: "defer_pwa",

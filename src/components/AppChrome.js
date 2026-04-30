@@ -9,6 +9,9 @@ export function AppChrome({
   showBottomNav = true,
   activeTab = "timeline",
   showTemporaryBanner = false,
+  statusSignedIn = false,
+  statusRingBound = false,
+  statusSealRequiresRing = false,
   onTabTimeline,
   onTabExplore,
   onTabSeal,
@@ -42,13 +45,23 @@ export function AppChrome({
       style={{
         ...styles.wrapper,
         ...sanctuaryBackgroundStyle(),
-        paddingTop: showTemporaryBanner
-          ? "calc(env(safe-area-inset-top, 0px) + 92px)"
-          : "calc(env(safe-area-inset-top, 0px) + 52px)",
       }}
     >
       <header style={styles.topBar}>
-        <p style={styles.brand}>{t.brand}</p>
+        <div style={styles.brandWrap}>
+          <p style={styles.brand}>{t.brand}</p>
+          <div style={styles.statusPills} role="status" aria-live="polite">
+            <span style={styles.statusPill}>
+              {statusSignedIn ? t.statusSignedIn : t.statusSignedOut}
+            </span>
+            <span style={styles.statusPill}>
+              {statusRingBound ? t.statusRingBound : t.statusRingNotBound}
+            </span>
+            <span style={styles.statusPill}>
+              {statusSealRequiresRing ? t.statusSealRingRecommended : t.statusSealSecureOnly}
+            </span>
+          </div>
+        </div>
         <div style={styles.topActions}>
           <button
             type="button"
@@ -77,8 +90,11 @@ export function AppChrome({
       <div
         style={{
           ...styles.mainArea,
+          paddingTop: showTemporaryBanner
+            ? "calc(env(safe-area-inset-top, 0px) + 92px)"
+            : "calc(env(safe-area-inset-top, 0px) + 52px)",
           paddingBottom: showBottomNav
-            ? "calc(72px + env(safe-area-inset-bottom, 0px))"
+            ? "calc(60px + env(safe-area-inset-bottom, 0px))"
             : "20px",
         }}
       >
@@ -125,6 +141,8 @@ const styles = {
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
     position: "relative",
+    display: "flex",
+    flexDirection: "column",
   },
   temporaryBanner: {
     position: "fixed",
@@ -163,6 +181,27 @@ const styles = {
     color: sanctuaryTheme.wood,
     fontWeight: 600,
   },
+  brandWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    minWidth: 0,
+  },
+  statusPills: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  statusPill: {
+    fontSize: 10,
+    lineHeight: 1.2,
+    borderRadius: 999,
+    border: "1px solid rgba(107, 83, 68, 0.24)",
+    background: "rgba(255, 255, 255, 0.62)",
+    color: sanctuaryTheme.ink,
+    padding: "4px 8px",
+    whiteSpace: "nowrap",
+  },
   topActions: {
     display: "flex",
     gap: 4,
@@ -179,7 +218,8 @@ const styles = {
     lineHeight: 1,
   },
   mainArea: {
-    minHeight: "calc(100vh - 120px)",
+    flex: 1,
+    minHeight: 0,
   },
   tabBar: {
     position: "fixed",

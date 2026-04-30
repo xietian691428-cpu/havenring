@@ -26,6 +26,7 @@ export function NfcGuideModal({
   const [nfcStatus, setNfcStatus] = useState("");
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [lastAction, setLastAction] = useState("read");
+  const canRewriteRingLink = platform === "android";
   if (!open) return null;
 
   async function handleReadTap() {
@@ -48,10 +49,7 @@ export function NfcGuideModal({
     setLastAction("write");
     setNfcBusy(true);
     setNfcError(null);
-    const fixedUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/start`
-        : "https://havenring.me/start";
+    const fixedUrl = "https://havenring.me/start";
     setNfcStatus(t.writingStatus);
     try {
       await writeFixedEntryUrlToRing(fixedUrl);
@@ -125,17 +123,24 @@ export function NfcGuideModal({
             >
               {nfcBusy && lastAction === "read" ? t.reading : t.read}
             </button>
-            <button
-              type="button"
-              onClick={handleWriteTap}
-              disabled={nfcBusy}
-              style={styles.secondaryButton}
-            >
-              {nfcBusy && lastAction === "write"
-                ? t.writing
-                : t.write}
-            </button>
+            {canRewriteRingLink ? (
+              <button
+                type="button"
+                onClick={handleWriteTap}
+                disabled={nfcBusy}
+                style={styles.secondaryButton}
+              >
+                {nfcBusy && lastAction === "write"
+                  ? t.writing
+                  : t.write}
+              </button>
+            ) : null}
           </div>
+          {!canRewriteRingLink ? (
+            <p style={styles.statusText}>
+              iPhone path: ring links are factory-prewritten. You usually do not need to rewrite.
+            </p>
+          ) : null}
           <p style={styles.statusText}>{nfcStatus || "\u00A0"}</p>
           <NfcErrorHandler
             error={nfcError}
