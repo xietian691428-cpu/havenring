@@ -9,6 +9,31 @@ import { getPlatformGuidance } from "@/src/utils/platformGuidance";
 
 const FTUX_STARTED_KEY = "haven.ftux.started.v1";
 const PROD_ORIGIN = "https://www.havenring.me";
+const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
+
+function normalizeClaimValue(input: string): string {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  const cleaned = raw.replace(/[\u0000-\u001F\u007F]/g, "");
+  if (!cleaned) return "";
+  try {
+    const decoded = decodeURIComponent(cleaned);
+    if (/^https?:\/\//i.test(decoded)) {
+      const url = new URL(decoded);
+      return (url.searchParams.get("claim") || "").trim();
+    }
+    if (decoded.includes("claim=")) {
+      const q = decoded.includes("?")
+        ? decoded.slice(decoded.indexOf("?") + 1)
+        : decoded;
+      const p = new URLSearchParams(q);
+      return (p.get("claim") || "").trim();
+    }
+    return decoded.trim();
+  } catch {
+    return cleaned;
+  }
+}
 
 export default function StartClient() {
   const [busyProvider, setBusyProvider] = useState("");
@@ -37,8 +62,9 @@ export default function StartClient() {
     const value = window.location.search
       ? new URLSearchParams(window.location.search).get("claim") || ""
       : "";
-    if (!value) return;
-    setClaimToken(value);
+    const normalized = normalizeClaimValue(value);
+    if (!normalized) return;
+    setClaimToken(normalized);
     setClaimState("waiting_signin");
     setNotice("Connecting your ring...");
   }, []);
@@ -49,8 +75,21 @@ export default function StartClient() {
     const timer = window.setTimeout(() => {
       setClaimToken("");
       setNotice("Setup complete! You can now start saving memories.");
-      window.history.replaceState({}, "", "/start");
+      window.history.replaceState({}, "", "/");
     }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [claimState]);
+
+  useEffect(() => {
+    if (claimState !== "claiming") return;
+    if (typeof window === "undefined") return;
+    const timer = window.setTimeout(() => {
+      claimAttemptedRef.current = false;
+      setClaimState("failed");
+      setNotice(
+        "Ring setup is taking too long. You can retry now, or continue without ring for now."
+      );
+    }, 12_000);
     return () => window.clearTimeout(timer);
   }, [claimState]);
 
@@ -60,14 +99,18 @@ export default function StartClient() {
     setClaimState("claiming");
     setNotice("Connecting your ring...");
     try {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), CLAIM_REQUEST_TIMEOUT_MS);
       const res = await fetch("/api/rings/claim", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({ token: claimToken }),
       });
+      window.clearTimeout(timer);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         claimAttemptedRef.current = false;
@@ -84,7 +127,9 @@ export default function StartClient() {
     } catch {
       claimAttemptedRef.current = false;
       setClaimState("failed");
-      setNotice("We could not connect this ring yet. You can continue without ring for now.");
+      setNotice(
+        "Ring setup timed out. You can retry now, or continue without ring for now."
+      );
     }
   }
 
@@ -199,9 +244,34 @@ export default function StartClient() {
               <p style={styles.claimBody}>
                 {claimState === "claimed"
                   ? "Your ring is securely connected to your account."
-                  : "Connecting your ring..."}
+                  : claimState === "waiting_signin"
+                    ? "Please sign in first, then we will connect your ring automatically."
+                    : "Connecting your ring..."}
               </p>
               {claimState === "failed" ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const supabase = getSupabaseBrowserClient();
+                      const { data } = await supabase.auth.getSession();
+                      if (data.session?.access_token) {
+                        void claimRingWithToken(data.session.access_token);
+                      } else {
+                        setNotice("Please sign in first, then retry ring setup.");
+                        setClaimState("waiting_signin");
+                      }
+                    } catch {
+                      setNotice("Please sign in first, then retry ring setup.");
+                      setClaimState("waiting_signin");
+                    }
+                  }}
+                  style={styles.secondaryButton}
+                >
+                  Retry ring setup
+                </button>
+              ) : null}
+              {claimState !== "claimed" ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -209,7 +279,7 @@ export default function StartClient() {
                     setClaimToken("");
                     setNotice("You can continue now and connect a ring later in My Rings.");
                     if (typeof window !== "undefined") {
-                      window.history.replaceState({}, "", "/start");
+                      window.history.replaceState({}, "", "/");
                     }
                   }}
                   style={styles.secondaryButton}
