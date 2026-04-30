@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NfcGuideModal } from "./NfcGuideModal";
 import { FIRST_TIME_ONBOARDING_CONTENT } from "../content/firstTimeOnboardingContent";
+import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
+import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 
 /**
  * FirstTimeOnboarding
@@ -19,6 +21,35 @@ export function FirstTimeOnboarding({
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [showNfcGuide, setShowNfcGuide] = useState(false);
+  const platform = useMemo(() => resolvePlatformTarget(), []);
+  const onboardingEventLocale = locale;
+  const [openedTracked, setOpenedTracked] = useState(false);
+
+  useEffect(() => {
+    if (!open || openedTracked) return;
+    setOpenedTracked(true);
+    void trackFirstRunEvent("onboarding_opened", {
+      locale: onboardingEventLocale,
+      platform,
+    });
+  }, [open, openedTracked, onboardingEventLocale, platform]);
+
+  function handleSkip() {
+    void trackFirstRunEvent("onboarding_skipped", {
+      locale: onboardingEventLocale,
+      platform,
+      metadata: { step: stepIndex + 1 },
+    });
+    onSkip?.();
+  }
+
+  function handleComplete() {
+    void trackFirstRunEvent("onboarding_completed", {
+      locale: onboardingEventLocale,
+      platform,
+    });
+    onComplete?.();
+  }
 
   if (!open) return null;
   const step = t.steps[stepIndex];
@@ -40,6 +71,9 @@ export function FirstTimeOnboarding({
               {t.title}
             </h2>
             <p style={styles.subtitle}>{t.subtitle}</p>
+            <p style={styles.platformHint}>
+              {platform === "android" ? t.platformHintAndroid : t.platformHintIos}
+            </p>
           </header>
 
           <article style={styles.card}>
@@ -61,7 +95,7 @@ export function FirstTimeOnboarding({
           </article>
 
           <footer style={styles.footer}>
-            <button type="button" onClick={onSkip} style={styles.skipButton}>
+            <button type="button" onClick={handleSkip} style={styles.skipButton}>
               {t.skip}
             </button>
             <div style={styles.navActions}>
@@ -83,7 +117,7 @@ export function FirstTimeOnboarding({
                   {t.next}
                 </button>
               ) : (
-                <button type="button" onClick={onComplete} style={styles.primaryButton}>
+                <button type="button" onClick={handleComplete} style={styles.primaryButton}>
                   {t.start}
                 </button>
               )}
@@ -145,6 +179,12 @@ const styles = {
     color: "#e4ccbc",
     fontSize: 16,
     lineHeight: 1.6,
+  },
+  platformHint: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 13,
+    lineHeight: 1.5,
   },
   card: {
     border: "1px solid #3d2f28",

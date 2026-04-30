@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hitRateLimitWithRedisFallback } from "@/lib/rate-limit";
 import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {
   getSupabaseUserClient,
   isAnonymousUser,
@@ -32,22 +32,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const limit = await hitRateLimitWithRedisFallback(
-      `nfc-bind:${user.id}`,
-      20,
-      60_000
-    );
-    if (!limit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": Math.ceil(limit.retryAfterMs / 1000).toString(),
-          },
-        }
-      );
-    }
+    const limitRes = await enforceUserIpRateLimit({
+      req,
+      userId: user.id,
+      scope: "nfc-bind",
+      policy: API_RATE_POLICIES.ringMedium,
+    });
+    if (limitRes) return limitRes;
 
     const secondary = req.headers.get("x-haven-secondary-verified");
     if (secondary !== "1") {

@@ -18,29 +18,50 @@ function supabaseConfigured() {
 export function NfcRingSilentEntry({
   copy,
   onSignedIn,
+  authExpiredNotice = "",
 }) {
   const t = copy || {};
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [errorState, setErrorState] = useState({ message: "", help: "" });
 
   if (!supabaseConfigured()) return null;
 
   async function handleTap() {
     setBusy(true);
-    setError("");
+    setErrorState({ message: "", help: "" });
     try {
       await silentLoginViaNfcScan();
       onSignedIn?.();
     } catch (e) {
       const code = e?.code || e?.message || "";
       if (code === "nfc_login_unconfigured" || /not configured/i.test(String(e?.message))) {
-        setError(t.unconfigured || "Cloud sign-in is not configured on this build.");
+        setErrorState({
+          message: t.unconfigured || "Cloud sign-in is not configured on this build.",
+          help:
+            t.helpUnconfigured ||
+            "Server-side NFC login is not configured yet. Please contact support or the app operator.",
+        });
       } else if (code === "Unknown or inactive ring" || e?.message?.includes?.("Unknown")) {
-        setError(t.noBinding || "This tag is not linked to an account.");
+        setErrorState({
+          message: t.noBinding || "This tag is not linked to an account.",
+          help:
+            t.helpNoBinding ||
+            "This ring is not bound to this account. Open Rings and bind this ring first, then try again.",
+        });
       } else if (e?.message === "no_uid_from_tag") {
-        setError(t.noUid || "Could not read the tag ID.");
+        setErrorState({
+          message: t.noUid || "Could not read the tag ID.",
+          help:
+            t.helpNoUid ||
+            "The tag ID was not read. Keep your ring close to the NFC area for 1-2 seconds and try again.",
+        });
       } else {
-        setError(t.generic || "Could not sign in with this ring.");
+        setErrorState({
+          message: t.generic || "Could not sign in with this ring.",
+          help:
+            t.helpGeneric ||
+            "Try once more with a steady ring touch. If it still fails, check network and ring binding status.",
+        });
       }
     } finally {
       setBusy(false);
@@ -54,6 +75,7 @@ export function NfcRingSilentEntry({
       aria-label={t.regionLabel || "Ring sign-in"}
     >
       <p style={styles.lede}>{t.lede}</p>
+      {authExpiredNotice ? <p style={styles.notice}>{authExpiredNotice}</p> : null}
       <button
         type="button"
         onClick={() => void handleTap()}
@@ -62,11 +84,12 @@ export function NfcRingSilentEntry({
       >
         {busy ? t.scanning || "Hold ring…" : t.cta || "Continue with ring"}
       </button>
-      {error ? (
+      {errorState.message ? (
         <p style={styles.err} role="alert">
-          {error}
+          {errorState.message}
         </p>
       ) : null}
+      {errorState.help ? <p style={styles.help}>{errorState.help}</p> : null}
     </div>
   );
 }
@@ -85,6 +108,16 @@ const styles = {
     lineHeight: 1.45,
     color: "rgba(248, 239, 231, 0.72)",
   },
+  notice: {
+    margin: "0 0 10px",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "#f2d8c5",
+    background: "rgba(217, 166, 122, 0.08)",
+    border: "1px solid rgba(217, 166, 122, 0.3)",
+    borderRadius: 10,
+    padding: "8px 10px",
+  },
   btn: {
     border: `1px solid ${sanctuaryTheme.accent}`,
     background: `linear-gradient(180deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
@@ -99,5 +132,11 @@ const styles = {
     margin: "10px 0 0",
     fontSize: 12,
     color: "#ffb8a3",
+  },
+  help: {
+    margin: "6px 0 0",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(248, 239, 231, 0.74)",
   },
 };

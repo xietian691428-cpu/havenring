@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hitRateLimitWithRedisFallback } from "@/lib/rate-limit";
+import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {
   getSupabaseUserClient,
   requireAuthenticatedUser,
@@ -26,17 +26,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const limit = await hitRateLimitWithRedisFallback(
-      `nfc-revoke-all:${user.id}`,
-      5,
-      60_000
-    );
-    if (!limit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        { status: 429 }
-      );
-    }
+    const limitRes = await enforceUserIpRateLimit({
+      req,
+      userId: user.id,
+      scope: "nfc-revoke-all",
+      policy: API_RATE_POLICIES.ringMedium,
+    });
+    if (limitRes) return limitRes;
 
     const body = (await req.json().catch(() => ({}))) as {
       privacy_acknowledged?: unknown;

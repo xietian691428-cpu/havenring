@@ -11,6 +11,7 @@ import {
   syncRingScopedCaches,
 } from "../services/ringSyncService";
 import { getActiveRingUidKey } from "../services/ringRegistryService";
+import { classifySyncHealth } from "../state/recoveryPolicy";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -70,17 +71,20 @@ export function useMemories() {
           ...payload,
           id: nextId,
           timelineAt: payload?.timelineAt || now,
+          releaseAt: Number(payload?.releaseAt || 0) || 0,
         };
         const contentSha = await computeMemoryBundleHash({
           title: enrichedPayload.title,
           story: enrichedPayload.story,
           timelineAt: enrichedPayload.timelineAt,
+          releaseAt: enrichedPayload.releaseAt,
           photos: Array.isArray(enrichedPayload.photo) ? enrichedPayload.photo : [],
         });
         await stageDraftForActiveRing({
           id: nextId,
           title: enrichedPayload.title || "",
           timelineAt: enrichedPayload.timelineAt,
+          releaseAt: enrichedPayload.releaseAt,
           content_sha256: contentSha,
         });
 
@@ -294,7 +298,14 @@ export function useMemories() {
   }, [refresh]);
 
   useEffect(() => {
-    void runSync();
+    const runSoon = () => {
+      void runSync();
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(runSoon, { timeout: 2000 });
+    } else {
+      window.setTimeout(runSoon, 600);
+    }
     const onOnline = () => {
       void runSync();
     };
@@ -327,6 +338,11 @@ export function useMemories() {
       cloudPlaceholders,
       syncIssues,
       syncMeta,
+      syncHealth: classifySyncHealth({
+        syncIssues,
+        integrityWarning,
+        syncMeta,
+      }),
       refresh,
       syncNow: runSync,
       syncActiveRingNow: runSyncForActiveRing,

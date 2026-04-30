@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { readNfcScanFull } from "../services/nfcRingService";
+import { readNfcScanFull, writeFixedEntryUrlToRing } from "../services/nfcRingService";
 import {
   addBoundRing,
   canAddAnotherRing,
@@ -13,8 +13,10 @@ import {
   verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
 import { RING_SETUP_CONTENT } from "../content/ringSetupContent";
+import { usePwaInstall } from "../hooks/usePwaInstall";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
+import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 
 function privacyPolicyHref() {
   if (typeof window === "undefined") return "/privacy-policy";
@@ -24,6 +26,7 @@ function privacyPolicyHref() {
 }
 
 export const RING_SETUP_DISMISSED_KEY = "haven.ring.setup.dismissed.v1";
+const INSTALL_CONFIRM_SUPPRESS_KEY = "haven.install.confirm.suppress.v1";
 
 function isIosLike() {
   if (typeof navigator === "undefined") return false;
@@ -33,6 +36,47 @@ function isIosLike() {
 
 function hasWebNfc() {
   return typeof window !== "undefined" && "NDEFReader" in window;
+}
+
+function isStandalonePwa() {
+  if (typeof window === "undefined") return false;
+  const standaloneDisplay = window.matchMedia?.("(display-mode: standalone)")
+    ?.matches;
+  const iosStandalone = window.navigator?.standalone === true;
+  return Boolean(standaloneDisplay || iosStandalone);
+}
+
+function uidFromAnyUrlText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const direct = normalizeNfcUidInput(text);
+  if (direct) return direct;
+  try {
+    const url = new URL(text, typeof window !== "undefined" ? window.location.origin : "https://example.com");
+    const candidates = [
+      url.searchParams.get("nfc_uid"),
+      url.searchParams.get("uid"),
+      url.searchParams.get("ring_uid"),
+      url.searchParams.get("ring"),
+      url.searchParams.get("tag"),
+      decodeURIComponent(url.hash || "").replace(/^#/, ""),
+      url.pathname.split("/").filter(Boolean).pop() || "",
+    ];
+    for (const c of candidates) {
+      const n = normalizeNfcUidInput(c || "");
+      if (n) return n;
+    }
+  } catch {
+    // ignore malformed URL text
+  }
+  return "";
+}
+
+function startEntryUrl() {
+  if (typeof window === "undefined") return "https://havenring.me/start";
+  const configured = String(process.env.NEXT_PUBLIC_START_ENTRY_URL || "").trim();
+  if (/^https?:\/\//i.test(configured)) return configured;
+  return `${window.location.origin}/start`;
 }
 
 /**
@@ -58,6 +102,10 @@ export function RingSetupWizard({
     () => RING_SETUP_CONTENT[locale] || RING_SETUP_CONTENT.en,
     [locale]
   );
+  const { canInstall, installStatus, install } = usePwaInstall({
+    installPreparingTimeout: t.installPreparingTimeout,
+    installReadyAfterDelay: t.installReadyAfterDelay,
+  });
   const [step, setStep] = useState("intro");
   const [scanBusy, setScanBusy] = useState(false);
   const [scanPayload, setScanPayload] = useState(null);
@@ -66,9 +114,28 @@ export function RingSetupWizard({
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [bindError, setBindError] = useState("");
+  const [stepNote, setStepNote] = useState("");
+  const [installConsentOpen, setInstallConsentOpen] = useState(false);
+  const [suppressInstallConfirm, setSuppressInstallConfirm] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(INSTALL_CONFIRM_SUPPRESS_KEY) === "1";
+  });
   const [label, setLabel] = useState("");
   const [colorKey, setColorKey] = useState(RING_COLOR_OPTIONS[0].key);
   const [icon, setIcon] = useState(RING_ICON_OPTIONS[0]);
+  const [showInstallSafetyDetails, setShowInstallSafetyDetails] = useState(false);
+  const [iosInstallGuideOpen, setIosInstallGuideOpen] = useState(false);
+  const [writeBusy, setWriteBusy] = useState(false);
+  const [writeError, setWriteError] = useState("");
+  const [writeStatus, setWriteStatus] = useState("");
+  const openedUidFromUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return uidFromAnyUrlText(window.location.href);
+  }, []);
+  const installStateLine = canInstall ? t.installStateReady : t.installStateManual;
+  const ringLinkStateLine = openedUidFromUrl
+    ? t.ringLinkDetected
+    : t.ringLinkNotDetected;
 
   const resetFormState = useCallback(() => {
     setScanPayload(null);
@@ -76,10 +143,17 @@ export function RingSetupWizard({
     setRecoveryCode("");
     setVerifyError("");
     setBindError("");
+    setStepNote("");
+    setInstallConsentOpen(false);
     setLabel("");
     setColorKey(RING_COLOR_OPTIONS[0].key);
     setIcon(RING_ICON_OPTIONS[0]);
     setScanBusy(false);
+    setShowInstallSafetyDetails(false);
+    setIosInstallGuideOpen(false);
+    setWriteBusy(false);
+    setWriteError("");
+    setWriteStatus("");
   }, []);
 
   function dismissWizard() {
@@ -132,6 +206,25 @@ export function RingSetupWizard({
       n = normalizeNfcUidInput(payload.text);
     }
     return n;
+  }
+
+  function continueWithOpenedRingLink() {
+    const normalized = uidFromAnyUrlText(openedUidFromUrl);
+    if (!normalized) {
+      setBindError(t.readError);
+      return;
+    }
+    setBindError("");
+    setScanPayload({
+      serialNumber: normalized,
+      text: normalized,
+    });
+    const security = getSecuritySummary();
+    if (!security.initialized) {
+      setStep("blocked_security");
+      return;
+    }
+    setStep("verify");
   }
 
   async function handleSaveRing() {
@@ -213,6 +306,34 @@ export function RingSetupWizard({
           cloudLastUsedAt: json?.ring?.last_used_at || null,
         });
       }
+      if (hasWebNfc()) {
+        setWriteBusy(true);
+        setWriteError("");
+        setWriteStatus(t.writeStartPreparing);
+        try {
+          await writeFixedEntryUrlToRing(startEntryUrl());
+          setWriteStatus(t.writeStartSuccess);
+          void trackFirstRunEvent("ring_start_link_written_success", {
+            locale,
+            metadata: { source: "ring_setup_auto", step: "bind_success" },
+          });
+        } catch {
+          setWriteError(t.writeStartFailed);
+          setWriteStatus("");
+          void trackFirstRunEvent("ring_start_link_written_failed", {
+            locale,
+            metadata: { source: "ring_setup_auto", step: "bind_success" },
+          });
+        } finally {
+          setWriteBusy(false);
+        }
+      } else {
+        setWriteStatus(t.writeStartManualHint);
+        void trackFirstRunEvent("ring_start_link_manual_required", {
+          locale,
+          metadata: { source: "ring_setup_auto", reason: "no_web_nfc" },
+        });
+      }
       setStep("success");
     } catch (e) {
       if (e?.code === "duplicate_ring") {
@@ -224,6 +345,70 @@ export function RingSetupWizard({
       }
     } finally {
       setVerifyBusy(false);
+    }
+  }
+
+  async function retryWriteStartLink() {
+    if (!hasWebNfc()) return;
+    setWriteBusy(true);
+    setWriteError("");
+    setWriteStatus(t.writeStartPreparing);
+    try {
+      await writeFixedEntryUrlToRing(startEntryUrl());
+      setWriteStatus(t.writeStartSuccess);
+      void trackFirstRunEvent("ring_start_link_written_success", {
+        locale,
+        metadata: { source: "ring_setup_retry", step: "success_screen_retry" },
+      });
+    } catch {
+      setWriteError(t.writeStartFailed);
+      setWriteStatus("");
+      void trackFirstRunEvent("ring_start_link_written_failed", {
+        locale,
+        metadata: { source: "ring_setup_retry", step: "success_screen_retry" },
+      });
+    } finally {
+      setWriteBusy(false);
+    }
+  }
+
+  async function installPwaNow() {
+    setStepNote("");
+    if (canInstall) {
+      try {
+        await install();
+        setStepNote(t.installSuccessNotice || installStatus || t.installDoneHint);
+        return;
+      } catch {
+        setStepNote(t.copyLinkFailed);
+        return;
+      }
+    }
+    openIosInstallGuide();
+  }
+
+  function onInstallEntryClick() {
+    if (suppressInstallConfirm) {
+      void installPwaNow();
+      return;
+    }
+    setInstallConsentOpen(true);
+  }
+
+  function openIosInstallGuide() {
+    setIosInstallGuideOpen(true);
+  }
+
+  function closeIosInstallGuide() {
+    setIosInstallGuideOpen(false);
+  }
+
+  async function copySiteLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setStepNote(t.copyLinkDone);
+    } catch {
+      setStepNote(t.copyLinkFailed);
     }
   }
 
@@ -256,10 +441,27 @@ export function RingSetupWizard({
               </>
             ) : (
               <div style={styles.actions}>
+                {!isStandalonePwa() ? (
+                  <button
+                    type="button"
+                    onClick={onInstallEntryClick}
+                    style={styles.secondaryBtn}
+                  >
+                    {t.installNowCta}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
                     resetFormState();
+                    if (isIosLike()) {
+                      setStep("blocked_ios");
+                      return;
+                    }
+                    if (!isStandalonePwa()) {
+                      setStep("blocked_install_recommended");
+                      return;
+                    }
                     if (!hasWebNfc()) {
                       setStep(isIosLike() ? "blocked_ios" : "blocked_no_nfc");
                       return;
@@ -275,6 +477,137 @@ export function RingSetupWizard({
                 </button>
               </div>
             )}
+            {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
+            <div style={styles.statusBox}>
+              <p style={styles.statusLine}>{installStateLine}</p>
+              <p style={styles.statusLine}>{ringLinkStateLine}</p>
+            </div>
+            {installConsentOpen ? (
+              <div style={styles.noticeBox}>
+                <p style={styles.noticeTitle}>{t.installConsentTitle}</p>
+                <p style={styles.hint}>{t.installConsentBody}</p>
+                <p style={styles.hint}>{t.installConsentRevoke}</p>
+                <label style={styles.checkRow}>
+                  <input
+                    type="checkbox"
+                    checked={suppressInstallConfirm}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setSuppressInstallConfirm(next);
+                      if (typeof window !== "undefined") {
+                        window.localStorage.setItem(
+                          INSTALL_CONFIRM_SUPPRESS_KEY,
+                          next ? "1" : "0"
+                        );
+                      }
+                    }}
+                  />
+                  <span>{t.installSuppressConfirmLabel}</span>
+                </label>
+                <div style={styles.actions}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInstallConsentOpen(false);
+                      void installPwaNow();
+                    }}
+                    style={styles.primaryBtn}
+                  >
+                    {t.installConsentConfirm}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInstallConsentOpen(false)}
+                    style={styles.ghostBtn}
+                  >
+                    {t.installConsentCancel}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === "blocked_install_recommended" ? (
+          <>
+            <p style={styles.kicker}>{t.kicker}</p>
+            <h2 style={styles.title}>{t.installRecommendedTitle}</h2>
+            <p style={styles.body}>{t.installRecommendedBody}</p>
+            <div style={styles.noticeBox}>
+              <p style={styles.noticeTitle}>{t.iosInstallSafetyTitle}</p>
+              <p style={styles.hint}>{t.iosInstallSafetyBrief}</p>
+              <button
+                type="button"
+                onClick={() => setShowInstallSafetyDetails((prev) => !prev)}
+                style={styles.inlineLinkBtn}
+              >
+                {showInstallSafetyDetails
+                  ? t.iosInstallSafetyCollapse
+                  : t.iosInstallSafetyExpand}
+              </button>
+              {showInstallSafetyDetails ? (
+                <>
+                  <p style={styles.hint}>{t.iosInstallSafetyBody}</p>
+                  <p style={styles.hint}>{t.iosInstallSafetyPrivacy}</p>
+                </>
+              ) : null}
+            </div>
+            <div style={styles.statusBox}>
+              <p style={styles.statusLine}>{installStateLine}</p>
+              <p style={styles.statusLine}>{ringLinkStateLine}</p>
+            </div>
+            {iosInstallGuideOpen ? (
+              <div style={styles.noticeBox}>
+                <p style={styles.noticeTitle}>{t.iosInstallGuideTitle}</p>
+                <p style={styles.hint}>{t.iosInstallGuideTone}</p>
+                <ol style={styles.stepList}>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep1}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep2}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep3}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep4}</li>
+                </ol>
+                <div style={styles.screenshotMock} aria-hidden>
+                  <p style={styles.screenshotTitle}>Safari</p>
+                  <p style={styles.screenshotRow}>Share -> Add to Home Screen</p>
+                  <p style={styles.screenshotRow}>Haven icon appears on Home Screen</p>
+                </div>
+                <p style={styles.hint}>{t.iosInstallGuideScreenshotHint1}</p>
+                <p style={styles.hint}>{t.iosInstallGuideScreenshotHint2}</p>
+                <button type="button" onClick={closeIosInstallGuide} style={styles.ghostBtn}>
+                  {t.androidOk}
+                </button>
+              </div>
+            ) : null}
+            {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
+            <div style={styles.actions}>
+              {canInstall ? (
+                <button type="button" onClick={() => void installPwaNow()} style={styles.primaryBtn}>
+                  {t.installNowCta}
+                </button>
+              ) : null}
+              <button type="button" onClick={openIosInstallGuide} style={styles.secondaryBtn}>
+                {t.iosInstallGuideCta}
+              </button>
+              <button type="button" onClick={() => void copySiteLink()} style={styles.ghostBtn}>
+                {t.copyLinkCta}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!hasWebNfc()) {
+                    setStep(isIosLike() ? "blocked_ios" : "blocked_no_nfc");
+                    return;
+                  }
+                  setStep("scan");
+                }}
+                style={styles.primaryBtn}
+              >
+                {t.continueInBrowserCta}
+              </button>
+              <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>
+                {t.ctaSkip}
+              </button>
+            </div>
           </>
         ) : null}
 
@@ -283,9 +616,78 @@ export function RingSetupWizard({
             <p style={styles.kicker}>{t.kicker}</p>
             <h2 style={styles.title}>{t.iosNfcTitle}</h2>
             <p style={styles.body}>{t.iosNfcBody}</p>
-            <button type="button" onClick={() => setStep("intro")} style={styles.secondaryBtn}>
-              {t.androidOk}
-            </button>
+            <p style={styles.hint}>
+              {openedUidFromUrl ? t.useOpenedRingLinkHint : t.noOpenedRingLinkHint}
+            </p>
+            <div style={styles.noticeBox}>
+              <p style={styles.noticeTitle}>{t.iosInstallSafetyTitle}</p>
+              <p style={styles.hint}>{t.iosInstallSafetyBrief}</p>
+              <button
+                type="button"
+                onClick={() => setShowInstallSafetyDetails((prev) => !prev)}
+                style={styles.inlineLinkBtn}
+              >
+                {showInstallSafetyDetails
+                  ? t.iosInstallSafetyCollapse
+                  : t.iosInstallSafetyExpand}
+              </button>
+              {showInstallSafetyDetails ? (
+                <>
+                  <p style={styles.hint}>{t.iosInstallSafetyBody}</p>
+                  <p style={styles.hint}>{t.iosInstallSafetyPrivacy}</p>
+                </>
+              ) : null}
+            </div>
+            <div style={styles.statusBox}>
+              <p style={styles.statusLine}>{installStateLine}</p>
+              <p style={styles.statusLine}>{ringLinkStateLine}</p>
+            </div>
+            {iosInstallGuideOpen ? (
+              <div style={styles.noticeBox}>
+                <p style={styles.noticeTitle}>{t.iosInstallGuideTitle}</p>
+                <p style={styles.hint}>{t.iosInstallGuideTone}</p>
+                <ol style={styles.stepList}>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep1}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep2}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep3}</li>
+                  <li style={styles.stepItem}>{t.iosInstallGuideStep4}</li>
+                </ol>
+                <div style={styles.screenshotMock} aria-hidden>
+                  <p style={styles.screenshotTitle}>Safari</p>
+                  <p style={styles.screenshotRow}>Share -> Add to Home Screen</p>
+                  <p style={styles.screenshotRow}>Haven icon appears on Home Screen</p>
+                </div>
+                <p style={styles.hint}>{t.iosInstallGuideScreenshotHint1}</p>
+                <p style={styles.hint}>{t.iosInstallGuideScreenshotHint2}</p>
+                <button type="button" onClick={closeIosInstallGuide} style={styles.ghostBtn}>
+                  {t.androidOk}
+                </button>
+              </div>
+            ) : null}
+            {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
+            <div style={styles.actions}>
+              <button
+                type="button"
+                onClick={continueWithOpenedRingLink}
+                style={styles.primaryBtn}
+              >
+                {t.useOpenedRingLinkCta}
+              </button>
+              {canInstall ? (
+                <button type="button" onClick={() => void installPwaNow()} style={styles.primaryBtn}>
+                  {t.installNowCta}
+                </button>
+              ) : null}
+              <button type="button" onClick={openIosInstallGuide} style={styles.secondaryBtn}>
+                {t.iosInstallGuideCta}
+              </button>
+              <button type="button" onClick={() => void copySiteLink()} style={styles.ghostBtn}>
+                {t.copyLinkCta}
+              </button>
+              <button type="button" onClick={() => setStep("intro")} style={styles.secondaryBtn}>
+                {t.androidOk}
+              </button>
+            </div>
           </>
         ) : null}
 
@@ -457,7 +859,19 @@ export function RingSetupWizard({
             <h2 style={styles.title}>{t.successTitle}</h2>
             <p style={styles.body}>{t.successBody}</p>
             <p style={styles.encourage}>{t.successEncourage}</p>
+            {writeStatus ? <p style={styles.hint}>{writeStatus}</p> : null}
+            {writeError ? <p style={styles.error}>{writeError}</p> : null}
             <div style={styles.actions}>
+              {writeError && hasWebNfc() ? (
+                <button
+                  type="button"
+                  onClick={() => void retryWriteStartLink()}
+                  disabled={writeBusy}
+                  style={styles.secondaryBtn}
+                >
+                  {writeBusy ? t.writeStartWorking : t.writeStartRetry}
+                </button>
+              ) : null}
               {canAddAnotherRing() ? (
                 <button
                   type="button"
@@ -552,6 +966,84 @@ const styles = {
     margin: 0,
     fontSize: 13,
     color: "#a8988c",
+  },
+  noticeBox: {
+    border: "1px solid #5a3b30",
+    borderRadius: 12,
+    padding: "10px 12px",
+    background: "rgba(22, 18, 16, 0.8)",
+    display: "grid",
+    gap: 8,
+  },
+  noticeTitle: {
+    margin: 0,
+    fontSize: 14,
+    color: "#f0c29e",
+    fontWeight: 700,
+  },
+  statusBox: {
+    border: "1px solid rgba(90, 59, 48, 0.6)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    background: "rgba(23, 18, 16, 0.7)",
+    display: "grid",
+    gap: 4,
+  },
+  statusLine: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "#d9c3b3",
+  },
+  checkRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    color: "#d9c3b3",
+  },
+  inlineLinkBtn: {
+    border: "none",
+    background: "transparent",
+    color: "#f0c29e",
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontSize: 13,
+    padding: 0,
+    justifySelf: "start",
+  },
+  stepList: {
+    margin: 0,
+    paddingLeft: 18,
+    color: "#d9c3b3",
+    fontSize: 13,
+    lineHeight: 1.5,
+    display: "grid",
+    gap: 4,
+  },
+  stepItem: {
+    margin: 0,
+  },
+  screenshotMock: {
+    border: "1px dashed rgba(240, 194, 158, 0.35)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    background: "rgba(26, 21, 18, 0.45)",
+    display: "grid",
+    gap: 4,
+  },
+  screenshotTitle: {
+    margin: 0,
+    fontSize: 11,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "#f0c29e",
+  },
+  screenshotRow: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 12,
+    lineHeight: 1.4,
   },
   privacyFine: {
     margin: 0,

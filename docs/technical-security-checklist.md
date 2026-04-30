@@ -35,7 +35,7 @@
 | Location | Status |
 |----------|--------|
 | Ring setup intro | `RingSetupWizard` + `ringSetupContent` + link to `/privacy-policy` or `NEXT_PUBLIC_PRIVACY_POLICY_URL` |
-| Settings | NFC bind / unbind / digital legacy lines + policy link |
+| Settings | NFC bind / unbind lines + policy link |
 | `app/privacy-policy/page.tsx` | Placeholder — replace with legal text. |
 
 ## Environment

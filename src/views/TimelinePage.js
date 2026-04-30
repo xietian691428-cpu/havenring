@@ -27,6 +27,10 @@ export function TimelinePage({
   locale = "en",
   showRingSignIn = false,
   onRingSignedIn,
+  flowPrimaryUi = null,
+  onFlowPrimaryAction,
+  suppressSecondaryNotices = false,
+  flowMainState = "READY",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
   const [pinnedId, setPinnedId] = useState(null);
@@ -66,13 +70,13 @@ export function TimelinePage({
     const uniq = Array.from(new Set(syncIssues || []));
     return uniq
       .map((code) => {
-        if (code === "auth") return t.syncIssueAuth;
+        if (code === "auth") return "";
         if (code === "network") return t.syncIssueNetwork;
         if (code === "hash") return t.syncIssueHash;
         return "";
       })
       .filter(Boolean);
-  }, [syncIssues, t]);
+  }, [showRingSignIn, syncIssues, t]);
 
   const failureReasonText = useMemo(() => {
     if (syncMeta?.lastFailureCode === "auth") return t.syncIssueAuth;
@@ -80,6 +84,8 @@ export function TimelinePage({
     if (syncMeta?.lastFailureCode === "network") return t.syncIssueNetwork;
     return "";
   }, [syncMeta?.lastFailureCode, t]);
+  const isReadyState = flowMainState === "READY";
+  const [lightToast, setLightToast] = useState("");
 
   function formatTs(ts) {
     if (!ts) return "—";
@@ -126,6 +132,20 @@ export function TimelinePage({
     (onOpenMemoryFromRing ?? onOpenMemory)?.(memoryId);
   }, [onOpenMemoryFromRing, onOpenMemory]);
 
+  useEffect(() => {
+    if (!isReadyState) return;
+    if (syncing) {
+      setLightToast(t.syncStatusRunning);
+      return;
+    }
+    if (syncMeta?.lastSuccessAt) {
+      setLightToast(t.syncStatusIdle);
+      const timer = window.setTimeout(() => setLightToast(""), 1800);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [isReadyState, syncing, syncMeta?.lastSuccessAt, t.syncStatusIdle, t.syncStatusRunning]);
+
   return (
     <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
       <section style={styles.shell}>
@@ -143,8 +163,44 @@ export function TimelinePage({
             {welcomeLine}
           </div>
         ) : null}
+        {isReadyState && lightToast ? (
+          <div style={styles.lightToast} role="status">
+            {lightToast}
+          </div>
+        ) : null}
 
-        {showRingSignIn ? (
+        {flowPrimaryUi ? (
+          <div style={styles.flowCard} role="status">
+            <p style={styles.flowTitle}>{flowPrimaryUi.title}</p>
+            <p style={styles.flowBody}>{flowPrimaryUi.body}</p>
+            {flowPrimaryUi.actionLabel ? (
+              <div style={styles.flowActions}>
+                <button
+                  type="button"
+                  style={styles.integrityButton}
+                  onClick={() => onFlowPrimaryAction?.("primary")}
+                >
+                  {flowPrimaryUi.actionLabel}
+                </button>
+                {flowPrimaryUi.secondaryActionLabel ? (
+                  <button
+                    type="button"
+                    style={styles.flowSecondaryButton}
+                    onClick={() =>
+                      onFlowPrimaryAction?.(
+                        flowPrimaryUi.secondaryActionIntent || "secondary"
+                      )
+                    }
+                  >
+                    {flowPrimaryUi.secondaryActionLabel}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {showRingSignIn && !suppressSecondaryNotices ? (
           <NfcRingSilentEntry
             copy={{
               regionLabel: t.nfcRegionLabel,
@@ -155,12 +211,18 @@ export function TimelinePage({
               noBinding: t.nfcErrNoBinding,
               noUid: t.nfcErrNoUid,
               unconfigured: t.nfcErrUnconfigured,
+              helpNoBinding: t.nfcHelpNoBinding,
+              helpNoUid: t.nfcHelpNoUid,
+              helpUnconfigured: t.nfcHelpUnconfigured,
+              helpGeneric: t.nfcHelpGeneric,
             }}
+            authExpiredNotice=""
             onSignedIn={onRingSignedIn}
           />
         ) : null}
 
-        <div style={styles.syncStatusBox}>
+        {!flowPrimaryUi?.enforceSingle && !isReadyState ? (
+          <div style={styles.syncStatusBox}>
           <p style={styles.syncStatusTitle}>
             {t.syncStatusLabel}: {syncing ? t.syncStatusRunning : t.syncStatusIdle}
           </p>
@@ -201,24 +263,17 @@ export function TimelinePage({
                 .replace("{count}", String(syncMeta.lastRecoveryCount || 0))}
             </p>
           ) : null}
-          <div style={styles.integrityActions}>
-            <button
-              type="button"
-              style={styles.integrityButton}
-              onClick={() => void onRecoverNow?.()}
-              disabled={syncing}
-            >
-              {syncing ? t.resyncing : t.rebuildLocalCache}
-            </button>
           </div>
-        </div>
+        ) : null}
 
-        {isOffline ? (
+        {!suppressSecondaryNotices && isOffline ? (
           <p style={styles.offlineTip}>{t.offlineTip}</p>
         ) : null}
-        <p style={styles.cloudNote}>{t.cloudSourceNote}</p>
+        {!suppressSecondaryNotices ? (
+          <p style={styles.cloudNote}>{t.cloudSourceNote}</p>
+        ) : null}
 
-        {integrityWarning ? (
+        {!flowPrimaryUi?.enforceSingle && !isReadyState && integrityWarning ? (
           <div style={styles.integrityBox}>
             <p style={styles.integrityText}>{t.integrityMismatch}</p>
             <div style={styles.integrityActions}>
@@ -242,7 +297,7 @@ export function TimelinePage({
           </div>
         ) : null}
 
-        {syncIssueLines.length ? (
+        {!flowPrimaryUi?.enforceSingle && !isReadyState && syncIssueLines.length ? (
           <div style={styles.issueBox}>
             {syncIssueLines.map((line) => (
               <p key={line} style={styles.issueLine}>
@@ -252,15 +307,16 @@ export function TimelinePage({
           </div>
         ) : null}
 
-        {loading ? <p style={styles.feedback}>{t.loading}</p> : null}
-        {error ? <p style={styles.error}>{error}</p> : null}
-        {!loading && !ordered.length ? (
+        {!flowPrimaryUi?.enforceSingle && loading ? <p style={styles.feedback}>{t.loading}</p> : null}
+        {!flowPrimaryUi?.enforceSingle && error ? <p style={styles.error}>{error}</p> : null}
+        {!flowPrimaryUi?.enforceSingle && !loading && !ordered.length ? (
           <p style={styles.feedback}>{t.empty}</p>
         ) : null}
 
-        <ol style={styles.list}>
+        {!flowPrimaryUi?.enforceSingle ? <ol style={styles.list}>
           {ordered.map((memory) => {
             const pinned = pinnedId === memory.id;
+            const locked = Number(memory?.releaseAt || 0) > Date.now();
             return (
               <li key={memory.id} style={styles.card}>
                 <div style={styles.cardHeader}>
@@ -279,21 +335,28 @@ export function TimelinePage({
                   {pinned ? "📌 " : ""}
                   {memory.title || t.untitled}
                 </h3>
-                <p style={styles.preview}>{memory.story || t.noStory}</p>
+                <p style={styles.preview}>
+                  {locked
+                    ? t.capsuleLockedPreview.replace(
+                        "{time}",
+                        new Date(memory.releaseAt).toLocaleString()
+                      )
+                    : memory.story || t.noStory}
+                </p>
                 <button
                   type="button"
                   onClick={() => onOpenMemory?.(memory.id)}
                   style={styles.primaryButton}
-                  disabled={loading}
+                  disabled={loading || locked}
                 >
-                  {t.open}
+                  {locked ? t.capsuleOpen : t.open}
                 </button>
               </li>
             );
           })}
-        </ol>
+        </ol> : null}
 
-        {groupedCloud.length ? (
+        {!flowPrimaryUi?.enforceSingle && groupedCloud.length ? (
           <section style={styles.cloudSection}>
             <p style={styles.cloudTitle}>{t.cloudSectionTitle}</p>
             {groupedCloud.map((group) => (
@@ -320,29 +383,39 @@ export function TimelinePage({
                   {(expandedGroups[group.key]
                     ? group.rows
                     : group.rows.slice(0, 3)
-                  ).map((row) => (
-                    <li key={`cloud-${row.id}`} style={styles.cloudCard}>
-                      <div style={styles.cardHeader}>
-                        <small style={styles.date}>
-                          {new Date(row.timelineAt).toLocaleString()}
-                        </small>
-                      </div>
-                      <h3 style={styles.cardTitle}>☁ {t.untitled}</h3>
-                      <p style={styles.preview}>
-                        {t.cloudPlaceholderBody.replace(
-                          "{ring}",
-                          row.ringLabel || "ring"
-                        )}
-                      </p>
-                    </li>
-                  ))}
+                  ).map((row) => {
+                    const lockedInCloud = Number(row?.releaseAt || 0) > Date.now();
+                    return (
+                      <li key={`cloud-${row.id}`} style={styles.cloudCard}>
+                        <div style={styles.cardHeader}>
+                          <small style={styles.date}>
+                            {new Date(row.timelineAt).toLocaleString()}
+                          </small>
+                        </div>
+                        <h3 style={styles.cardTitle}>☁ {t.untitled}</h3>
+                        <p style={styles.preview}>
+                          {lockedInCloud
+                            ? t.cloudCapsuleLockedPlaceholder
+                                .replace("{ring}", row.ringLabel || "ring")
+                                .replace(
+                                  "{time}",
+                                  new Date(Number(row.releaseAt || 0)).toLocaleString()
+                                )
+                            : t.cloudPlaceholderBody.replace(
+                                "{ring}",
+                                row.ringLabel || "ring"
+                              )}
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ol>
               </div>
             ))}
           </section>
         ) : null}
 
-        <p style={styles.feedback}>{notice || "\u00A0"}</p>
+        {!flowPrimaryUi?.enforceSingle ? <p style={styles.feedback}>{notice || "\u00A0"}</p> : null}
       </section>
     </main>
   );
@@ -398,6 +471,36 @@ const styles = {
     fontSize: 15,
     textAlign: "center",
   },
+  lightToast: {
+    margin: 0,
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(122, 163, 201, 0.25)",
+    background: "rgba(122, 163, 201, 0.08)",
+    color: "rgba(213, 232, 247, 0.88)",
+    fontSize: 12,
+  },
+  flowCard: {
+    border: "1px solid rgba(217, 166, 122, 0.35)",
+    borderRadius: 12,
+    background: "rgba(42, 31, 24, 0.6)",
+    padding: "10px 12px",
+    display: "grid",
+    gap: 8,
+  },
+  flowTitle: {
+    margin: 0,
+    fontSize: 13,
+    color: "#f3d7bf",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+  flowBody: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(248, 239, 231, 0.78)",
+  },
   offlineTip: {
     margin: 0,
     padding: "10px 12px",
@@ -452,6 +555,21 @@ const styles = {
     border: "1px solid rgba(201, 123, 132, 0.5)",
     background: "transparent",
     color: "#ffd9cf",
+    borderRadius: 999,
+    padding: "6px 12px",
+    cursor: "pointer",
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  },
+  flowActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  flowSecondaryButton: {
+    border: "1px solid #5a3b30",
+    background: "transparent",
+    color: "#d9c3b3",
     borderRadius: 999,
     padding: "6px 12px",
     cursor: "pointer",

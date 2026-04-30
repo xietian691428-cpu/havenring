@@ -5,7 +5,10 @@ import { PWA_INSTALL_CARD_CONTENT } from "../content/pwaInstallCardContent";
 export function PwaInstallCard({ locale = "en" }) {
   const t = PWA_INSTALL_CARD_CONTENT[locale] || PWA_INSTALL_CARD_CONTENT.en;
   const [installing, setInstalling] = useState(false);
-  const { canInstall, installStatus, swReady, install } = usePwaInstall();
+  const { canInstall, installStatus, swReady, install } = usePwaInstall({
+    installPreparingTimeout: t.installPreparingTimeout,
+    installReadyAfterDelay: t.installReadyAfterDelay,
+  });
 
   async function onInstallClick() {
     setInstalling(true);

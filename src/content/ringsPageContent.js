@@ -2,7 +2,7 @@ const EN = {
   brand: "Haven",
   title: "My rings",
   subtitle:
-    "Quick access keys to your memory space. Any bound ring works equally for fast access.",
+    "Quick access keys to your memory space. Any bound ring works equally for quick login and recommended sealing.",
   emptyTitle: "No rings registered yet",
   emptyBody:
     "Add your NFC rings and give them names. We recommend at least two: one for daily use and one backup in case of loss.",
@@ -38,7 +38,7 @@ const EN = {
   openSetup: "Register another ring",
   settingsLink: "Privacy & backup",
   privacyNote:
-    "Rings are quick tools, not your only account proof. Your precious memories remain permanently safe in cloud storage, protected with end-to-end encryption on supported devices.",
+    "Every ring is equal: any one can be used for quick login and recommended sealing. Your account stays the owner of all memories.",
 };
 
 export const RINGS_PAGE_CONTENT = {

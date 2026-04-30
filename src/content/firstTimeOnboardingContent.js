@@ -3,17 +3,41 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     title: "Welcome to Haven Ring",
     stepLabelPrefix: "Step ",
     stepLabelMiddle: " of ",
-    subtitle: "A gentle guide to your first moment.",
+    subtitle: "Your first memory can be safe in just a few minutes.",
     skip: "Skip for now",
     next: "Next",
     back: "Back",
     start: "Start Using Now",
-    openNfcGuide: "See ring position guide",
+    openNfcGuide: "See ring position guide in Settings",
+    platformHintIos:
+      "On iPhone, open Haven from the Home Screen icon for the smoothest daily experience.",
+    platformHintAndroid:
+      "On Android, you can continue directly in browser and use NFC ring touch more reliably.",
     steps: [
-      { id: "welcome", icon: "💛", title: "Your account is home; the ring is a shortcut", body: "Haven belongs to your signed-in account. The ring is a quick tap to open or seal—like a favorite button, not a password. You can add more than one ring; all are equal backup-style shortcuts." },
-      { id: "entry-url", icon: "🔗", title: "Set one fixed entry once", body: "For first setup, write one fixed Haven entry on your ring. After that, no rewrite for each memory." },
-      { id: "create-first", icon: "✍️", title: "Create your first memory", body: "Add photos, a short story, and optional files (audio, video, documents). Tap Save to keep it in your local Haven." },
-      { id: "daily", icon: "✨", title: "Daily use is simple", body: "Lightly tap your ring to open Haven. Any linked ring on this account works the same way—no main ring required." },
+      {
+        id: "welcome",
+        icon: "💛",
+        title: "Your memories always belong to you",
+        body: "Haven is your private memory sanctuary. Your signed-in account is the owner of every memory, now and in the future.",
+      },
+      {
+        id: "create-first",
+        icon: "✍️",
+        title: "Start with one memory first",
+        body: "Write a short story, add photos if you like, and save. You can do this immediately without learning NFC first.",
+      },
+      {
+        id: "entry-url",
+        icon: "💍",
+        title: "Ring setup is recommended, not required",
+        body: "Your NFC ring adds a beautiful quick-open and sealing ritual. If you are in a hurry, you can skip now and set it up later.",
+      },
+      {
+        id: "daily",
+        icon: "✨",
+        title: "Daily use stays simple",
+        body: "Open Haven, add memories, and seal when you want. Any linked ring works the same way. No master ring, no complicated choices.",
+      },
     ],
   },
   fr: {

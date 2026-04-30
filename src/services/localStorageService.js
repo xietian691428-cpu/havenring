@@ -36,6 +36,7 @@ function normalizeMemoryInput(input = {}) {
     voice: input.voice || null, // legacy field kept for backward compatibility
     attachments: Array.isArray(input.attachments) ? input.attachments : [],
     timelineAt: input.timelineAt || now,
+    releaseAt: Number(input.releaseAt || 0) || 0,
     tags: Array.isArray(input.tags) ? input.tags : [],
     encryptVoice: input.encryptVoice !== false,
   };
@@ -92,6 +93,7 @@ async function encryptMemoryFields(memory) {
       createdAt: memory.createdAt,
       updatedAt: memory.updatedAt,
       timelineAt: memory.timelineAt,
+      releaseAt: memory.releaseAt,
       tags: memory.tags,
     }),
   ]);
@@ -141,6 +143,7 @@ async function decryptRecord(record) {
     createdAt: meta.createdAt ?? record.createdAt,
     updatedAt: meta.updatedAt ?? record.updatedAt,
     timelineAt: meta.timelineAt ?? record.timelineAt,
+    releaseAt: Number(meta.releaseAt || 0) || 0,
     tags: Array.isArray(meta.tags) ? meta.tags : [],
   };
 }

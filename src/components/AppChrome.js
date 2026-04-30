@@ -8,6 +8,7 @@ export function AppChrome({
   locale = "en",
   showBottomNav = true,
   activeTab = "timeline",
+  showTemporaryBanner = false,
   onTabTimeline,
   onTabExplore,
   onTabSeal,
@@ -37,7 +38,15 @@ export function AppChrome({
   );
 
   return (
-    <div style={{ ...styles.wrapper, ...sanctuaryBackgroundStyle() }}>
+    <div
+      style={{
+        ...styles.wrapper,
+        ...sanctuaryBackgroundStyle(),
+        paddingTop: showTemporaryBanner
+          ? "calc(env(safe-area-inset-top, 0px) + 92px)"
+          : "calc(env(safe-area-inset-top, 0px) + 52px)",
+      }}
+    >
       <header style={styles.topBar}>
         <p style={styles.brand}>{t.brand}</p>
         <div style={styles.topActions}>
@@ -59,6 +68,11 @@ export function AppChrome({
           </button>
         </div>
       </header>
+      {showTemporaryBanner ? (
+        <div style={styles.temporaryBanner} role="status" aria-live="polite">
+          {t.temporaryBanner}
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -108,10 +122,24 @@ export function AppChrome({
 const styles = {
   wrapper: {
     minHeight: "100vh",
-    paddingTop: "calc(env(safe-area-inset-top, 0px) + 52px)",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
     position: "relative",
+  },
+  temporaryBanner: {
+    position: "fixed",
+    top: "calc(env(safe-area-inset-top, 0px) + 52px)",
+    left: 0,
+    right: 0,
+    zIndex: 35,
+    padding: "8px 14px",
+    borderBottom: "1px solid rgba(201, 123, 132, 0.35)",
+    background: "rgba(72, 36, 34, 0.92)",
+    color: "#ffd9cf",
+    fontSize: 12,
+    lineHeight: 1.45,
+    textAlign: "center",
+    backdropFilter: "blur(12px)",
   },
   topBar: {
     position: "fixed",

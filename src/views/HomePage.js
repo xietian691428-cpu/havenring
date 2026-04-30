@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { FirstTimeOnboarding } from "../components/FirstTimeOnboarding";
+import { PwaInstallCard } from "../components/PwaInstallCard";
 import { HOME_PAGE_CONTENT } from "../content/homePageContent";
 import {
   getSecuritySummary,
@@ -8,6 +9,10 @@ import {
   initializeSecurity,
   verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
+import {
+  isFirstMemoryCompleted,
+  trackFirstRunEvent,
+} from "../services/firstRunTelemetryService";
 
 const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
 /**
@@ -16,6 +21,7 @@ const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
  */
 export function HomePage({
   locale = "en",
+  hasSession = false,
   onOpenTimeline,
   onCreateMemory,
   onOpenSettings,
@@ -27,10 +33,14 @@ export function HomePage({
   loading = false,
   quickSigningIn = false,
   message = "",
+  flowPrimaryUi = null,
+  onFlowPrimaryAction,
+  suppressSecondaryNotices = false,
 }) {
   const t = HOME_PAGE_CONTENT[locale] || HOME_PAGE_CONTENT.en;
   const ringHandledRef = useRef(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(false);
   const [ringSignIn, setRingSignIn] = useState({
     needed: false,
     token: "",
@@ -45,6 +55,7 @@ export function HomePage({
   const [setupRecoveryCode, setSetupRecoveryCode] = useState("");
   const [securityBusy, setSecurityBusy] = useState(false);
   const [securityError, setSecurityError] = useState("");
+  const [installedStandalone, setInstalledStandalone] = useState(false);
   useEffect(() => {
     if (ringHandledRef.current) return;
     if (typeof window === "undefined") return;
@@ -90,6 +101,20 @@ export function HomePage({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const checkStandalone = () => {
+      const displayStandalone = window.matchMedia?.(
+        "(display-mode: standalone)"
+      )?.matches;
+      const iosStandalone = window.navigator?.standalone === true;
+      setInstalledStandalone(Boolean(displayStandalone || iosStandalone));
+    };
+    checkStandalone();
+    window.addEventListener("appinstalled", checkStandalone);
+    return () => window.removeEventListener("appinstalled", checkStandalone);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const ua = navigator.userAgent.toLowerCase();
     const isAndroid = ua.includes("android");
     const isIOS =
@@ -108,15 +133,18 @@ export function HomePage({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!hasSession) return;
     const done = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+    setIsFirstRun(!done || !isFirstMemoryCompleted());
     if (!done) setOnboardingOpen(true);
-  }, []);
+  }, [hasSession]);
 
   function markOnboardingDone() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
     }
     setOnboardingOpen(false);
+    setIsFirstRun(!isFirstMemoryCompleted());
     onAfterOnboarding?.();
   }
 
@@ -186,7 +214,40 @@ export function HomePage({
             {t.howBody}
           </p>
         </section>
-        {ringSignIn.needed ? (
+        {flowPrimaryUi ? (
+          <section style={styles.howItWorksCard}>
+            <p style={styles.howItWorksTitle}>{flowPrimaryUi.title}</p>
+            <p style={styles.howItWorksBody}>{flowPrimaryUi.body}</p>
+            {flowPrimaryUi.actionLabel ? (
+              <div style={styles.voiceActions}>
+                <button
+                  type="button"
+                  onClick={() => onFlowPrimaryAction?.("primary")}
+                  style={styles.secondaryButton}
+                >
+                  {flowPrimaryUi.actionLabel}
+                </button>
+                {flowPrimaryUi.secondaryActionLabel ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onFlowPrimaryAction?.(
+                        flowPrimaryUi.secondaryActionIntent || "secondary"
+                      )
+                    }
+                    style={styles.tertiaryButton}
+                  >
+                    {flowPrimaryUi.secondaryActionLabel}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        {!suppressSecondaryNotices && !installedStandalone ? (
+          <PwaInstallCard locale={locale} />
+        ) : null}
+        {ringSignIn.needed && !suppressSecondaryNotices ? (
           <section style={styles.ringSignInCard}>
             <p style={styles.ringSignInTitle}>{t.ringSignInTitle}</p>
             <p style={styles.howItWorksBody}>{t.ringSignInBody}</p>
@@ -301,7 +362,7 @@ export function HomePage({
             ) : null}
           </section>
         ) : null}
-        {sealHelp ? (
+        {sealHelp && !suppressSecondaryNotices ? (
           <section style={styles.ringSignInCard}>
             <p style={styles.ringSignInTitle}>{t.sealHelpTitle}</p>
             <p style={styles.howItWorksBody}>{t.sealHelpBody}</p>
@@ -315,15 +376,39 @@ export function HomePage({
           </section>
         ) : null}
 
-          <div style={styles.actions}>
+          {!flowPrimaryUi?.enforceSingle ? <div style={styles.actions}>
           <button
             type="button"
             disabled={loading}
-            onClick={onOpenTimeline}
+            onClick={() => {
+              if (isFirstRun) {
+                void trackFirstRunEvent("first_memory_cta_clicked", { locale });
+                onCreateMemory?.();
+                return;
+              }
+              onOpenTimeline?.();
+            }}
             style={styles.primaryButton}
           >
-            {loading ? t.opening : t.open}
+            {loading ? t.opening : isFirstRun ? t.firstMissionPrimary : t.open}
           </button>
+          {isFirstRun ? (
+            <section style={styles.howItWorksCard}>
+              <p style={styles.howItWorksTitle}>{t.firstMissionTitle}</p>
+              <p style={styles.howItWorksBody}>{t.firstMissionBody}</p>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  void trackFirstRunEvent("ring_setup_cta_clicked", { locale });
+                  onOpenRingSetup?.();
+                }}
+                style={styles.secondaryButton}
+              >
+                {t.firstMissionSecondary}
+              </button>
+            </section>
+          ) : null}
           <button
             type="button"
             disabled={loading}
@@ -348,15 +433,17 @@ export function HomePage({
             >
               {t.start}
             </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => onOpenRingSetup?.()}
-              style={styles.tertiaryButton}
-            >
-              {t.ringSetupCta}
-            </button>
-          </div>
+            {!isFirstRun ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => onOpenRingSetup?.()}
+                style={styles.tertiaryButton}
+              >
+                {t.ringSetupCta}
+              </button>
+            ) : null}
+          </div> : null}
 
           <p style={styles.feedback}>{message || "\u00A0"}</p>
           {quickSignInError ? <p style={styles.feedback}>{quickSignInError}</p> : null}
@@ -472,6 +559,11 @@ const styles = {
     color: "#f0c29e",
   },
   altSignInRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  voiceActions: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",

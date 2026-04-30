@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hitRateLimitWithRedisFallback } from "@/lib/rate-limit";
 import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { signSupabaseAccessJwt } from "@/lib/supabase-access-jwt";
+import { API_RATE_POLICIES, enforceIpRateLimit } from "@/lib/api-rate-limit";
 
 type LoginBody = { nfc_uid?: unknown; prefer_long_session?: unknown };
 
@@ -27,19 +27,12 @@ function envInt(name: string, fallback: number): number {
  */
 export async function POST(req: NextRequest) {
   try {
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const limit = await hitRateLimitWithRedisFallback(
-      `nfc-login-ip:${ip}`,
-      40,
-      60_000
-    );
-    if (!limit.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        { status: 429 }
-      );
-    }
+    const limitRes = await enforceIpRateLimit({
+      req,
+      scope: "nfc-login",
+      policy: API_RATE_POLICIES.ringMedium,
+    });
+    if (limitRes) return limitRes;
 
     const body = (await req.json()) as LoginBody;
     const rawUid = typeof body.nfc_uid === "string" ? body.nfc_uid : "";

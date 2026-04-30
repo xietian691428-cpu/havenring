@@ -2,7 +2,7 @@ const EN = {
   kicker: "One-time setup",
   title: "Set up your magic keys",
   introBody:
-    "Add your NFC rings as quick access keys to your private memory space. Any ring you add works the same way — we recommend at least two: one for daily wear and one kept safe as backup.",
+    "Add NFC rings for faster sign-in. You can link 1 to 5 rings, and every ring works the same way. No master ring. Your memories always stay with your account.",
   ctaAddRing: "Add NFC ring",
   ctaSkip: "Skip for now",
   scanTitle: "Hold your ring to the phone",
@@ -13,7 +13,65 @@ const EN = {
   scanRetry: "Try again",
   iosNfcTitle: "NFC setup on iPhone",
   iosNfcBody:
-    "Web NFC is not available in iPhone browsers. Add Haven to your Home Screen for the best PWA experience, and use an Android device or desktop Chrome when you need on-device NFC registration in the browser.",
+    "On iPhone, we recommend ring link URL or manual assist first. Web NFC in browser can be limited.",
+  installRecommendedTitle: "Better full-screen experience from Home Screen",
+  installRecommendedBody:
+    "iOS needs manual Add to Home Screen. Once added, Haven feels much closer to a native app and is more stable for daily use.",
+  continueInBrowserCta: "Continue in browser anyway",
+  installNowCta: "Install to Home Screen now",
+  installDoneHint: "Install prompt shown. Return here after adding Haven to your Home Screen.",
+  installConsentTitle: "Before installing to Home Screen",
+  installConsentBody:
+    "This action creates a Haven icon on your phone Home Screen so you can open Haven directly in full-screen mode, without first opening the browser.",
+  installConsentRevoke:
+    "You can revoke this anytime by removing the Haven icon from your Home Screen. This does not delete your account or cloud data.",
+  installConsentConfirm: "I understand, continue install",
+  installConsentCancel: "Cancel",
+  installSuppressConfirmLabel: "Do not show this install confirmation again on this device",
+  installSuccessNotice:
+    "Haven was added to your Home Screen. Next time, open Haven directly from the Home Screen icon for a smoother app-like flow.",
+  iosInstallGuideCta: "How to add to Home Screen",
+  iosInstallGuideTitle: "Add Haven to Home Screen (iOS)",
+  iosInstallGuideTone:
+    "iOS requires a manual step here. This is normal and safe.",
+  iosInstallGuideStep1: "Tap the top-right Share button in Safari.",
+  iosInstallGuideStep2: "Select Add to Home Screen.",
+  iosInstallGuideStep3: "Confirm Add.",
+  iosInstallGuideStep4: "Tap Add, then open Haven from the new Home Screen icon.",
+  iosInstallGuideScreenshotHint1:
+    "Screenshot hint: look for Safari Share sheet with 'Add to Home Screen'.",
+  iosInstallGuideScreenshotHint2:
+    "Screenshot hint: after adding, confirm Haven icon appears on Home Screen.",
+  useOpenedRingLinkCta: "Use this opened ring link",
+  useOpenedRingLinkHint:
+    "If this page was opened by tapping your ring, continue directly with this ring link.",
+  noOpenedRingLinkHint:
+    "If your ring opens Haven with a unique link, open Haven from that ring first, then tap this button.",
+  installStateReady: "Install state: ready to add to Home Screen on this device.",
+  installStateManual:
+    "Install state: manual add required (open in Safari and use Share → Add to Home Screen).",
+  installPreparingTimeout:
+    "Install setup is preparing. If it takes too long, you can add to Home Screen later from Settings.",
+  installReadyAfterDelay:
+    "Install setup is now ready. You can continue installing from this page.",
+  ringLinkDetected:
+    "Good news: this page was opened by your ring. Tap 'Use this opened ring link' to continue.",
+  ringLinkNotDetected:
+    "This page was not opened by your ring yet. Tap your ring to open Haven first, then come back and continue.",
+  iosInstallSafetyTitle: "Why this is safe",
+  iosInstallSafetyBrief:
+    "Adding to Home Screen is a shortcut only. It does not grant extra permissions.",
+  iosInstallSafetyBody:
+    "Adding to Home Screen only creates a shortcut icon. It does not grant new phone permissions, does not expose your contacts/photos, and does not change your account security settings.",
+  iosInstallSafetyPrivacy:
+    "During ring setup, Haven stores only a secure ring fingerprint for login checks, never the raw ring UID.",
+  iosInstallSafetyExpand: "Show details",
+  iosInstallSafetyCollapse: "Hide details",
+  iosInstallGuideSteps:
+    "On iPhone Safari:\n1) Tap the Share button.\n2) Choose 'Add to Home Screen'.\n3) Confirm Add.\n4) Return to Home Screen and open Haven from the new icon.\n\nSafety note:\n- This only creates a shortcut icon.\n- It does not grant extra device permissions.\n- You can remove the icon anytime.",
+  copyLinkCta: "Copy site link",
+  copyLinkDone: "Site link copied. Paste it in Safari, then Add to Home Screen.",
+  copyLinkFailed: "Could not copy link automatically. Please copy the URL from your browser.",
   androidOk: "Got it",
   verifyTitle: "Confirm it's you",
   verifyBody:
@@ -35,9 +93,18 @@ const EN = {
   nameCta: "Save and finish",
   successTitle: "Ring linked",
   successBody:
-    "This ring can now be used for quick access and sealing memories. Tap any linked ring to return to your Haven — no mode switching.",
+    "This ring is ready for quick sign-in and optional sealing. Any linked ring can bring you back to Haven.",
   successEncourage:
-    "Best practice: add a second ring and store it safely. If you lose one ring, your memories stay with your account.",
+    "Tip: add a second ring as backup. If one ring is lost, your memories are still safe in your account.",
+  writeStartPreparing: "Finishing setup: writing your secure start link to this ring...",
+  writeStartWorking: "Writing start link...",
+  writeStartSuccess:
+    "Done. This ring now opens your private Haven start page on any phone.",
+  writeStartFailed:
+    "Ring is linked, but writing the start link did not complete. You can retry now or do it later in Settings.",
+  writeStartRetry: "Retry writing start link",
+  writeStartManualHint:
+    "Ring is linked. On this device, ring-link writing may require manual setup from Settings.",
   addAnother: "Add another ring",
   doneToHaven: "Go to my memory space",
   duplicateError: "This ring is already in your list.",
@@ -56,7 +123,7 @@ const EN = {
   privacyPolicyLink: "Privacy Policy",
   noNfcTitle: "NFC not available in this browser",
   noNfcBody:
-    "Use Chrome on an Android phone with NFC, or try another device. You can still use Haven; in-browser ring registration needs Web NFC (common on Android).",
+    "This browser cannot access NFC right now. Please install Haven to your Home Screen and open it from there on this same phone, then try again.",
 };
 
 export const RING_SETUP_CONTENT = {

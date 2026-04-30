@@ -9,7 +9,6 @@ import {
   getCloudBackupSettings,
   restoreFromCloud,
   setCloudBackupEnabled,
-  signInWithApple,
   signOutCloudBackup,
 } from "../services/cloudBackupService";
 import { SETTINGS_CONTENT } from "../content/settingsContent";
@@ -19,6 +18,11 @@ import {
   revokeTrustedDevice,
   setKeepSignedInPreference,
 } from "../services/deviceTrustService";
+import {
+  isTemporaryDeviceModeEnabled,
+  setTemporaryDeviceModeEnabled,
+  wipeTemporaryDevice,
+} from "../services/temporaryDeviceService";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
@@ -28,7 +32,12 @@ import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryThem
  * - Optional cloud backup switch
  * - Privacy-first messaging
  */
-export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
+export function SettingsPage({
+  onBack,
+  onOpenHelp,
+  onLocalDataCleared,
+  locale = "en",
+}) {
   const localeCopy = SETTINGS_CONTENT[locale] || SETTINGS_CONTENT.en;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -40,6 +49,9 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
   const [keepSignedIn, setKeepSignedIn] = useState(() =>
     getKeepSignedInPreference()
   );
+  const [temporaryMode, setTemporaryMode] = useState(() =>
+    isTemporaryDeviceModeEnabled()
+  );
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -49,10 +61,6 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
 
   useEffect(() => {
     void refreshLocalStats();
-  }, []);
-
-  useEffect(() => {
-    setSecurity(getSecuritySummary());
   }, []);
 
   async function refreshLocalStats() {
@@ -110,6 +118,7 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
     try {
       await clearAllMemories();
       await refreshLocalStats();
+      await onLocalDataCleared?.();
       setStatus(localeCopy.clearDone);
     } catch (error) {
       setStatus(localeCopy.clearFailed);
@@ -140,8 +149,17 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
     setBusy(true);
     setStatus(localeCopy.signingIn);
     try {
-      await signInWithApple();
-      setCloud(getCloudBackupSettings());
+      const supabase = getSupabaseBrowserClient();
+      const redirectTo = `${window.location.origin}/`;
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "apple",
+        options: { redirectTo },
+      });
+      if (oauthError) {
+        setStatus(localeCopy.signInFailed);
+        return;
+      }
+      // Redirect starts immediately on success.
       setStatus(localeCopy.signInDone);
     } catch (error) {
       setStatus(localeCopy.signInFailed);
@@ -189,6 +207,29 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
     setStatus(localeCopy.unlinkDone);
   }
 
+  function handleTemporaryModeChange(enabled) {
+    setTemporaryDeviceModeEnabled(enabled);
+    setTemporaryMode(enabled);
+    setStatus("");
+  }
+
+  async function handleTemporaryExitNow() {
+    const confirmed = window.confirm(localeCopy.confirmTemporaryExit);
+    if (!confirmed) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      await wipeTemporaryDevice();
+      setStatus(localeCopy.temporaryExitDone);
+      await refreshLocalStats();
+      onBack?.();
+    } catch {
+      setStatus(localeCopy.temporaryExitFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function handleRevokeDevice(deviceId) {
     const confirmed = window.confirm(localeCopy.confirmRevokeDevice);
     if (!confirmed) return;
@@ -224,7 +265,7 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
           "Content-Type": "application/json",
           "X-Haven-Secondary-Verified": "1",
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ privacy_acknowledged: true }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -386,6 +427,28 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
         </section>
 
         <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.temporarySectionTitle}</h2>
+          <label style={styles.toggleRow}>
+            <span style={styles.copy}>{localeCopy.temporaryModeLabel}</span>
+            <input
+              type="checkbox"
+              checked={temporaryMode}
+              disabled={busy}
+              onChange={(e) => handleTemporaryModeChange(e.target.checked)}
+            />
+          </label>
+          <p style={styles.copy}>{localeCopy.temporaryModeHelp}</p>
+          <button
+            type="button"
+            onClick={() => void handleTemporaryExitNow()}
+            disabled={busy}
+            style={styles.dangerButton}
+          >
+            {localeCopy.temporaryExitButton}
+          </button>
+        </section>
+
+        <section style={styles.card}>
           <h2 style={styles.sectionTitle}>{localeCopy.privacySectionTitle}</h2>
           <p style={styles.copy}>
             {localeCopy.privacyLine1}
@@ -398,9 +461,6 @@ export function SettingsPage({ onBack, onOpenHelp, locale = "en" }) {
           </p>
           <p style={styles.copy}>
             {localeCopy.privacyUnbindLine}
-          </p>
-          <p style={styles.copy}>
-            {localeCopy.privacyLegacyLine}
           </p>
           <p style={styles.copy}>
             {localeCopy.privacyE2eLine}

@@ -34,6 +34,7 @@ export type MomentRow = {
   created_at: string;
   sealed_at: string | null;
   content_sha256: string | null;
+  release_at: string | null;
 };
 
 export type UserNfcRingRow = {
@@ -197,6 +198,7 @@ export type Database = {
           created_at?: string;
           sealed_at?: string | null;
           content_sha256?: string | null;
+          release_at?: string | null;
         };
         Update: Partial<MomentRow>;
         Relationships: [

@@ -35,6 +35,15 @@ Run these before release; automate where possible.
 1. **Android Chrome**: Web NFC available — bind flow uses UID hash client-side before POST.
 2. **iOS Safari**: Web NFC unavailable — expect wizard branch `blocked_ios`; bind via Android/desktop or native helper.
 
+## iOS + Android mixed-device regression (must-pass)
+
+1. Bind ring A on Android, then sign in on iOS and confirm ring list + timeline load with the same account.
+2. Create 2 drafts on iOS, get ticket with ring tap, and finalize on iOS from Home Screen launch.
+3. Repeat finalize on Android for a different draft and verify both memories appear after sync.
+4. Revoke ring A on iOS, then confirm Android ring-tap login/seal is rejected for that ring.
+5. Bind ring B on Android, then confirm iOS can use ring B without rebinding.
+6. Verify `seal_telemetry_events` captures success/error ratio and key `error_code` values.
+
 ## Extreme: five rings in use
 
 1. Attempt sixth bind → **409** with limit message.

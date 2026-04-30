@@ -1,0 +1,17 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2D211B"/>
+      <stop offset="0.45" stop-color="#1C1512"/>
+      <stop offset="1" stop-color="#120E0D"/>
+    </linearGradient>
+    <radialGradient id="sunset" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(980 250) rotate(210) scale(600 360)">
+      <stop stop-color="#F0B98E" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="#F0B98E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg2)"/>
+  <rect width="1600" height="900" fill="url(#sunset)"/>
+  <path d="M0 640C180 560 390 620 560 690C720 754 900 770 1080 702C1250 638 1390 610 1600 672V900H0V640Z" fill="#1A1311"/>
+  <path d="M0 726C210 676 360 710 530 760C700 808 930 808 1110 758C1300 706 1430 698 1600 740V900H0V726Z" fill="#130F0E"/>
+</svg>

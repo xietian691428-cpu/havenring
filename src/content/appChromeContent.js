@@ -8,7 +8,9 @@ const EN = {
   tabSeal: "Seal new",
   tabRings: "Rings",
   bottomNavAria: "Main",
-  /** Legacy — keep for any old references */
+  temporaryBanner:
+    "Temporary device mode is on. This phone will wipe local memories and sign-in data when you leave.",
+  /** Kept for backward route labels */
   breadcrumbAria: "Breadcrumb",
   home: "Home",
   timeline: "Timeline",

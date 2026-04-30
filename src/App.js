@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppChrome } from "./components/AppChrome";
 import {
   RingSetupWizard,
@@ -20,8 +20,24 @@ import { usePwaLocale } from "./i18n/pwaLocale";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 import { getBoundRingCount } from "./services/ringRegistryService";
 import { scheduleWelcomeToast } from "./utils/welcomeToast";
+import {
+  isTemporaryDeviceModeEnabled,
+  TEMP_DEVICE_MODE_EVENT,
+  wipeTemporaryDevice,
+} from "./services/temporaryDeviceService";
+import { AppFlowProvider, useAppFlow } from "./state/appFlowContext";
+import { getFlowPrimaryUi, getRecoveryActionIntent } from "./state/appFlowSelectors";
+import { FIRST_MEMORY_DONE_KEY } from "./services/firstRunTelemetryService";
 
 export default function App() {
+  return (
+    <AppFlowProvider>
+      <AppOrchestrator />
+    </AppFlowProvider>
+  );
+}
+
+function AppOrchestrator() {
   const [route, setRoute] = useState({ name: "timeline", memoryId: null });
   const [transitionDirection, setTransitionDirection] = useState("forward");
   const [swipeDx, setSwipeDx] = useState(0);
@@ -38,6 +54,7 @@ export default function App() {
     cloudPlaceholders,
     syncIssues,
     syncMeta,
+    syncHealth,
     refresh,
     syncNow,
     syncActiveRingNow,
@@ -50,12 +67,65 @@ export default function App() {
   const [quickSignInError, setQuickSignInError] = useState("");
   const [ringSetupOpen, setRingSetupOpen] = useState(false);
   const [ringSetupKey, setRingSetupKey] = useState(0);
+  const [temporaryModeBanner, setTemporaryModeBanner] = useState(() =>
+    isTemporaryDeviceModeEnabled()
+  );
+  const { flowState, dispatchFlow } = useAppFlow();
   const loginSyncDoneForSessionRef = useRef("");
+  const tempWipeStartedRef = useRef(false);
 
   const selectedMemory = useMemo(
     () => memories.find((m) => m.id === route.memoryId) || null,
     [memories, route.memoryId]
   );
+  const flowPrimaryUi = useMemo(
+    () => getFlowPrimaryUi(flowState, locale),
+    [flowState, locale]
+  );
+  const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
+
+  const flowPrimaryAction = useCallback((intent = "primary") => {
+    if (!flowPrimaryUi) return;
+    if (flowState.mainState === "RING_SETUP_GATE") {
+      openRingSetup();
+      return;
+    }
+    if (flowState.mainState === "SYNC_GATE") {
+      void syncNow();
+      return;
+    }
+    if (flowState.mainState === "PWA_INSTALL_GATE") {
+      if (intent === "defer_pwa") {
+        dispatchFlow({ type: "PWA_DEFERRED" });
+        return;
+      }
+      openRingSetup();
+      navigateTo({ name: "home", memoryId: null }, "back");
+      return;
+    }
+    if (flowState.mainState === "RECOVERY") {
+      const errorType = String(flowState.recoveryErrorType || "");
+      const actionIntent = getRecoveryActionIntent(errorType);
+      if (actionIntent === "reauth") {
+        dispatchFlow({ type: "RECOVERY_DISMISSED" });
+        navigateTo({ name: "home", memoryId: null }, "back");
+        return;
+      }
+      if (actionIntent === "open_ring_setup") {
+        openRingSetup();
+        return;
+      }
+      if (actionIntent === "rebuild_and_sync") {
+        void syncNow().finally(() => {
+          dispatchFlow({ type: "RECOVERY_DISMISSED" });
+        });
+        return;
+      }
+      void syncNow().finally(() => {
+        dispatchFlow({ type: "RECOVERY_DISMISSED" });
+      });
+    }
+  }, [flowPrimaryUi, flowState.mainState, flowState.recoveryErrorType, openRingSetup, syncNow]);
 
   function openRingSetup() {
     setRingSetupKey((k) => k + 1);
@@ -101,6 +171,7 @@ export default function App() {
     onNavigateSettings: () =>
       navigateTo({ name: "settings", memoryId: null }, "forward"),
     onNavigateHelp: () => navigateTo({ name: "help", memoryId: null }, "forward"),
+    showTemporaryBanner: temporaryModeBanner,
   };
 
   function renderWithShell(content) {
@@ -127,6 +198,18 @@ export default function App() {
     setTransitionDirection(direction);
     setRoute(nextRoute);
   }
+
+  const scheduleBackgroundSync = useCallback(() => {
+    const run = () => {
+      void syncNow().catch(() => null);
+      void refresh().catch(() => null);
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(run, { timeout: 1500 });
+      return;
+    }
+    window.setTimeout(run, 400);
+  }, [syncNow, refresh]);
 
   async function handleQuickSignIn(provider, token) {
     setQuickSigningIn(true);
@@ -196,12 +279,133 @@ export default function App() {
     const sessionKey = String(supabaseSession.access_token || "");
     if (sessionKey && loginSyncDoneForSessionRef.current !== sessionKey) {
       loginSyncDoneForSessionRef.current = sessionKey;
-      void (async () => {
-        await syncNow().catch(() => null);
-        await refresh().catch(() => null);
-      })();
+      scheduleBackgroundSync();
     }
-  }, [supabaseSession, sessionLoading, syncNow, refresh]);
+  }, [supabaseSession, sessionLoading, scheduleBackgroundSync]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent.toLowerCase();
+    const platform = /iphone|ipad|ipod/.test(ua)
+      ? "ios"
+      : ua.includes("android")
+        ? "android"
+        : "other";
+    const webNfcAvailable = typeof window !== "undefined" && "NDEFReader" in window;
+    const pwaInstalled = Boolean(
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+        window.navigator?.standalone === true
+    );
+    dispatchFlow({
+      type: "BOOTSTRAP_DONE",
+      hasSession: Boolean(supabaseSession),
+      hasBoundRing: getBoundRingCount() > 0,
+      platform,
+      webNfcAvailable,
+      pwaInstalled,
+    });
+  }, [supabaseSession]);
+
+  useEffect(() => {
+    dispatchFlow({
+      type: "SESSION_CHANGED",
+      hasSession: Boolean(supabaseSession),
+    });
+    dispatchFlow({
+      type: "RINGS_CHANGED",
+      hasBoundRing: getBoundRingCount() > 0,
+    });
+  }, [supabaseSession, ringSetupOpen, route.name]);
+
+  useEffect(() => {
+    dispatchFlow({ type: "SYNC_STATUS", syncing: Boolean(syncing) });
+    if (syncHealth?.severity === "hard") {
+      if (
+        syncHealth.reason === "auth_expired" &&
+        supabaseSession &&
+        !sessionLoading
+      ) {
+        dispatchFlow({ type: "SYNC_RECOVERED" });
+        return;
+      }
+      dispatchFlow({
+        type: "SYNC_HARD_FAILED",
+        errorType: syncHealth.reason || "auth_expired",
+      });
+      return;
+    }
+    dispatchFlow({ type: "SYNC_RECOVERED" });
+  }, [syncing, syncHealth, supabaseSession, sessionLoading]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ftuxWelcomeDone =
+      window.localStorage.getItem("haven.onboarding.completed.v1") === "1";
+    const ftuxFirstMemoryDone =
+      window.localStorage.getItem(FIRST_MEMORY_DONE_KEY) === "1";
+    dispatchFlow({
+      type: "FTUX_SYNC",
+      ftuxLandingSignedIn: Boolean(supabaseSession),
+      ftuxPwaDone: Boolean(flowState.pwaInstalled || flowState.pwaDeferred),
+      ftuxWelcomeDone,
+      ftuxFirstMemoryDone,
+    });
+  }, [
+    supabaseSession,
+    flowState.pwaInstalled,
+    flowState.pwaDeferred,
+    route.name,
+    dispatchFlow,
+  ]);
+
+  useEffect(() => {
+    if (flowState.mainState !== "RING_SETUP_GATE") return;
+    if (typeof window === "undefined") return;
+    const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
+    if (dismissed || ringSetupOpen) return;
+    setRingSetupKey((k) => k + 1);
+    setRingSetupOpen(true);
+  }, [flowState.mainState, ringSetupOpen]);
+
+  useEffect(() => {
+    const onModeChanged = (evt) => {
+      const enabled = Boolean(evt?.detail?.enabled);
+      setTemporaryModeBanner(enabled);
+    };
+    const onStorage = (evt) => {
+      if (evt.key === "haven.session.temporaryDevice.v1") {
+        setTemporaryModeBanner(isTemporaryDeviceModeEnabled());
+      }
+    };
+    window.addEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTemporaryDeviceModeEnabled()) return undefined;
+    const runWipe = () => {
+      if (tempWipeStartedRef.current) return;
+      tempWipeStartedRef.current = true;
+      void wipeTemporaryDevice().catch(() => {
+        tempWipeStartedRef.current = false;
+      });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        runWipe();
+      }
+    };
+    window.addEventListener("pagehide", runWipe);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", runWipe);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [temporaryModeBanner]);
 
   function goBackByRoute() {
     if (route.name === "detail" || route.name === "new") {
@@ -293,13 +497,21 @@ export default function App() {
             navigateTo({ name: "detail", memoryId }, "forward")
           }
           onOpenMemoryFromRing={openMemoryFromRingParams}
-          showRingSignIn={!sessionLoading && !supabaseSession && !hideNfcPrompt}
+          showRingSignIn={
+            !enforceSingleFlowCard &&
+            !sessionLoading &&
+            !supabaseSession &&
+            !hideNfcPrompt
+          }
           onRingSignedIn={async () => {
             setHideNfcPrompt(true);
-            await refresh();
-            await syncNow().catch(() => null);
             navigateTo({ name: "timeline", memoryId: null }, "forward");
+            scheduleBackgroundSync();
           }}
+          flowPrimaryUi={flowPrimaryUi}
+          onFlowPrimaryAction={flowPrimaryAction}
+          suppressSecondaryNotices={enforceSingleFlowCard}
+          flowMainState={flowState.mainState}
         />
       </FadePage>
     );
@@ -356,6 +568,9 @@ export default function App() {
           locale={locale}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
+          onLocalDataCleared={async () => {
+            await refresh().catch(() => null);
+          }}
         />
       </FadePage>
     );
@@ -373,6 +588,7 @@ export default function App() {
       <FadePage pageKey="home" direction={transitionDirection}>
         <HomePage
           locale={locale}
+          hasSession={Boolean(supabaseSession)}
           loading={loading || saving}
           message={error || ""}
           quickSignInError={quickSignInError}
@@ -391,6 +607,9 @@ export default function App() {
             navigateTo({ name: "settings", memoryId: null }, "forward")
           }
           onOpenMemoryFromRing={openMemoryFromRingParams}
+          flowPrimaryUi={flowPrimaryUi}
+          onFlowPrimaryAction={flowPrimaryAction}
+          suppressSecondaryNotices={enforceSingleFlowCard}
         />
       </FadePage>
     );

@@ -21,15 +21,25 @@ const EN = {
   welcomeBack: "Welcome back",
   nfcRegionLabel: "Ring sign-in",
   nfcLede:
-    "Any bound ring can quickly open this account. We recommend preparing at least two rings for backup, and your precious memories remain permanently safe in cloud storage with end-to-end encryption.",
+    "Any linked ring can quickly open your Haven. You can link up to 5 rings, and all of them work the same way. Your memories stay with your account.",
   nfcCta: "Continue with ring",
   nfcScanning: "Hold your ring near the device…",
   nfcErrGeneric: "Could not sign in with this ring.",
   nfcErrNoBinding: "This ring is not linked to an account yet.",
   nfcErrNoUid: "Could not read the ring ID from the tag.",
   nfcErrUnconfigured: "Ring sign-in is not configured on this server.",
+  nfcAuthExpiredNotice:
+    "Your sync session expired. Use the ring button above to sign in again, then sync will resume automatically.",
+  nfcHelpNoBinding:
+    "This ring is not bound to this account. Open Rings and bind this ring first, then try again.",
+  nfcHelpNoUid:
+    "The tag ID was not read. Keep your ring close to the NFC area for 1-2 seconds and try again.",
+  nfcHelpUnconfigured:
+    "Server-side NFC login is not configured yet. Please contact support or the app operator.",
+  nfcHelpGeneric:
+    "Try once more with a steady ring touch. If it still fails, check network and ring binding status.",
   cloudSourceNote:
-    "Cloud remains the source of truth. Local ring caches are offline helpers and may be cleared by iOS.",
+    "Your account is the source of truth. Local data helps with offline use and can be rebuilt anytime.",
   integrityMismatch:
     "Detected data inconsistency. Cloud is the source of truth, please resync now.",
   resyncNow: "Resync",
@@ -37,6 +47,8 @@ const EN = {
   cloudSectionTitle: "Cloud entries pending local reconciliation",
   cloudPlaceholderBody:
     "This item exists in cloud metadata for {ring}. Open/restore after sync to reconcile encrypted payload locally.",
+  cloudCapsuleLockedPlaceholder:
+    "Time capsule in cloud metadata for {ring}. It unlocks at {time}.",
   resyncActive: "Sync active ring",
   resyncAll: "Sync all rings",
   cloudGroupCount: "{n} cloud entries",
@@ -56,6 +68,8 @@ const EN = {
   syncNextRetry: "Next auto retry: {time}",
   rebuildLocalCache: "Rebuild local cache from cloud",
   syncLastRecovery: "Last cache rebuild: {time} ({count} rings)",
+  capsuleLockedPreview: "This time capsule unlocks at {time}.",
+  capsuleOpen: "Open when unlocked",
 };
 
 export const TIMELINE_PAGE_CONTENT = {

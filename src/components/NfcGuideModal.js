@@ -7,6 +7,7 @@ import {
 } from "../services/nfcRingService";
 import { getNfcGuideContent } from "../content/nfcGuideContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
+import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 
 /**
  * NfcGuideModal
@@ -49,15 +50,25 @@ export function NfcGuideModal({
     setNfcError(null);
     const fixedUrl =
       typeof window !== "undefined"
-        ? `${window.location.origin}/hub`
-        : "https://haven.yourdomain.com/hub";
+        ? `${window.location.origin}/start`
+        : "https://havenring.me/start";
     setNfcStatus(t.writingStatus);
     try {
       await writeFixedEntryUrlToRing(fixedUrl);
       setNfcStatus(t.writeSuccess);
+      void trackFirstRunEvent("ring_start_link_written_success", {
+        locale,
+        platform,
+        metadata: { source: "nfc_guide_manual" },
+      });
     } catch (error) {
       setNfcStatus("");
       setNfcError(error);
+      void trackFirstRunEvent("ring_start_link_written_failed", {
+        locale,
+        platform,
+        metadata: { source: "nfc_guide_manual" },
+      });
     } finally {
       setNfcBusy(false);
     }
@@ -188,7 +199,7 @@ const styles = {
   overlay: {
     position: "fixed",
     inset: 0,
-    zIndex: 60,
+    zIndex: 90,
     background: "rgba(8, 7, 6, 0.72)",
     backdropFilter: "blur(8px)",
     display: "grid",

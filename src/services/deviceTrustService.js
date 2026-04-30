@@ -20,9 +20,19 @@ function readPublicEnvMs(name, fallbackDays) {
   return n * 24 * 60 * 60 * 1000;
 }
 
+function readPublicEnvFlag(name, fallback = false) {
+  if (typeof process === "undefined") return fallback;
+  const raw = process.env?.[name];
+  if (!raw) return fallback;
+  return ["1", "true", "yes", "on"].includes(String(raw).toLowerCase());
+}
+
 export function getKeepSignedInPreference() {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(KEEP_SIGNED_IN_KEY) === "1";
+  const stored = window.localStorage.getItem(KEEP_SIGNED_IN_KEY);
+  if (stored === "1") return true;
+  if (stored === "0") return false;
+  return readPublicEnvFlag("NEXT_PUBLIC_NFC_KEEP_SIGNED_IN_DEFAULT", false);
 }
 
 export function setKeepSignedInPreference(enabled) {

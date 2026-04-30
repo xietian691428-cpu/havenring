@@ -21,7 +21,7 @@ device**.
 
 These are the only invariants. If a decision violates one, stop.
 
-### 2.1 低频 — Low frequency
+### 2.1 Low frequency
 - The product is designed to be used **rarely** — maybe once a week, maybe once
   a year. The UI must *discourage* casual or habitual use.
 - No streaks. No daily prompts. No reminders. No notifications of any kind.
@@ -30,7 +30,7 @@ These are the only invariants. If a decision violates one, stop.
   The only way into the vault is to physically tap the ring.
 - There is no feed. There is no "today's moment". There is no digest email.
 
-### 2.2 仪式感 — Ritual / ceremony
+### 2.2 Ritual / ceremony
 - Sealing a moment requires a **physical act** (touching the ring to the phone).
   This is non-negotiable. No "seal" button. No "save" shortcut.
 - Revisiting sealed moments **also** requires the physical act. Tapping the
@@ -48,7 +48,7 @@ These are the only invariants. If a decision violates one, stop.
   tap), but never alter it. The only way to remove a sealed moment is to wipe
   the whole ring — which is all-or-nothing and irreversible.
 
-### 2.3 不存敏感数据 — Zero sensitive data on the server
+### 2.3 Zero sensitive data on the server
 - The server (Supabase) **must never** see plaintext. Ever.
 - All payload encryption and decryption happens in the browser via Web Crypto
   (AES-GCM 256).

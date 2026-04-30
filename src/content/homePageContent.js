@@ -2,13 +2,13 @@ const EN = {
   brand: "Haven Ring",
   title: "Welcome back to your Haven",
   subtitle:
-    "Your private keepsake for stories, photos, and voice memories. Encrypted on your device; your signed-in account owns access—not the ring alone.",
+    "Your private space for stories, photos, and voice memories. Your account is always the owner of every memory.",
   howTitle: "How it works",
   howBody:
-    "Your ring is quick access into Haven (like a shortcut): tap to open or seal. Memories save encrypted locally without rewriting the ring each time. Link several rings if you like—they are equals; there is no single \"master\" ring.",
+    "Your ring is a quick way in: tap to open or seal. You can link up to 5 rings, and every ring works the same way. No master ring. For daily stability on iPhone, open Haven from the Home Screen icon.",
   ringSignInTitle: "Ring detected",
   ringSignInBody:
-    "Continue with Apple so this device trusts your account. The ring stays a convenience shortcut—full access still sits behind your account and device checks.",
+    "Sign in to continue. Your ring helps you enter quickly, but your account stays in control of access.",
   ringSignInPermissionHint:
     "NFC permission was unavailable on the last tap. You can still continue by signing in.",
   ringSignInApple: "Continue with Apple",
@@ -42,6 +42,11 @@ const EN = {
   settings: "Settings",
   start: "How to start",
   ringSetupCta: "Add NFC rings",
+  firstMissionTitle: "Your first step",
+  firstMissionBody:
+    "Create your first memory first. Ring setup is warmly recommended after that, and you can always do it later.",
+  firstMissionPrimary: "Create my first memory",
+  firstMissionSecondary: "Set up ring (recommended)",
 };
 
 export const HOME_PAGE_CONTENT = {

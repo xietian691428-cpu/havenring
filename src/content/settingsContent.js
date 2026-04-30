@@ -38,8 +38,6 @@ const EN = {
     "NFC bind/unbind: we store only a secure fingerprint of the tag, not a naked UID. You can revoke a lost ring from another signed-in device.",
   privacyUnbindLine:
     "Unlinking a ring does not delete your sealed memories; it stops that ring from being used for quick access.",
-  privacyLegacyLine:
-    "Digital legacy options (if we offer them) require your explicit choice and are described in the privacy policy.",
   privacyE2eLine:
     "Your sealed memories are protected with end-to-end encryption on supported flows. Rings are shortcuts to your account, not the only proof of identity.",
   privacyPolicy: "View Privacy Policy",
@@ -86,6 +84,16 @@ const EN = {
   revokeAllNfcNeedSignIn: "Sign in with cloud backup first, then try again.",
   revokeAllNfcDone: "Revoked {n} ring binding(s). Cloud login may be required to add rings again.",
   revokeAllNfcFailed: "Could not revoke all rings.",
+  temporarySectionTitle: "Temporary phone safety",
+  temporaryModeLabel:
+    "Temporary device mode (auto wipe local data after use).",
+  temporaryModeHelp:
+    "Use this on borrowed iPhone/Android devices. After finishing, tap secure exit to remove local memories, caches, and sessions from this phone.",
+  temporaryExitButton: "Secure exit and wipe this phone",
+  confirmTemporaryExit:
+    "End this temporary session now? This will sign out and wipe local memories, cache, and tokens from this phone.",
+  temporaryExitDone: "Temporary session ended. Local data has been wiped.",
+  temporaryExitFailed: "Could not complete secure wipe. Please retry.",
 };
 
 export const SETTINGS_CONTENT = {

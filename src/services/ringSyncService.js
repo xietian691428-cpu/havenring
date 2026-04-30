@@ -27,6 +27,7 @@ export async function stageDraftForActiveRing(memoryDraft) {
     id: memoryDraft.id,
     title: memoryDraft.title,
     timelineAt: memoryDraft.timelineAt,
+    releaseAt: Number(memoryDraft.releaseAt || 0) || 0,
     content_sha256: memoryDraft.content_sha256,
   });
   return { staged: true, uidKey: ring.uidKey };
@@ -86,7 +87,7 @@ async function fetchMomentsDelta(cloudRingIds) {
   const sb = getSupabaseBrowserClient();
   const { data, error } = await sb
     .from("moments")
-    .select("id, ring_id, created_at, content_sha256, is_sealed")
+    .select("id, ring_id, created_at, release_at, content_sha256, is_sealed")
     .in("ring_id", cloudRingIds)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -172,6 +173,7 @@ export async function syncRingScopedCaches(options = {}) {
           id: item.id,
           title: item.title || "",
           timelineAt: item.timelineAt || Date.now(),
+          releaseAt: Number(item.releaseAt || 0) || 0,
           content_sha256: item.content_sha256 || null,
         });
         syncedIds.push(item.id);
@@ -197,6 +199,7 @@ export async function syncRingScopedCaches(options = {}) {
         ring_id: row.ring_id,
         uidKey: ring.uidKey,
         timelineAt: Date.parse(row.created_at || "") || Date.now(),
+        releaseAt: Date.parse(row.release_at || "") || 0,
         content_sha256: row.content_sha256 || null,
         ringLabel: ring.label || "Ring",
       });

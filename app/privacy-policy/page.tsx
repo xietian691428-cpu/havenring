@@ -14,10 +14,9 @@ export default function PrivacyPolicyPage() {
         Haven Ring is designed for a private memory space. Sealed content is
         encrypted; we do not use NFC tag UIDs as naked identifiers in our
         database — we store only secure fingerprints. Binding and revoking
-        rings, optional cloud features, and any future digital-legacy options
-        are described in your region-specific policy when you go live. Replace
-        this page with your counsel-approved text and data-residency addenda
-        (GDPR / CCPA) before production.
+        rings and optional cloud features are described in your region-specific
+        policy when you go live. Replace this page with your counsel-approved
+        text and data-residency addenda (GDPR / CCPA) before production.
       </p>
       <ul className="mt-6 list-disc pl-5 text-sm text-stone-400 space-y-2">
         <li>Export and delete rights supported at the account level where applicable.</li>

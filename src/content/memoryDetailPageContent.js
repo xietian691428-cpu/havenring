@@ -13,6 +13,10 @@ const EN = {
   noAttachments: "No attachments.",
   downloadAttachment: "Download file",
   untitledAttachment: "Attachment",
+  capsuleLockedTitle: "Time capsule is still locked",
+  capsuleLockedBody: "This capsule unlocks at {time}. Please come back then.",
+  capsuleTypeTime: "Time capsule",
+  capsuleTypeNormal: "Normal memory",
 };
 
 export const MEMORY_DETAIL_PAGE_CONTENT = {

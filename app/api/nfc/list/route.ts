@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {
   getSupabaseUserClient,
   requireAuthenticatedUser,
@@ -12,6 +13,13 @@ import {
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuthenticatedUser(req);
+    const limitRes = await enforceUserIpRateLimit({
+      req,
+      userId: user.id,
+      scope: "nfc-list",
+      policy: API_RATE_POLICIES.ringMedium,
+    });
+    if (limitRes) return limitRes;
     const accessToken = requireBearerToken(req);
     const supabase = getSupabaseUserClient(accessToken);
 

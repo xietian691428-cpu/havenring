@@ -44,6 +44,8 @@ export function MemoryDetailPage({
     return [];
   }, [memory]);
   const currentPhoto = photos[index]?.dataUrl || photos[index] || "";
+  const releaseAt = Number(memory?.releaseAt || 0) || 0;
+  const isCapsuleLocked = releaseAt > Date.now();
 
   function nextPhoto() {
     if (!photos.length) return;
@@ -71,7 +73,12 @@ export function MemoryDetailPage({
         <header style={styles.header}>
           <div>
             <p style={styles.brand}>{t.brand}</p>
-            <h1 style={styles.title}>{memory?.title || t.defaultTitle}</h1>
+            <div style={styles.titleRow}>
+              <h1 style={styles.title}>{memory?.title || t.defaultTitle}</h1>
+              <span style={styles.typeBadge}>
+                {releaseAt ? t.capsuleTypeTime : t.capsuleTypeNormal}
+              </span>
+            </div>
           </div>
           <OnlineStatusBadge locale={locale} />
         </header>
@@ -92,7 +99,11 @@ export function MemoryDetailPage({
               <p style={styles.meta}>
                 {new Date(memory.timelineAt).toLocaleString()}
               </p>
-              {photos.length ? (
+              {isCapsuleLocked ? (
+                <p style={styles.empty}>
+                  {t.capsuleLockedBody.replace("{time}", new Date(releaseAt).toLocaleString())}
+                </p>
+              ) : photos.length ? (
                 <div style={styles.carousel}>
                   <img src={currentPhoto} alt="" style={styles.photo} />
                   {photos.length > 1 ? (
@@ -115,36 +126,44 @@ export function MemoryDetailPage({
             </section>
 
             <section style={styles.card}>
-              <h2 style={styles.sectionTitle}>{t.storyTitle}</h2>
-              <p style={styles.story}>{memory.story || t.noStory}</p>
+              <h2 style={styles.sectionTitle}>
+                {isCapsuleLocked ? t.capsuleLockedTitle : t.storyTitle}
+              </h2>
+              <p style={styles.story}>
+                {isCapsuleLocked
+                  ? t.capsuleLockedBody.replace("{time}", new Date(releaseAt).toLocaleString())
+                  : memory.story || t.noStory}
+              </p>
             </section>
 
-            <section style={styles.card}>
-              <h2 style={styles.sectionTitle}>{t.attachmentsTitle}</h2>
-              {attachments.length ? (
-                <ul style={styles.attachmentList}>
-                  {attachments.map((item) => (
-                    <li key={item.id || item.name} style={styles.attachmentItem}>
-                      <p style={styles.attachmentName}>{item.name || t.untitledAttachment}</p>
-                      {String(item.mimeType || "").startsWith("audio/") ? (
-                        <audio controls src={item.dataUrl} style={{ width: "100%" }} />
-                      ) : null}
-                      {String(item.mimeType || "").startsWith("video/") ? (
-                        <video controls src={item.dataUrl} style={{ width: "100%", borderRadius: 10 }} />
-                      ) : null}
-                      {!String(item.mimeType || "").startsWith("audio/") &&
-                      !String(item.mimeType || "").startsWith("video/") ? (
-                        <a href={item.dataUrl} download={item.name || "attachment"} style={styles.downloadLink}>
-                          {t.downloadAttachment}
-                        </a>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={styles.empty}>{t.noAttachments}</p>
-              )}
-            </section>
+            {!isCapsuleLocked ? (
+              <section style={styles.card}>
+                <h2 style={styles.sectionTitle}>{t.attachmentsTitle}</h2>
+                {attachments.length ? (
+                  <ul style={styles.attachmentList}>
+                    {attachments.map((item) => (
+                      <li key={item.id || item.name} style={styles.attachmentItem}>
+                        <p style={styles.attachmentName}>{item.name || t.untitledAttachment}</p>
+                        {String(item.mimeType || "").startsWith("audio/") ? (
+                          <audio controls src={item.dataUrl} style={{ width: "100%" }} />
+                        ) : null}
+                        {String(item.mimeType || "").startsWith("video/") ? (
+                          <video controls src={item.dataUrl} style={{ width: "100%", borderRadius: 10 }} />
+                        ) : null}
+                        {!String(item.mimeType || "").startsWith("audio/") &&
+                        !String(item.mimeType || "").startsWith("video/") ? (
+                          <a href={item.dataUrl} download={item.name || "attachment"} style={styles.downloadLink}>
+                            {t.downloadAttachment}
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={styles.empty}>{t.noAttachments}</p>
+                )}
+              </section>
+            ) : null}
           </>
         ) : null}
       </section>
@@ -183,6 +202,22 @@ const styles = {
     margin: "8px 0 0",
     fontSize: 30,
     fontWeight: 500,
+  },
+  titleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  typeBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    border: "1px solid #5a3b30",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: 12,
+    color: "#f0c29e",
+    background: "rgba(240, 194, 158, 0.08)",
   },
   backButton: {
     justifySelf: "start",

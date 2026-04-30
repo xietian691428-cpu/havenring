@@ -3,11 +3,18 @@ const EN = {
   title: "Capture this moment",
   sealGuidance:
     "Do not tap your ring while editing. Tap only after pressing Seal with Ring Now.",
+  firstMemoryQuickTitle: "Your first memory can be simple",
+  firstMemoryQuickBody:
+    "Start with a short title and one sentence. You can add files and advanced options later.",
+  firstMemoryShowAdvanced: "Add optional details",
   back: "Back",
   titleLabel: "Title",
   titlePlaceholder: "A quiet title...",
   storyLabel: "Story",
   storyPlaceholder: "Write what this memory means to you...",
+  timeCapsuleLabel: "Time capsule unlock time",
+  timeCapsuleHint:
+    "Optional. Before this time, memory content stays locked and hidden.",
   photosLabel: "Photos",
   choosePhotos: "Choose photos",
   noPhotosSelected: "No photos selected",
@@ -47,6 +54,8 @@ const EN = {
   feedbackSavingLocal: "Saving draft locally...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
   feedbackReadyToSeal: "Ready to seal. Touch your ring now.",
+  feedbackMissingVerifiedTap:
+    "No verified ring tap was detected. Please touch your ring and return to complete sealing.",
   feedbackDraftRestored: "Recovered your unsaved draft.",
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
@@ -57,13 +66,52 @@ const EN = {
   readBinaryFailed: "Failed to read binary data.",
   sealPromptTitle: "Final step: touch your ring",
   sealPromptBody:
-    "Hold your ring near the back of your phone now. Sealing is completed only after the ring touch is detected.",
+    "Take a calm breath, then hold your ring near the back of your phone. Sealing finishes after a verified touch.",
+  sealPromptIosHint:
+    "On iPhone, open Haven from your Home Screen shortcut before touching the ring for a more reliable seal flow.",
   sealPromptDone: "I touched the ring",
+  sealTouchInstruction:
+    "Touch your ring to your phone to confirm identity and get a one-time seal ticket.",
+  sealTouchRetry: "Touch ring now",
+  sealTouchWorking: "Reading ring...",
+  sealTicketReady: "Ring verified. You can confirm sealing now.",
+  sealConfirmButton: "Confirm seal",
+  sealSuccessWarm: "Your memory is now sealed, safe, and ready to keep.",
+  sealNeedSignIn: "Please sign in again before sealing this memory.",
+  sealRingReadFailed:
+    "Ring touch did not complete. Try touching again, or use Save Securely below.",
+  sealCommitRetryHint:
+    "Your memory is safe. Final sealing is still finishing—please retry confirm in a moment.",
+  sealFallbackTitle: "Touch did not work?",
+  sealFallbackBody:
+    "If ring touch is not convenient right now, you can still finish safely with device verification.",
+  sealFallbackPassword: "Device password",
+  sealFallbackRecovery: "Or recovery code",
+  sealFallbackAction: "Save Securely",
+  sealFallbackWorking: "Saving securely...",
   sealPromptClose: "Close",
+  errInvalidTicket: "Please touch your ring again to confirm your identity.",
+  errTicketExpired: "That confirmation timed out. Please try Seal with Ring again.",
+  errTicketUsed: "This confirmation was already used. Please touch your ring again.",
+  errInvalidRingTouch: "We could not read your ring clearly. Please try touching again.",
+  errRingNotLinked: "This ring is not linked yet. Please use one of your linked rings.",
+  errRateLimited: "You are moving a little fast. Please wait a moment and try again.",
+  errNeedSignIn: "Please sign in again, then continue sealing your memory.",
+  errGenericWarmFallback:
+    "Something small went wrong. Please try again shortly, or use Save Securely.",
   backlogTitle: "Planned enhancements (backlog)",
-  backlogTimeCapsule: "Time capsule scheduling UI (deferred release time).",
+  backlogTimeCapsule: "Advanced time capsule rules (for example recurring unlock plans).",
   backlogTags: "Richer tag editor (multi-tag suggestions and quick chips).",
   backlogGeo: "Optional location marker with explicit permission flow.",
+  draftBoxTitle: "Draft box",
+  draftBoxEmpty: "No saved drafts yet.",
+  draftSealSelected: "Seal selected drafts ({n})",
+  draftEdit: "Edit",
+  draftSealNow: "Seal now",
+  undoSealAction: "Undo",
+  feedbackUndoWindow:
+    "Preparing to seal {n} draft(s). You can undo for a few seconds.",
+  feedbackUndoDone: "Seal action was undone. Drafts are still in your box.",
 };
 
 export const NEW_MEMORY_PAGE_CONTENT = {

@@ -4,6 +4,10 @@ const EN = {
   installing: "Installing...",
   install: "Install App",
   offlineReady: "Offline mode ready.",
+  installPreparingTimeout:
+    "Install setup is preparing. If it takes too long, you can add to Home Screen later from Settings.",
+  installReadyAfterDelay:
+    "Install setup is now ready. You can continue installing from this page.",
 };
 
 export const PWA_INSTALL_CARD_CONTENT = {
