@@ -44,11 +44,8 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
               {(t.howHavenWorksRows || []).map((row) => (
                 <article key={row.operation} style={styles.flowRow}>
                   <p style={styles.flowTitle}>{row.operation}</p>
-                  <p style={styles.flowMeta}>
-                    是否需要戒指：{row.ringRequired}
-                  </p>
-                  <p style={styles.flowMeta}>推荐方式：{row.recommended}</p>
-                  <p style={styles.flowHint}>重要说明：{row.note}</p>
+                  <p style={styles.flowMeta}>Ring Required: {row.ringRequired}</p>
+                  <p style={styles.flowHint}>Recommended: {row.recommended}</p>
                 </article>
               ))}
             </div>

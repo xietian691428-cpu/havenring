@@ -2,22 +2,11 @@ const EN = {
   brand: "New Memory",
   title: "Capture this moment",
   sealGuidance:
-    "Do not tap your ring while editing. Tap only after pressing Seal with Ring Now.",
-  layeredCoreLine:
-    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
+    "Seal with Ring is recommended for important memories. Save Securely with Face ID is always available.",
   sealGuidanceIos:
     "On iPhone, Save Securely is the smooth default. Seal with Ring remains available as an optional ritual.",
   sealGuidanceAndroid:
     "On Android, Seal with Ring works well for daily ritual use. Save Securely stays available anytime.",
-  statusCardTitle: "Your current status",
-  statusSignedIn: "Signed in to account",
-  statusSignedOut: "Not signed in yet",
-  statusRingLinked: "Ring linked to this account",
-  statusRingNotLinked: "No ring linked yet",
-  statusSealRuleWithRing:
-    "For precious memories: Ring is recommended for the ritual. Save Securely still works anytime.",
-  statusSealRuleNoRing:
-    "Ring touch is not required. You can always finish with Save Securely with Face ID.",
   firstMemoryQuickTitle: "Your first memory can be simple",
   firstMemoryQuickBody:
     "Start with a short title and one sentence. You can add files and advanced options later.",
@@ -108,9 +97,6 @@ const EN = {
   sealFallbackRecovery: "Or recovery code",
   sealFallbackAction: "Save Securely with Face ID",
   sealSecureQuickAction: "Save Securely with Face ID",
-  sealChoiceHintTitle: "How Haven Works",
-  sealChoiceHintBody:
-    "重要记忆推荐使用戒指封印（仪式路径），但并非强制。你也可以随时使用 Save Securely with Face ID。",
   sealFallbackWorking: "Saving securely...",
   sealPromptClose: "Close",
   errInvalidTicket: "Please touch your ring again to confirm your identity.",

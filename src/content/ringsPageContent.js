@@ -46,14 +46,46 @@ const EN = {
   androidUsageHint: "You can also rewrite the ring link here when needed.",
   rewriteLinkAction: "Rewrite ring link",
   quickGuideTitle: "How Haven Works",
-  quickGuideIntro: "欢迎来到你的私人记忆圣殿。这里的一切都设计得简单且安全。",
+  quickGuideIntro:
+    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
   quickGuideOneLine:
-    "一句话总结：“戒指为你提供速度与仪式感，Face ID 保护你的账号安全。”",
-  quickGuidePoints: [
-    "日常打开应用：戒指强烈推荐但不强制，也可用 Face ID / Passkey。",
-    "快速记录想法：不需要戒指，登录后可直接记录到草稿箱。",
-    "重要记忆封印：推荐 Seal with Ring，备选 Save Securely with Face ID。",
-    "高风险操作（解绑、导出、删除）：必须二次验证。",
+    "The ring is your magical key for speed and ceremony. Face ID keeps everything secure.",
+  quickGuideRows: [
+    {
+      action: "Open the app daily",
+      required: "No (Strongly recommended)",
+      way: "Touch your ring or use Face ID",
+    },
+    {
+      action: "Quick notes / drafts",
+      required: "No",
+      way: "Just start typing",
+    },
+    {
+      action: "Seal an important memory",
+      required: "Recommended",
+      way: "Seal with Ring (ritual) or Save Securely",
+    },
+    {
+      action: "Add / remove a ring",
+      required: "Yes",
+      way: "Face ID confirmation",
+    },
+    {
+      action: "Export data",
+      required: "Yes",
+      way: "Face ID confirmation",
+    },
+    {
+      action: "Delete sealed content",
+      required: "Yes",
+      way: "Face ID + extra confirmation",
+    },
+    {
+      action: "Handle a lost ring",
+      required: "No",
+      way: "Revoke from any logged-in device",
+    },
   ],
 };
 

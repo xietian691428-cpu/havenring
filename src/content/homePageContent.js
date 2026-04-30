@@ -2,10 +2,10 @@ const EN = {
   brand: "Haven Ring",
   title: "Welcome back to your Haven",
   subtitle:
-    "Your private space for stories, photos, and voice memories. Your account is always the owner of every memory.",
+    "Your private space for memories.",
   howTitle: "How it works",
   howBody:
-    "Your ring is a quick way in: tap to open or seal. You can link up to 5 rings, and every ring works the same way. No master ring. For daily stability on iPhone, open Haven from the Home Screen icon.",
+    "Use your ring for fast access, or continue with Face ID anytime.",
   ringSignInTitle: "Ring detected",
   ringSignInBody:
     "Sign in to continue. Your ring helps you enter quickly, but your account stays in control of access.",
@@ -46,7 +46,7 @@ const EN = {
   ringSetupCta: "Add NFC rings",
   firstMissionTitle: "Your first step",
   firstMissionBody:
-    "Create your first memory first. Ring setup is warmly recommended after that, and you can always do it later.",
+    "Create your first memory now. You can set up your ring right after.",
   firstMissionPrimary: "Create my first memory",
   firstMissionSecondary: "Set up ring (recommended)",
 };

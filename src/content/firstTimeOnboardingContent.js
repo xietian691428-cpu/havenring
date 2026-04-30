@@ -11,17 +11,6 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
     back: "Back",
     start: "Start Using Now",
     openNfcGuide: "See ring position guide in Settings",
-    howHavenWorksTitle: "How Haven Works",
-    howHavenWorksIntro:
-      "欢迎来到你的私人记忆圣殿。这里的一切都设计得简单且安全。",
-    howHavenWorksPoints: [
-      "日常打开应用：戒指不强制（强烈推荐），也可用 Face ID / Touch ID / Passkey。",
-      "快速记录想法（草稿箱）：不需要戒指，登录后直接开始记录。",
-      "重要记忆封印（Seal）：推荐 Seal with Ring；备选 Save Securely（Face ID）。",
-      "高风险操作（加/解绑戒指、导出迁移、删除封印）：必须二次验证。",
-    ],
-    howHavenWorksOneLine:
-      "一句话总结：“戒指为你提供速度与仪式感，Face ID 保护你的账号安全。”",
     platformHintIos:
       "On iPhone, open Haven from the Home Screen icon for the smoothest daily experience.",
     platformHintAndroid:
@@ -31,25 +20,25 @@ export const FIRST_TIME_ONBOARDING_CONTENT = {
         id: "welcome",
         icon: "💛",
         title: "Your memories always belong to you",
-        body: "Haven is your private memory sanctuary. Your signed-in account is the owner of every memory, now and in the future.",
+        body: "Your signed-in account is the trusted home for every memory.",
       },
       {
         id: "create-first",
         icon: "✍️",
-        title: "Start with one memory first",
-        body: "Write a short story, add photos if you like, and save. You can do this immediately without learning NFC first.",
+        title: "Capture your first memory",
+        body: "Write a title, add your story, and save in seconds.",
       },
       {
         id: "entry-url",
         icon: "💍",
         title: "Ring setup is recommended, not required",
-        body: "Your NFC ring adds a beautiful quick-open and sealing ritual. If you are in a hurry, you can skip now and set it up later.",
+        body: "Use your ring for fast access and ritual sealing, or set it up later.",
       },
       {
         id: "daily",
         icon: "✨",
         title: "Daily use stays simple",
-        body: "Open Haven, add memories, and seal when you want. For precious moments, use Seal with Ring as your ritual, or Save Securely with Face ID as smooth fallback.",
+        body: "Open Haven, capture moments, and choose Seal with Ring or Save Securely.",
       },
     ],
   },

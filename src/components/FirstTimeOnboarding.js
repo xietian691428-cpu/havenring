@@ -82,19 +82,6 @@ export function FirstTimeOnboarding({
             </div>
             <h3 style={styles.stepTitle}>{step.title}</h3>
             <p style={styles.stepBody}>{step.body}</p>
-            {step.id === "entry-url" || step.id === "daily" ? (
-              <section style={styles.quickGuideBox}>
-                <p style={styles.quickGuideTitle}>{t.howHavenWorksTitle}</p>
-                <p style={styles.quickGuideBody}>{t.howHavenWorksIntro}</p>
-                {(t.howHavenWorksPoints || []).map((point) => (
-                  <p key={point} style={styles.quickGuidePoint}>
-                    {point}
-                  </p>
-                ))}
-                <p style={styles.quickGuideOneLine}>{t.howHavenWorksOneLine}</p>
-              </section>
-            ) : null}
-
             {step.id === "entry-url" ? (
               <button
                 type="button"
@@ -237,38 +224,6 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
     fontSize: 15,
-  },
-  quickGuideBox: {
-    border: "1px solid #3d2f28",
-    borderRadius: 12,
-    background: "#14100f",
-    padding: 12,
-    display: "grid",
-    gap: 6,
-  },
-  quickGuideTitle: {
-    margin: 0,
-    fontSize: 18,
-    color: "#f8efe7",
-    fontWeight: 650,
-  },
-  quickGuideBody: {
-    margin: 0,
-    color: "#e4ccbc",
-    fontSize: 14,
-    lineHeight: 1.55,
-  },
-  quickGuidePoint: {
-    margin: 0,
-    color: "#e4ccbc",
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-  quickGuideOneLine: {
-    margin: 0,
-    color: "#f0c29e",
-    fontSize: 13,
-    lineHeight: 1.5,
   },
   footer: {
     display: "flex",

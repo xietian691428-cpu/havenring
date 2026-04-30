@@ -211,7 +211,6 @@ export function RingsPage({
             <p style={styles.brand}>{t.brand}</p>
             <h1 style={styles.title}>{t.title}</h1>
             <p style={styles.subtitle}>{t.subtitle}</p>
-            <p style={styles.note}>{t.layeredCoreLine}</p>
           </div>
           <OnlineStatusBadge locale={locale} />
         </header>
@@ -222,15 +221,18 @@ export function RingsPage({
         {rings.length >= MAX_BOUND_RINGS ? (
           <p style={styles.note}>{t.limitReachedHint}</p>
         ) : null}
-        <p style={styles.privacyNote}>{t.privacyNote}</p>
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
           <p style={styles.guideBody}>{t.quickGuideIntro}</p>
-          {(t.quickGuidePoints || []).map((point) => (
-            <p key={point} style={styles.guideBullet}>
-              {point}
-            </p>
-          ))}
+          <div style={styles.guideTable}>
+            {(t.quickGuideRows || []).map((row) => (
+              <article key={row.action} style={styles.guideRow}>
+                <p style={styles.guideHead}>{row.action}</p>
+                <p style={styles.guideCell}>Ring Required: {row.required}</p>
+                <p style={styles.guideCell}>Recommended: {row.way}</p>
+              </article>
+            ))}
+          </div>
           <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
         </section>
         <p style={styles.note}>
@@ -456,6 +458,33 @@ const styles = {
     fontSize: 12,
     color: sanctuaryTheme.accentSoft,
     lineHeight: 1.5,
+  },
+  guideTable: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 6,
+    alignItems: "start",
+  },
+  guideRow: {
+    border: "1px solid rgba(232, 220, 208, 0.12)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    display: "grid",
+    gap: 4,
+  },
+  guideHead: {
+    margin: 0,
+    fontSize: 11,
+    color: sanctuaryTheme.accentSoft,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    fontWeight: 700,
+  },
+  guideCell: {
+    margin: 0,
+    fontSize: 12,
+    color: sanctuaryTheme.inkSoft,
+    lineHeight: 1.45,
   },
   success: {
     margin: 0,

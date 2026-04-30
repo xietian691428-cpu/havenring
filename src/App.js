@@ -546,8 +546,6 @@ function AppOrchestrator() {
       <FadePage pageKey="new" direction={transitionDirection}>
         <NewMemoryPage
           locale={locale}
-          hasSession={Boolean(supabaseSession)}
-          hasBoundRing={boundRingCount > 0}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onSaveMemory={createMemory}
           onSaved={async () => {

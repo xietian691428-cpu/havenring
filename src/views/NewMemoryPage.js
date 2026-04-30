@@ -52,8 +52,6 @@ export function NewMemoryPage({
   onSaveMemory,
   onViewTimeline,
   locale = "en",
-  hasSession = false,
-  hasBoundRing = false,
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
   const [title, setTitle] = useState("");
@@ -679,25 +677,6 @@ export function NewMemoryPage({
         <p style={styles.sealGuidance}>
           {isIosLikeDevice ? t.sealGuidanceIos || t.sealGuidance : t.sealGuidanceAndroid || t.sealGuidance}
         </p>
-        <p style={styles.hint}>{t.layeredCoreLine || ""}</p>
-        <section style={styles.noticeBox}>
-          <p style={styles.noticeTitle}>{t.statusCardTitle || "Your current status"}</p>
-          <p style={styles.hint}>
-            {hasSession ? t.statusSignedIn || "Signed in to account" : t.statusSignedOut || "Not signed in yet"}
-          </p>
-          <p style={styles.hint}>
-            {hasBoundRing
-              ? t.statusRingLinked || "Ring linked to this account"
-              : t.statusRingNotLinked || "No ring linked yet"}
-          </p>
-          <p style={styles.hint}>
-            {hasBoundRing
-              ? t.statusSealRuleWithRing ||
-                "For precious memories: Ring is recommended for the ritual. Save Securely still works anytime."
-              : t.statusSealRuleNoRing ||
-                "Ring touch is not required. You can always finish with Save Securely with Face ID."}
-          </p>
-        </section>
         {isFirstMemoryMode ? (
           <section style={styles.noticeBox}>
             <p style={styles.noticeTitle}>{t.firstMemoryQuickTitle}</p>
@@ -873,16 +852,9 @@ export function NewMemoryPage({
           </label>
         ) : null}
 
-        <button type="button" onClick={handleSave} disabled={saving} style={styles.secondaryButton}>
+        <button type="button" onClick={handleSave} disabled={saving} style={styles.linkButton}>
           {saving ? t.saving : t.save}
         </button>
-        <section style={styles.noticeBox}>
-          <p style={styles.noticeTitle}>{t.sealChoiceHintTitle || "How Haven Works"}</p>
-          <p style={styles.hint}>
-            {t.sealChoiceHintBody ||
-              "重要记忆推荐使用戒指封印（仪式路径），但并非强制。你也可以随时使用 Save Securely with Face ID。"}
-          </p>
-        </section>
         <button type="button" onClick={handleSealNow} disabled={saving} style={styles.primaryButton}>
           {isIosLikeDevice ? t.sealNowOptionalIos || t.sealNow : t.sealNow}
         </button>
@@ -1032,41 +1004,6 @@ export function NewMemoryPage({
           </section>
         ) : null}
 
-        <div style={styles.feedbackToggles}>
-          <label style={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={hapticEnabled}
-              onChange={(e) => {
-                updateFeedbackPrefs({ hapticEnabled: e.target.checked });
-              }}
-            />
-            {t.haptic}
-          </label>
-          <label style={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={soundEnabled}
-              onChange={(e) => {
-                updateFeedbackPrefs({ soundEnabled: e.target.checked });
-              }}
-            />
-            {t.sound}
-          </label>
-          <label style={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={soundScope === "save_only"}
-              onChange={(e) => {
-                updateFeedbackPrefs({
-                  soundScope: e.target.checked ? "save_only" : "all_success",
-                });
-              }}
-            />
-            {t.soundSaveOnly}
-          </label>
-        </div>
-
         <p style={styles.feedback}>{feedback || "\u00A0"}</p>
         {pendingSealIds.length ? (
           <div style={styles.voiceActions}>
@@ -1079,17 +1016,7 @@ export function NewMemoryPage({
             </button>
           </div>
         ) : null}
-        <p style={styles.hint}>
-          {t.privacyHint}
-        </p>
-        <section style={styles.backlogBox}>
-          <p style={styles.backlogTitle}>{t.backlogTitle}</p>
-          <ul style={styles.backlogList}>
-            <li>{t.backlogTimeCapsule}</li>
-            <li>{t.backlogTags}</li>
-            <li>{t.backlogGeo}</li>
-          </ul>
-        </section>
+        <p style={styles.hint}>{t.privacyHint}</p>
       </section>
       <SaveToHavenDialog
         locale={locale}
@@ -1334,6 +1261,16 @@ const styles = {
     color: "#f0c29e",
     padding: "8px 12px",
     cursor: "pointer",
+  },
+  linkButton: {
+    border: "none",
+    background: "transparent",
+    color: "#d9c3b3",
+    textDecoration: "underline",
+    padding: "2px 0 4px",
+    justifySelf: "start",
+    cursor: "pointer",
+    fontSize: 13,
   },
   clearButton: {
     border: "1px solid #5a3b30",
