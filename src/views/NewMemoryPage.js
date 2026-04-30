@@ -873,11 +873,26 @@ export function NewMemoryPage({
           </label>
         ) : null}
 
-        <button type="button" onClick={handleSave} disabled={saving} style={styles.primaryButton}>
+        <button type="button" onClick={handleSave} disabled={saving} style={styles.secondaryButton}>
           {saving ? t.saving : t.save}
         </button>
-        <button type="button" onClick={handleSealNow} disabled={saving} style={styles.secondaryButton}>
+        <section style={styles.noticeBox}>
+          <p style={styles.noticeTitle}>{t.sealChoiceHintTitle || "How Haven Works"}</p>
+          <p style={styles.hint}>
+            {t.sealChoiceHintBody ||
+              "重要记忆推荐使用戒指封印（仪式路径），但并非强制。你也可以随时使用 Save Securely with Face ID。"}
+          </p>
+        </section>
+        <button type="button" onClick={handleSealNow} disabled={saving} style={styles.primaryButton}>
           {isIosLikeDevice ? t.sealNowOptionalIos || t.sealNow : t.sealNow}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSecureSave()}
+          disabled={secureSaveBusy || saving || ringTapBusy}
+          style={styles.secondaryButton}
+        >
+          {secureSaveBusy ? t.sealFallbackWorking : t.sealSecureQuickAction || t.sealFallbackAction}
         </button>
         <section style={styles.backlogBox}>
           <p style={styles.backlogTitle}>{t.draftBoxTitle}</p>

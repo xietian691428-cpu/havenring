@@ -223,6 +223,16 @@ export function RingsPage({
           <p style={styles.note}>{t.limitReachedHint}</p>
         ) : null}
         <p style={styles.privacyNote}>{t.privacyNote}</p>
+        <section style={styles.guideCard}>
+          <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
+          <p style={styles.guideBody}>{t.quickGuideIntro}</p>
+          {(t.quickGuidePoints || []).map((point) => (
+            <p key={point} style={styles.guideBullet}>
+              {point}
+            </p>
+          ))}
+          <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
+        </section>
         <p style={styles.note}>
           {platformGuidance.isIos ? t.iosUsageHint : t.androidUsageHint}
         </p>
@@ -414,6 +424,38 @@ const styles = {
     margin: 0,
     fontSize: 12,
     color: sanctuaryTheme.inkSoft,
+  },
+  guideCard: {
+    border: "1px solid rgba(232, 220, 208, 0.16)",
+    borderRadius: 14,
+    background: "rgba(26, 21, 18, 0.44)",
+    padding: 12,
+    display: "grid",
+    gap: 6,
+  },
+  guideTitle: {
+    margin: 0,
+    fontSize: 16,
+    color: sanctuaryTheme.cream,
+    fontWeight: 650,
+  },
+  guideBody: {
+    margin: 0,
+    fontSize: 13,
+    color: sanctuaryTheme.inkSoft,
+    lineHeight: 1.55,
+  },
+  guideBullet: {
+    margin: 0,
+    fontSize: 12,
+    color: sanctuaryTheme.inkSoft,
+    lineHeight: 1.5,
+  },
+  guideOneLine: {
+    margin: 0,
+    fontSize: 12,
+    color: sanctuaryTheme.accentSoft,
+    lineHeight: 1.5,
   },
   success: {
     margin: 0,

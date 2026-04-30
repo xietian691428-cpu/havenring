@@ -33,6 +33,65 @@ const EN = {
   contactTitle: "Contact Support",
   contactBody: "Still stuck? Reach out and we will help you personally.",
   supportEmail: "support@havenring.me",
+  howHavenWorksTitle: "How Haven Works",
+  howHavenWorksIntro:
+    "欢迎来到你的私人记忆圣殿。这里的一切都设计得简单且安全。",
+  howHavenWorksRows: [
+    {
+      operation: "日常打开应用",
+      ringRequired: "不强制（强烈推荐）",
+      recommended:
+        "优先：触碰戒指一触即达；备选：Face ID / Touch ID / Passkey",
+      note: "最常用的方式，推荐把 App 添加到主屏幕",
+    },
+    {
+      operation: "快速记录想法（草稿箱）",
+      ringRequired: "不需要",
+      recommended: "登录后直接开始记录",
+      note: "随时随地捕捉灵感，无需戒指",
+    },
+    {
+      operation: "重要记忆封印（Seal）",
+      ringRequired: "推荐使用",
+      recommended:
+        "主推荐：Seal with Ring（仪式路径）；备选：Save Securely（Face ID）",
+      note: "为特别珍贵的回忆增加神圣仪式感",
+    },
+    {
+      operation: "添加或解绑戒指",
+      ringRequired: "必须",
+      recommended: "Face ID / Touch ID 二次验证",
+      note: "高安全操作，需要本人确认",
+    },
+    {
+      operation: "数据导出或迁移",
+      ringRequired: "必须",
+      recommended: "Face ID / Touch ID 二次验证",
+      note: "保护你的全部记忆",
+    },
+    {
+      operation: "删除已封印的内容",
+      ringRequired: "必须",
+      recommended: "Face ID + 额外确认",
+      note: "非常谨慎的操作，默认封印内容不可修改",
+    },
+    {
+      operation: "丢失戒指处理",
+      ringRequired: "不需要",
+      recommended: "在任意已登录设备上远程解除（需 Face ID）",
+      note: "戒指丢失不影响你的记忆安全",
+    },
+  ],
+  howHavenWorksKeyPointsTitle: "快速了解 Haven 的 5 个关键点",
+  howHavenWorksKeyPoints: [
+    "1. 戒指的作用：魔法快捷钥匙 + 重要记忆的仪式工具",
+    "2. 安全机制：日常使用戒指 + Face ID 双重保护，所有重要操作必须二次验证",
+    "3. iPhone 用户提示：Seal with Ring 可能需要备选方式，建议添加应用到主屏幕",
+    "4. 推荐做法：准备至少 2 枚戒指，重要回忆使用 Seal with Ring",
+    "5. 你的记忆非常安全：封印内容默认永久保存且不可修改，受端到端加密保护",
+  ],
+  howHavenWorksOneLine:
+    "一句话总结：“戒指为你提供速度与仪式感，Face ID 保护你的账号安全。”",
 };
 
 export const HELP_CENTER_CONTENT = {

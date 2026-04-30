@@ -38,6 +38,32 @@ export function HelpCenterPage({ onBack, locale = "en" }) {
           </button>
 
           <section style={styles.card}>
+            <h2 style={styles.sectionTitle}>{t.howHavenWorksTitle}</h2>
+            <p style={styles.copy}>{t.howHavenWorksIntro}</p>
+            <div style={styles.flowGrid}>
+              {(t.howHavenWorksRows || []).map((row) => (
+                <article key={row.operation} style={styles.flowRow}>
+                  <p style={styles.flowTitle}>{row.operation}</p>
+                  <p style={styles.flowMeta}>
+                    是否需要戒指：{row.ringRequired}
+                  </p>
+                  <p style={styles.flowMeta}>推荐方式：{row.recommended}</p>
+                  <p style={styles.flowHint}>重要说明：{row.note}</p>
+                </article>
+              ))}
+            </div>
+            <p style={styles.sectionTitle}>{t.howHavenWorksKeyPointsTitle}</p>
+            <div style={styles.faqList}>
+              {(t.howHavenWorksKeyPoints || []).map((point) => (
+                <p key={point} style={styles.copy}>
+                  {point}
+                </p>
+              ))}
+            </div>
+            <p style={styles.copy}>{t.howHavenWorksOneLine}</p>
+          </section>
+
+          <section style={styles.card}>
             <h2 style={styles.sectionTitle}>{t.quickTitle}</h2>
             <p style={styles.copy}>{t.quickBody}</p>
             <button
@@ -199,6 +225,36 @@ const styles = {
     background: "#1a1412",
     display: "grid",
     gap: 5,
+  },
+  flowGrid: {
+    display: "grid",
+    gap: 8,
+  },
+  flowRow: {
+    border: "1px solid #3a2d28",
+    borderRadius: 12,
+    padding: 10,
+    background: "#1a1412",
+    display: "grid",
+    gap: 4,
+  },
+  flowTitle: {
+    margin: 0,
+    fontSize: 16,
+    color: "#f8efe7",
+    fontWeight: 650,
+  },
+  flowMeta: {
+    margin: 0,
+    color: "#e4ccbc",
+    lineHeight: 1.5,
+    fontSize: 14,
+  },
+  flowHint: {
+    margin: 0,
+    color: "#d9c3b3",
+    lineHeight: 1.5,
+    fontSize: 13,
   },
   faqQuestion: {
     margin: 0,

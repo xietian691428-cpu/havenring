@@ -45,6 +45,16 @@ const EN = {
     "Touch your ring to quickly access your sanctuary. Advanced option: ring link rewrite is available on Android devices.",
   androidUsageHint: "You can also rewrite the ring link here when needed.",
   rewriteLinkAction: "Rewrite ring link",
+  quickGuideTitle: "How Haven Works",
+  quickGuideIntro: "欢迎来到你的私人记忆圣殿。这里的一切都设计得简单且安全。",
+  quickGuideOneLine:
+    "一句话总结：“戒指为你提供速度与仪式感，Face ID 保护你的账号安全。”",
+  quickGuidePoints: [
+    "日常打开应用：戒指强烈推荐但不强制，也可用 Face ID / Passkey。",
+    "快速记录想法：不需要戒指，登录后可直接记录到草稿箱。",
+    "重要记忆封印：推荐 Seal with Ring，备选 Save Securely with Face ID。",
+    "高风险操作（解绑、导出、删除）：必须二次验证。",
+  ],
 };
 
 export const RINGS_PAGE_CONTENT = {
