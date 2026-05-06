@@ -2,7 +2,7 @@ const EN = {
   brand: "Haven",
   title: "My rings",
   subtitle:
-    "Quick access keys to your memory space. Any bound ring works equally for quick login and recommended sealing.",
+    "Quick access keys to your memory space. Any trusted ring can open Haven and seal sacred memories.",
   layeredCoreLine:
     "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
   emptyTitle: "No rings registered yet",
@@ -18,6 +18,8 @@ const EN = {
   linkedMemories: "Linked memories",
   neverUsed: "Never used yet",
   revoke: "Revoke ring",
+  rename: "Rename",
+  renamePrompt: "Rename this ring",
   revoking: "Revoking…",
   syncLoading: "Loading cloud ring bindings…",
   syncFailed: "Could not load cloud ring data. Check sign-in/network and retry.",
@@ -37,21 +39,24 @@ const EN = {
   cloudSignInRequired: "Sign in first to manage cloud-linked rings.",
   cloudSignInAction: "Open Settings to sign in",
   unknownDate: "—",
-  openSetup: "Register another ring",
+  openSetup: "+ Add New Ring",
   settingsLink: "Privacy & backup",
   privacyNote:
-    "Every ring is equal: any one can be used for quick login and recommended sealing. Your account stays the owner of all memories.",
+    "Every trusted ring is equal: any one can be used for quick login and sealing. Your account stays the owner of all memories.",
   iosUsageHint:
     "Touch your ring to quickly access your sanctuary. Advanced option: ring link rewrite is available on Android devices.",
   androidUsageHint: "You can also rewrite the ring link here when needed.",
   rewriteLinkAction: "Rewrite ring link",
+  ringRequiredLabel: "Ring Required:",
+  recommendedLabel: "Recommended:",
+  actionLabel: "What you want to do",
   quickGuideTitle: "How Haven Works",
   quickGuideIntro:
     "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
   quickGuideSummaryLines: [
-    "Open daily: ring touch is recommended, Face ID always works.",
-    "Quick drafts: start typing immediately, no ring required.",
-    "Seal memories: choose Seal with Ring or Save Securely.",
+    "Open daily: touch your ring for the fastest path, or use Face ID.",
+    "Quick notes and drafts: just start writing.",
+    "Seal memories: only a trusted ring can complete the ritual.",
   ],
   quickGuideLearnMore: "Learn more",
   quickGuideShowLess: "Show less",
@@ -61,20 +66,20 @@ const EN = {
     {
       action: "Open the app daily",
       required: "No (Strongly recommended)",
-      way: "Touch your ring or use Face ID",
+      way: "Touch your ring (fastest) or Face ID",
     },
     {
-      action: "Quick notes / drafts",
+      action: "Quick notes & drafts",
       required: "No",
-      way: "Just start typing",
+      way: "Just start writing",
     },
     {
       action: "Seal an important memory",
-      required: "Recommended",
-      way: "Seal with Ring (ritual) or Save Securely",
+      required: "Yes",
+      way: "Seal with Ring (required)",
     },
     {
-      action: "Add / remove a ring",
+      action: "Add or remove a ring",
       required: "Yes",
       way: "Face ID confirmation",
     },
@@ -84,14 +89,14 @@ const EN = {
       way: "Face ID confirmation",
     },
     {
-      action: "Delete sealed content",
+      action: "Delete sealed memories",
       required: "Yes",
       way: "Face ID + extra confirmation",
     },
     {
       action: "Handle a lost ring",
       required: "No",
-      way: "Revoke from any logged-in device",
+      way: "Revoke from any signed-in device",
     },
   ],
 };
@@ -105,8 +110,60 @@ export const RINGS_PAGE_CONTENT = {
     emptyTitle: "Aucune bague enregistree",
     emptyBody: "Ajoutez vos bagues NFC. Au moins deux sont recommandees.",
     addRing: "Ajouter une bague",
-    openSetup: "Enregistrer une autre bague",
+    openSetup: "+ Ajouter une bague",
     settingsLink: "Confidentialite et sauvegarde",
+    ringRequiredLabel: "Bague requise :",
+    recommendedLabel: "Recommandé :",
+    actionLabel: "Ce que vous voulez faire",
+    quickGuideTitle: "Comment Haven fonctionne",
+    quickGuideIntro:
+      "Face ID protège votre compte. Votre bague vous offre un accès rapide et un rituel spécial pour vos souvenirs les plus précieux.",
+    quickGuideSummaryLines: [
+      "Ouverture quotidienne : touchez votre bague pour le chemin le plus rapide, ou utilisez Face ID.",
+      "Notes rapides et brouillons : commencez simplement à écrire.",
+      "Sceller : seule une bague de confiance peut compléter le rituel.",
+    ],
+    quickGuideLearnMore: "En savoir plus",
+    quickGuideShowLess: "Afficher moins",
+    quickGuideOneLine:
+      "La bague est votre clé magique pour la vitesse et le rituel. Face ID protège tout.",
+    quickGuideRows: [
+      {
+        action: "Ouvrir l'application au quotidien",
+        required: "Non (fortement recommandé)",
+        way: "Touchez votre bague (le plus rapide) ou utilisez Face ID",
+      },
+      {
+        action: "Notes rapides et brouillons",
+        required: "Non",
+        way: "Commencez simplement à écrire",
+      },
+      {
+        action: "Sceller un souvenir important",
+        required: "Oui",
+        way: "Seal with Ring (requis)",
+      },
+      {
+        action: "Ajouter ou retirer une bague",
+        required: "Oui",
+        way: "Confirmation Face ID",
+      },
+      {
+        action: "Exporter des données",
+        required: "Oui",
+        way: "Confirmation Face ID",
+      },
+      {
+        action: "Supprimer des souvenirs scellés",
+        required: "Oui",
+        way: "Face ID + confirmation supplémentaire",
+      },
+      {
+        action: "Gérer une bague perdue",
+        required: "Non",
+        way: "Révoquez depuis tout appareil connecté",
+      },
+    ],
   },
   es: {
     ...EN,
@@ -114,8 +171,60 @@ export const RINGS_PAGE_CONTENT = {
     subtitle: "Accesos rapidos. Cada anillo vale igual.",
     emptyTitle: "Sin anillos registrados",
     addRing: "Anadir anillo",
-    openSetup: "Registrar otro anillo",
+    openSetup: "+ Añadir anillo",
     settingsLink: "Privacidad y copia",
+    ringRequiredLabel: "¿Anillo requerido?:",
+    recommendedLabel: "Recomendado:",
+    actionLabel: "Qué quieres hacer",
+    quickGuideTitle: "Cómo funciona Haven",
+    quickGuideIntro:
+      "Face ID protege tu cuenta. Tu anillo te da acceso rápido y un ritual especial para tus recuerdos más valiosos.",
+    quickGuideSummaryLines: [
+      "A diario: toca el anillo para el camino más rápido, o usa Face ID.",
+      "Notas rápidas y borradores: empieza a escribir.",
+      "Sellar: solo un anillo de confianza puede completar el ritual.",
+    ],
+    quickGuideLearnMore: "Saber más",
+    quickGuideShowLess: "Mostrar menos",
+    quickGuideOneLine:
+      "El anillo es tu llave mágica para velocidad y ceremonia. Face ID lo mantiene seguro.",
+    quickGuideRows: [
+      {
+        action: "Abrir la app a diario",
+        required: "No (muy recomendado)",
+        way: "Toca tu anillo (más rápido) o usa Face ID",
+      },
+      {
+        action: "Notas rápidas y borradores",
+        required: "No",
+        way: "Empieza a escribir",
+      },
+      {
+        action: "Sellar un recuerdo importante",
+        required: "Sí",
+        way: "Seal with Ring (requerido)",
+      },
+      {
+        action: "Añadir o quitar un anillo",
+        required: "Sí",
+        way: "Confirmación con Face ID",
+      },
+      {
+        action: "Exportar datos",
+        required: "Sí",
+        way: "Confirmación con Face ID",
+      },
+      {
+        action: "Eliminar recuerdos sellados",
+        required: "Sí",
+        way: "Face ID + confirmación extra",
+      },
+      {
+        action: "Gestionar un anillo perdido",
+        required: "No",
+        way: "Revoca desde cualquier dispositivo con sesión activa",
+      },
+    ],
   },
   de: {
     ...EN,
@@ -123,8 +232,60 @@ export const RINGS_PAGE_CONTENT = {
     subtitle: "Schnellzugriff. Jeder Ring ist gleich.",
     emptyTitle: "Noch keine Ringe",
     addRing: "Ring hinzufugen",
-    openSetup: "Weiteren Ring registrieren",
+    openSetup: "+ Ring hinzufügen",
     settingsLink: "Datenschutz & Backup",
+    ringRequiredLabel: "Ring erforderlich:",
+    recommendedLabel: "Empfohlen:",
+    actionLabel: "Was du tun möchtest",
+    quickGuideTitle: "So funktioniert Haven",
+    quickGuideIntro:
+      "Face ID schützt dein Konto. Dein Ring gibt dir schnellen Zugriff und ein besonderes Ritual für deine wertvollsten Erinnerungen.",
+    quickGuideSummaryLines: [
+      "Täglich öffnen: Ring berühren für den schnellsten Weg, oder Face ID verwenden.",
+      "Schnelle Notizen und Entwürfe: einfach losschreiben.",
+      "Versiegeln: Nur ein vertrauenswürdiger Ring kann das Ritual abschließen.",
+    ],
+    quickGuideLearnMore: "Mehr erfahren",
+    quickGuideShowLess: "Weniger anzeigen",
+    quickGuideOneLine:
+      "Der Ring ist dein magischer Schlüssel für Tempo und Zeremonie. Face ID hält alles sicher.",
+    quickGuideRows: [
+      {
+        action: "App täglich öffnen",
+        required: "Nein (dringend empfohlen)",
+        way: "Ring berühren (am schnellsten) oder Face ID verwenden",
+      },
+      {
+        action: "Schnelle Notizen und Entwürfe",
+        required: "Nein",
+        way: "Einfach losschreiben",
+      },
+      {
+        action: "Wichtige Erinnerung versiegeln",
+        required: "Ja",
+        way: "Seal with Ring (erforderlich)",
+      },
+      {
+        action: "Ring hinzufügen oder entfernen",
+        required: "Ja",
+        way: "Face ID-Bestätigung",
+      },
+      {
+        action: "Daten exportieren",
+        required: "Ja",
+        way: "Face ID-Bestätigung",
+      },
+      {
+        action: "Versiegelte Inhalte löschen",
+        required: "Ja",
+        way: "Face ID + zusätzliche Bestätigung",
+      },
+      {
+        action: "Verlorenen Ring handhaben",
+        required: "Nein",
+        way: "Von jedem angemeldeten Gerät widerrufen",
+      },
+    ],
   },
   it: {
     ...EN,
@@ -132,7 +293,59 @@ export const RINGS_PAGE_CONTENT = {
     subtitle: "Accesso rapido. Ogni anello e uguale.",
     emptyTitle: "Nessun anello registrato",
     addRing: "Aggiungi anello",
-    openSetup: "Registra un altro anello",
+    openSetup: "+ Aggiungi anello",
     settingsLink: "Privacy e backup",
+    ringRequiredLabel: "Anello richiesto:",
+    recommendedLabel: "Consigliato:",
+    actionLabel: "Cosa vuoi fare",
+    quickGuideTitle: "Come funziona Haven",
+    quickGuideIntro:
+      "Face ID protegge il tuo account. Il tuo anello ti dà accesso rapido e un rituale speciale per i tuoi ricordi più preziosi.",
+    quickGuideSummaryLines: [
+      "Ogni giorno: tocca l'anello per il percorso più rapido, oppure usa Face ID.",
+      "Note veloci e bozze: inizia semplicemente a scrivere.",
+      "Sigillare: solo un anello fidato può completare il rituale.",
+    ],
+    quickGuideLearnMore: "Scopri di più",
+    quickGuideShowLess: "Mostra meno",
+    quickGuideOneLine:
+      "L'anello è la tua chiave magica per velocità e cerimonia. Face ID mantiene tutto al sicuro.",
+    quickGuideRows: [
+      {
+        action: "Aprire l'app ogni giorno",
+        required: "No (fortemente consigliato)",
+        way: "Tocca l'anello (più rapido) o usa Face ID",
+      },
+      {
+        action: "Note veloci e bozze",
+        required: "No",
+        way: "Inizia semplicemente a scrivere",
+      },
+      {
+        action: "Sigillare un ricordo importante",
+        required: "Sì",
+        way: "Seal with Ring (richiesto)",
+      },
+      {
+        action: "Aggiungere o rimuovere un anello",
+        required: "Sì",
+        way: "Conferma con Face ID",
+      },
+      {
+        action: "Esportare dati",
+        required: "Sì",
+        way: "Conferma con Face ID",
+      },
+      {
+        action: "Eliminare ricordi sigillati",
+        required: "Sì",
+        way: "Face ID + conferma extra",
+      },
+      {
+        action: "Gestire un anello smarrito",
+        required: "No",
+        way: "Revoca da qualsiasi dispositivo con accesso attivo",
+      },
+    ],
   },
 };

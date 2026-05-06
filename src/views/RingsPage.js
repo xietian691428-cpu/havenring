@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
 import {
@@ -8,46 +8,24 @@ import {
   removeBoundRingByCloudId,
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
-import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
-import { getPlatformGuidance } from "../utils/platformGuidance";
 
 export function RingsPage({
   locale = "en",
   onOpenRingSetup,
-  onOpenSettings,
 }) {
-  const GUIDE_EXPANDED_STORAGE_KEY = "haven.rings.guide_expanded.v1";
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
-  const platformGuidance = useMemo(() => getPlatformGuidance(), []);
   const [localRings, setLocalRings] = useState(() => getBoundRings());
   const [cloudRings, setCloudRings] = useState([]);
   const [memoryCountByRingId, setMemoryCountByRingId] = useState({});
   const [loading, setLoading] = useState(true);
-  const [syncError, setSyncError] = useState("");
-  const [status, setStatus] = useState("");
   const [busyCloudRingId, setBusyCloudRingId] = useState("");
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyPassword, setVerifyPassword] = useState("");
   const [verifyRecovery, setVerifyRecovery] = useState("");
   const [verifyError, setVerifyError] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState(null);
-  const [guideExpanded, setGuideExpanded] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(GUIDE_EXPANDED_STORAGE_KEY);
-    if (saved === "1") setGuideExpanded(true);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(
-      GUIDE_EXPANDED_STORAGE_KEY,
-      guideExpanded ? "1" : "0"
-    );
-  }, [guideExpanded]);
 
   const rings = useMemo(() => {
     const local = localRings || [];
@@ -87,14 +65,12 @@ export function RingsPage({
 
   async function loadCloudRings() {
     setLoading(true);
-    setSyncError("");
     try {
       const sb = getSupabaseBrowserClient();
       const {
         data: { session },
       } = await sb.auth.getSession();
       if (!session?.access_token) {
-        setSyncError(t.cloudSignInRequired);
         setCloudRings([]);
         setMemoryCountByRingId({});
         return;
@@ -147,7 +123,7 @@ export function RingsPage({
       }
       setMemoryCountByRingId(countMap);
     } catch {
-      setSyncError(t.syncFailed);
+      setCloudRings([]);
     } finally {
       setLoading(false);
     }
@@ -208,7 +184,6 @@ export function RingsPage({
 
       removeBoundRingByCloudId(pendingRevoke.cloudRingId);
       setLocalRings(getBoundRings());
-      setStatus(t.revokeDone);
       setVerifyOpen(false);
       setPendingRevoke(null);
       await loadCloudRings();
@@ -219,80 +194,55 @@ export function RingsPage({
     }
   }
 
+  function handleRenameRing(ring) {
+    const current = String(ring?.nickname || ring?.label || "").trim();
+    const next = window.prompt(t.renamePrompt || "Rename this ring", current);
+    if (!next || !next.trim() || next.trim() === current) return;
+    updateRingCloudMetadata(ring.uidKey, {
+      nickname: next.trim(),
+    });
+    setLocalRings(getBoundRings());
+  }
+
   return (
     <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <p style={styles.brand}>{t.brand}</p>
             <h1 style={styles.title}>{t.title}</h1>
-            <p style={styles.subtitle}>{t.subtitle}</p>
           </div>
-          <OnlineStatusBadge locale={locale} />
         </header>
-
-        <p style={styles.meta}>
-          {rings.length}/{MAX_BOUND_RINGS} · {t.maxRings}
-        </p>
-        {rings.length >= MAX_BOUND_RINGS ? (
-          <p style={styles.note}>{t.limitReachedHint}</p>
-        ) : null}
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
-          {(t.quickGuideSummaryLines || []).slice(0, 3).map((line) => (
-            <p key={line} style={styles.guideBullet}>
-              {line}
-            </p>
-          ))}
-          <button
-            type="button"
-            style={styles.ghostBtn}
-            onClick={() => setGuideExpanded((v) => !v)}
-          >
-            {guideExpanded ? t.quickGuideShowLess || "Show less" : t.quickGuideLearnMore || "Learn more"}
-          </button>
-          {guideExpanded ? (
-            <>
-              <p style={styles.guideBody}>{t.quickGuideIntro}</p>
-              <div style={styles.guideTable}>
+          <p style={styles.guideBody}>{t.quickGuideIntro}</p>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>{t.actionLabel}</th>
+                  <th style={styles.th}>{t.ringRequiredLabel}</th>
+                  <th style={styles.th}>{t.recommendedLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
                 {(t.quickGuideRows || []).map((row) => (
-                  <article key={row.action} style={styles.guideRow}>
-                    <p style={styles.guideHead}>{row.action}</p>
-                    <p style={styles.guideCell}>Ring Required: {row.required}</p>
-                    <p style={styles.guideCell}>Recommended: {row.way}</p>
-                  </article>
+                  <tr key={row.action}>
+                    <td style={styles.td}>{row.action}</td>
+                    <td style={styles.td}>{row.required}</td>
+                    <td style={styles.td}>{row.way}</td>
+                  </tr>
                 ))}
-              </div>
-              <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
-            </>
-          ) : null}
-        </section>
-        <p style={styles.note}>
-          {platformGuidance.isIos ? t.iosUsageHint : t.androidUsageHint}
-        </p>
-        {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
-        {syncError ? (
-          <div style={styles.errorRow}>
-            <p style={styles.error}>{syncError}</p>
-            <button type="button" style={styles.secondaryBtn} onClick={() => void loadCloudRings()}>
-              {t.retrySync}
-            </button>
-            {syncError === t.cloudSignInRequired ? (
-              <button type="button" style={styles.ghostBtn} onClick={onOpenSettings}>
-                {t.cloudSignInAction}
-              </button>
-            ) : null}
+              </tbody>
+            </table>
           </div>
-        ) : null}
-        {status ? <p style={styles.success}>{status}</p> : null}
+          <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
+        </section>
+        {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
 
         {rings.length === 0 ? (
           <article style={styles.emptyCard}>
             <p style={styles.emptyTitle}>{t.emptyTitle}</p>
             <p style={styles.emptyBody}>{t.emptyBody}</p>
-            <button type="button" onClick={onOpenRingSetup} style={styles.primaryBtn}>
-              {t.addRing}
-            </button>
           </article>
         ) : (
           <ul style={styles.grid}>
@@ -326,14 +276,23 @@ export function RingsPage({
                   </p>
                 </div>
                 {ring.cloudRingId ? (
-                  <button
-                    type="button"
-                    style={styles.revokeBtn}
-                    onClick={() => askRevoke(ring)}
-                    disabled={busyCloudRingId === ring.cloudRingId}
-                  >
-                    {busyCloudRingId === ring.cloudRingId ? t.revoking : t.revoke}
-                  </button>
+                  <div style={styles.ringActions}>
+                    <button
+                      type="button"
+                      style={styles.secondaryBtn}
+                      onClick={() => handleRenameRing(ring)}
+                    >
+                      {t.rename || "Rename"}
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.revokeBtn}
+                      onClick={() => askRevoke(ring)}
+                      disabled={busyCloudRingId === ring.cloudRingId}
+                    >
+                      {busyCloudRingId === ring.cloudRingId ? t.revoking : t.revoke}
+                    </button>
+                  </div>
                 ) : null}
               </li>
             ))}
@@ -341,16 +300,8 @@ export function RingsPage({
         )}
 
         <div style={styles.actions}>
-          <button type="button" onClick={onOpenRingSetup} style={styles.secondaryBtn}>
+          <button type="button" onClick={onOpenRingSetup} style={styles.primaryBtn}>
             {t.openSetup}
-          </button>
-          {platformGuidance.isAndroid ? (
-            <button type="button" onClick={onOpenRingSetup} style={styles.secondaryBtn}>
-              {t.rewriteLinkAction}
-            </button>
-          ) : null}
-          <button type="button" onClick={onOpenSettings} style={styles.ghostBtn}>
-            {t.settingsLink}
           </button>
         </div>
 
@@ -460,6 +411,9 @@ const styles = {
     color: sanctuaryTheme.inkSoft,
   },
   guideCard: {
+    position: "sticky",
+    top: 8,
+    zIndex: 2,
     border: "1px solid rgba(232, 220, 208, 0.16)",
     borderRadius: 14,
     background: "rgba(26, 21, 18, 0.44)",
@@ -491,32 +445,28 @@ const styles = {
     color: sanctuaryTheme.accentSoft,
     lineHeight: 1.5,
   },
-  guideTable: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    gap: 6,
-    alignItems: "start",
+  tableWrap: {
+    overflowX: "auto",
   },
-  guideRow: {
-    border: "1px solid rgba(232, 220, 208, 0.12)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    display: "grid",
-    gap: 4,
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: 560,
   },
-  guideHead: {
-    margin: 0,
-    fontSize: 11,
+  th: {
+    textAlign: "left",
+    fontSize: 12,
     color: sanctuaryTheme.accentSoft,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    fontWeight: 700,
+    borderBottom: "1px solid rgba(232, 220, 208, 0.22)",
+    padding: "8px 10px",
   },
-  guideCell: {
-    margin: 0,
+  td: {
     fontSize: 12,
     color: sanctuaryTheme.inkSoft,
-    lineHeight: 1.45,
+    borderBottom: "1px solid rgba(232, 220, 208, 0.12)",
+    padding: "8px 10px",
+    lineHeight: 1.4,
+    verticalAlign: "top",
   },
   success: {
     margin: 0,
@@ -577,6 +527,11 @@ const styles = {
     margin: "4px 0 0",
     fontSize: 13,
     color: sanctuaryTheme.inkSoft,
+  },
+  ringActions: {
+    display: "grid",
+    gap: 6,
+    justifyItems: "end",
   },
   revokeBtn: {
     border: "1px solid rgba(201, 123, 132, 0.55)",

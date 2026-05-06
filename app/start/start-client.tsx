@@ -38,7 +38,6 @@ function normalizeClaimValue(input: string): string {
 export default function StartClient() {
   const [busyProvider, setBusyProvider] = useState("");
   const [notice, setNotice] = useState("");
-  const [supportsPasskey, setSupportsPasskey] = useState(false);
   const [appleProviderReady, setAppleProviderReady] = useState(true);
   const [claimToken, setClaimToken] = useState("");
   const [claimState, setClaimState] = useState<
@@ -49,13 +48,6 @@ export default function StartClient() {
   const hero = START_PAGE_CONTENT.hero;
   const hasVideoHero = Boolean(hero.video);
   const claimAttemptedRef = useRef(false);
-
-  useEffect(() => {
-    setSupportsPasskey(
-      typeof window !== "undefined" &&
-        typeof window.PublicKeyCredential !== "undefined"
-    );
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -235,9 +227,6 @@ export default function StartClient() {
           <p style={styles.kicker}>Haven Ring</p>
           <h1 style={styles.title}>{guidance.startTitle}</h1>
           <p style={styles.subtitle}>{guidance.startSubtitle}</p>
-          <p style={styles.privacyLead}>
-            Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.
-          </p>
           {claimToken ? (
             <section style={styles.claimCard}>
               <p style={styles.claimTitle}>Ring setup in progress</p>
@@ -313,19 +302,6 @@ export default function StartClient() {
               ? "Opening Google Sign In..."
               : "Continue with Google"}
           </button>
-          {supportsPasskey ? (
-            <button
-              type="button"
-              onClick={() =>
-                void signInWith(platform === "ios" ? "apple" : "google")
-              }
-              disabled={Boolean(busyProvider)}
-              style={styles.secondaryButton}
-            >
-              Continue with device passkey
-            </button>
-          ) : null}
-
           <p style={styles.linkLine}>
             Already have an account?{" "}
             <a href="/" style={styles.link}>
@@ -339,42 +315,14 @@ export default function StartClient() {
             </a>
             .
           </p>
-          <section style={styles.trustCard}>
-            <p style={styles.trustTitle}>Privacy-first sign in</p>
-            <ul style={styles.trustList}>
-              <li>We never see your Apple or Google password.</li>
-              <li>Apple users can choose Hide My Email.</li>
-              <li>Your memory content stays protected in Haven.</li>
-            </ul>
-          </section>
-
-          <section
-            style={{
-              ...styles.tipCard,
-              ...(guidance.isIos ? styles.tipCardIosStrong : null),
-            }}
-          >
-            <p style={styles.tipTitle}>
-              {guidance.isIos ? "Important for iPhone" : "Best iPhone experience"}
-            </p>
-            <p style={styles.tipBody}>
-              Add Haven to your Home Screen for the smoothest app-like flow.
-            </p>
-            <ol style={styles.tipList}>
-              <li>Tap the Share button in Safari</li>
-              <li>Scroll and tap Add to Home Screen</li>
-              <li>Tap Add</li>
-            </ol>
-            {platform === "ios" ? (
-              <p style={styles.tipFootnote}>
-                This is recommended on iPhone and works like a real app.
+          {guidance.isIos ? (
+            <section style={{ ...styles.tipCard, ...styles.tipCardIosStrong }}>
+              <p style={styles.tipTitle}>iPhone tip</p>
+              <p style={styles.tipBody}>
+                In Safari, tap Share, then Add to Home Screen for the smoothest flow.
               </p>
-            ) : (
-              <p style={styles.tipFootnote}>
-                On Android, you can install directly when prompted.
-              </p>
-            )}
-          </section>
+            </section>
+          ) : null}
 
           <p style={styles.notice}>{notice || "\u00A0"}</p>
         </div>

@@ -51,6 +51,18 @@ export function FirstTimeOnboarding({
     onComplete?.();
   }
 
+  function handlePrimaryAction(step, isLastStep) {
+    if (step?.action === "open-ring-guide") {
+      setShowNfcGuide(true);
+      return;
+    }
+    if (isLastStep) {
+      handleComplete();
+      return;
+    }
+    setStepIndex((prev) => Math.min(t.steps.length - 1, prev + 1));
+  }
+
   if (!open) return null;
   const step = t.steps[stepIndex];
   const isFirst = stepIndex === 0;
@@ -77,20 +89,12 @@ export function FirstTimeOnboarding({
           </header>
 
           <article style={styles.card}>
-            <div style={styles.stepIconWrap} aria-hidden>
-              <span style={styles.stepIcon}>{step.icon}</span>
+            <div style={styles.illustrationWrap} aria-hidden>
+              {renderOnboardingIllustration(step.illustration || "welcome")}
             </div>
             <h3 style={styles.stepTitle}>{step.title}</h3>
             <p style={styles.stepBody}>{step.body}</p>
-            {step.id === "entry-url" ? (
-              <button
-                type="button"
-                onClick={() => setShowNfcGuide(true)}
-                style={styles.inlineButton}
-              >
-                {t.openNfcGuide}
-              </button>
-            ) : null}
+            {step.subtitle ? <p style={styles.stepSubline}>{step.subtitle}</p> : null}
           </article>
 
           <footer style={styles.footer}>
@@ -110,14 +114,18 @@ export function FirstTimeOnboarding({
               {!isLast ? (
                 <button
                   type="button"
-                  onClick={() => setStepIndex((prev) => Math.min(t.steps.length - 1, prev + 1))}
+                  onClick={() => handlePrimaryAction(step, false)}
                   style={styles.primaryButton}
                 >
-                  {t.next}
+                  {step.primaryButton || t.next}
                 </button>
               ) : (
-                <button type="button" onClick={handleComplete} style={styles.primaryButton}>
-                  {t.start}
+                <button
+                  type="button"
+                  onClick={() => handlePrimaryAction(step, true)}
+                  style={styles.primaryButton}
+                >
+                  {step.primaryButton || t.start}
                 </button>
               )}
             </div>
@@ -132,6 +140,50 @@ export function FirstTimeOnboarding({
         onShowLater={() => setShowNfcGuide(false)}
       />
     </>
+  );
+}
+
+function renderOnboardingIllustration(kind) {
+  if (kind === "guardian") {
+    return (
+      <div style={styles.artBoard}>
+        <div style={styles.faceFrame}>◉</div>
+        <div style={styles.lockBadge}>🔒</div>
+      </div>
+    );
+  }
+  if (kind === "ring-key") {
+    return (
+      <div style={styles.artBoard}>
+        <div style={styles.ringHalo}>💍</div>
+        <div style={styles.ringSpark}>✦</div>
+      </div>
+    );
+  }
+  if (kind === "draft-vs-seal") {
+    return (
+      <div style={styles.artBoard}>
+        <div style={styles.compareRow}>
+          <div style={styles.compareCard}>Draft</div>
+          <div style={styles.compareArrow}>→</div>
+          <div style={styles.compareSeal}>Seal</div>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "ownership") {
+    return (
+      <div style={styles.artBoard}>
+        <div style={styles.vaultCircle}>🛡</div>
+        <div style={styles.vaultText}>E2E</div>
+      </div>
+    );
+  }
+  return (
+    <div style={styles.artBoard}>
+      <div style={styles.welcomeGlow}>✧</div>
+      <div style={styles.welcomeText}>Haven</div>
+    </div>
   );
 }
 
@@ -193,15 +245,65 @@ const styles = {
     display: "grid",
     gap: 10,
   },
-  stepIconWrap: {
-    width: 56,
-    height: 56,
+  illustrationWrap: { display: "grid", justifyItems: "start" },
+  artBoard: {
+    minHeight: 68,
+    minWidth: 180,
+    border: "1px solid #3d2f28",
     borderRadius: 14,
-    background: "rgba(240, 194, 158, 0.15)",
+    padding: "10px 12px",
+    background: "rgba(240, 194, 158, 0.06)",
+    display: "grid",
+    alignItems: "center",
+  },
+  faceFrame: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    border: "1px solid #c4956a",
+    color: "#f0c29e",
     display: "grid",
     placeItems: "center",
+    fontSize: 22,
   },
-  stepIcon: { fontSize: 30, lineHeight: 1 },
+  lockBadge: { fontSize: 20, marginTop: 4 },
+  ringHalo: { fontSize: 30, color: "#f0c29e" },
+  ringSpark: { fontSize: 16, color: "#f7dcc8" },
+  compareRow: { display: "flex", alignItems: "center", gap: 8 },
+  compareCard: {
+    border: "1px solid #5b4438",
+    borderRadius: 999,
+    padding: "4px 10px",
+    color: "#d9c3b3",
+    fontSize: 12,
+  },
+  compareArrow: { color: "#f0c29e", fontSize: 14 },
+  compareSeal: {
+    border: "1px solid #d9a67a",
+    borderRadius: 999,
+    padding: "4px 10px",
+    color: "#f8efe7",
+    fontSize: 12,
+    background: "rgba(217, 166, 122, 0.18)",
+  },
+  vaultCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    border: "1px solid #8cb3d8",
+    display: "grid",
+    placeItems: "center",
+    color: "#cfe6fb",
+    fontSize: 20,
+  },
+  vaultText: {
+    marginTop: 4,
+    color: "#cfe6fb",
+    fontSize: 12,
+    letterSpacing: "0.08em",
+  },
+  welcomeGlow: { color: "#f0c29e", fontSize: 20 },
+  welcomeText: { color: "#f8efe7", fontSize: 14, letterSpacing: "0.06em" },
   stepTitle: {
     margin: 0,
     fontSize: 28,
@@ -213,6 +315,12 @@ const styles = {
     color: "#f4dfcf",
     fontSize: 19,
     lineHeight: 1.65,
+  },
+  stepSubline: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 14,
+    lineHeight: 1.55,
   },
   inlineButton: {
     justifySelf: "start",

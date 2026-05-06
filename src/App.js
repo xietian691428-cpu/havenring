@@ -504,6 +504,9 @@ function AppOrchestrator() {
           onOpenMemory={(memoryId) =>
             navigateTo({ name: "detail", memoryId }, "forward")
           }
+          onCreateMemory={() =>
+            navigateTo({ name: "new", memoryId: null }, "forward")
+          }
           onOpenMemoryFromRing={openMemoryFromRingParams}
           showRingSignIn={
             !enforceSingleFlowCard &&
@@ -554,6 +557,7 @@ function AppOrchestrator() {
           onViewTimeline={() =>
             navigateTo({ name: "timeline", memoryId: null }, "back")
           }
+          onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
         />
       </FadePage>
     );

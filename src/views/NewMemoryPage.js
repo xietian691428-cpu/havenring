@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createMemory } from "../services/localStorageService";
 import {
   listDraftItems,
   removeDraftItem,
   saveDraftItem,
 } from "../services/draftBoxService";
-import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
@@ -23,8 +22,6 @@ import { armSealFlow, clearSealFlowArm } from "../../lib/seal-flow";
 import { readNfcScanFull } from "../services/nfcRingService";
 import { normalizeNfcUidInput } from "../../lib/nfc-uid-browser";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
-import { getSecuritySummary, verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
-import { getPlatformGuidance } from "../utils/platformGuidance";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
@@ -69,11 +66,8 @@ export function NewMemoryPage({
     errorMessage: "",
   });
   const [sealPromptOpen, setSealPromptOpen] = useState(false);
-  const [isIosLikeDevice, setIsIosLikeDevice] = useState(false);
-  const platformGuidance = useMemo(
-    () => getPlatformGuidance(isIosLikeDevice ? "ios" : "android"),
-    [isIosLikeDevice]
-  );
+  const [memoryType, setMemoryType] = useState("text");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftItems, setDraftItems] = useState([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState([]);
   const [editingDraftId, setEditingDraftId] = useState("");
@@ -82,14 +76,8 @@ export function NewMemoryPage({
   const [sealTicket, setSealTicket] = useState("");
   const [ringTapBusy, setRingTapBusy] = useState(false);
   const [ringTapError, setRingTapError] = useState("");
-  const [secureSaveBusy, setSecureSaveBusy] = useState(false);
-  const [securePassword, setSecurePassword] = useState("");
-  const [secureRecoveryCode, setSecureRecoveryCode] = useState("");
   const [sealSuccessToast, setSealSuccessToast] = useState("");
   const [isFirstMemoryMode, setIsFirstMemoryMode] = useState(false);
-  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
-  const [showFileQuickEntry, setShowFileQuickEntry] = useState(false);
-  const [showVideoQuickEntry, setShowVideoQuickEntry] = useState(false);
   const sealTimerRef = useRef(null);
 
   const photoInputRef = useRef(null);
@@ -123,17 +111,8 @@ export function NewMemoryPage({
   }
 
   useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase();
-    const isIos =
-      /iphone|ipad|ipod/.test(ua) ||
-      (ua.includes("macintosh") && "ontouchend" in window);
-    setIsIosLikeDevice(isIos);
-  }, []);
-
-  useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
     setIsFirstMemoryMode(!firstDone);
-    setShowAdvancedDetails(firstDone);
   }, []);
 
   useEffect(() => {
@@ -254,23 +233,35 @@ export function NewMemoryPage({
     const allowedFiles = files.slice(0, remainingSlots);
     try {
       const selected = [];
+      const tooLargeNames = [];
       for (const file of allowedFiles) {
         if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-          setFeedback(
-            `${t.feedbackAttachmentTooLargePrefix}${file.name}${t.feedbackAttachmentTooLargeSuffix}`
-          );
+          tooLargeNames.push(file.name || "file");
           continue;
         }
         selected.push(fileToAttachmentCandidate(file));
       }
-      if (!selected.length) {
-        event.target.value = "";
-        return;
+      if (selected.length) {
+        setAttachments((prev) => [...prev, ...selected]);
       }
-      setAttachments((prev) => [...prev, ...selected]);
-      setFeedback(
-        `${t.feedbackAttachmentAddedPrefix}${selected.length}${t.feedbackAttachmentAddedSuffix}`
-      );
+      const messages = [];
+      if (selected.length) {
+        messages.push(
+          `${t.feedbackAttachmentAddedPrefix}${selected.length}${t.feedbackAttachmentAddedSuffix}`
+        );
+      }
+      if (tooLargeNames.length) {
+        const preview = tooLargeNames.slice(0, 2).join(", ");
+        messages.push(
+          `${t.feedbackAttachmentTooLargeManyPrefix}${tooLargeNames.length}${t.feedbackAttachmentTooLargeManyMiddle}${MAX_ATTACHMENT_SIZE_MB}${t.feedbackAttachmentTooLargeManySuffix}${preview}`
+        );
+      }
+      if (files.length > allowedFiles.length) {
+        messages.push(
+          `${t.feedbackAttachmentSlotsExceededPrefix}${files.length - allowedFiles.length}${t.feedbackAttachmentSlotsExceededSuffix}${MAX_ATTACHMENTS}.`
+        );
+      }
+      setFeedback(messages.join(" "));
     } catch {
       setFeedback(t.feedbackAttachmentError);
     } finally {
@@ -336,7 +327,6 @@ export function NewMemoryPage({
         if (isFirstMemoryMode) {
           markFirstMemoryCompleted();
           setIsFirstMemoryMode(false);
-          setShowAdvancedDetails(true);
           void trackFirstRunEvent("first_memory_saved", {
             locale,
             metadata: { mode: "draft_save" },
@@ -427,8 +417,6 @@ export function NewMemoryPage({
     setEditingDraftId("");
     setSealTicket("");
     setRingTapError("");
-    setSecurePassword("");
-    setSecureRecoveryCode("");
     setFeedback(t.feedbackReadyNext);
     clearSealFlowArm();
     clearDraftSnapshot();
@@ -449,6 +437,14 @@ export function NewMemoryPage({
 
   async function handleSealNow() {
     await handleSave({ openSealPromptOnSuccess: true, showDialogOnSuccess: false });
+  }
+
+  async function handleQuickDraft() {
+    await handleSave({ openSealPromptOnSuccess: false, showDialogOnSuccess: false });
+  }
+
+  async function handleSaveSecurelyFallback() {
+    await handleSave({ openSealPromptOnSuccess: false, showDialogOnSuccess: false });
   }
 
   function collectPendingSealPayloads() {
@@ -521,19 +517,22 @@ export function NewMemoryPage({
         const errorCode = getApiErrorCode(json, res.status);
         throw new Error(getUserFriendlyMessage(errorCode, t));
       }
-      setSealTicket(String(json.seal_ticket));
+      const nextTicket = String(json.seal_ticket);
+      setSealTicket(nextTicket);
       setFeedbackNotice(t.sealTicketReady);
+      return nextTicket;
     } catch (error) {
       setSealTicket("");
       setRingTapError(
         error instanceof Error ? error.message : t.errGenericWarmFallback
       );
+      return "";
     } finally {
       setRingTapBusy(false);
     }
   }
 
-  async function finalizePendingSealsAndExit() {
+  async function finalizePendingSealsAndExit(ticketOverride = "") {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     if (!pendingSealIds.length) {
       setSealPromptOpen(false);
@@ -541,7 +540,8 @@ export function NewMemoryPage({
       onViewTimeline?.();
       return;
     }
-    if (!sealTicket) {
+    const ticketToUse = String(ticketOverride || sealTicket || "");
+    if (!ticketToUse) {
       setFeedback(t.feedbackMissingVerifiedTap);
       return;
     }
@@ -564,7 +564,7 @@ export function NewMemoryPage({
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          seal_ticket: sealTicket,
+          seal_ticket: ticketToUse,
           draft_ids: pendingSealIds,
           mode: "precheck",
         }),
@@ -581,7 +581,7 @@ export function NewMemoryPage({
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          seal_ticket: sealTicket,
+          seal_ticket: ticketToUse,
           draft_ids: pendingSealIds,
           mode: "commit",
           draft_payloads: draftPayloads,
@@ -606,7 +606,6 @@ export function NewMemoryPage({
       if (isFirstMemoryMode) {
         markFirstMemoryCompleted();
         setIsFirstMemoryMode(false);
-        setShowAdvancedDetails(true);
         void trackFirstRunEvent("first_memory_saved", {
           locale,
           metadata: { mode: "seal_commit" },
@@ -623,42 +622,21 @@ export function NewMemoryPage({
     }
   }
 
-  async function handleSecureSave() {
-    if (!pendingSealIds.length) return;
-    setSecureSaveBusy(true);
-    setRingTapError("");
-    try {
-      const summary = getSecuritySummary();
-      if (summary.initialized) {
-        await verifyAndTrustCurrentDevice({
-          password: securePassword,
-          recoveryCode: secureRecoveryCode,
-        });
-      }
-      await persistPendingSeals();
-      await loadDraftBox();
-      clearDraftSnapshot();
-      setPendingSealIds([]);
-      setSealTicket("");
-      setSealPromptOpen(false);
-      clearSealFlowArm();
-      celebrateSealSuccess();
-      if (isFirstMemoryMode) {
-        markFirstMemoryCompleted();
-        setIsFirstMemoryMode(false);
-        setShowAdvancedDetails(true);
-        void trackFirstRunEvent("first_memory_saved", {
-          locale,
-          metadata: { mode: "secure_save" },
-        });
-      }
-      onSaved?.();
-      onViewTimeline?.();
-    } catch (error) {
-      setRingTapError(error instanceof Error ? error.message : t.errGenericWarmFallback);
-    } finally {
-      setSecureSaveBusy(false);
+  async function persistPendingSeals() {
+    const draftPayloads = collectPendingSealPayloads();
+    if (!draftPayloads.length) {
+      throw new Error(t.feedbackSaveFailed);
     }
+    await cacheSealedMemoriesLocally(draftPayloads);
+    for (const id of pendingSealIds) {
+      await removeDraftItem(id);
+    }
+  }
+
+  async function handleSealWithRingChoice() {
+    const ticket = await requestSealTicketFromRingTap();
+    if (!ticket) return;
+    await finalizePendingSealsAndExit(ticket);
   }
 
   const visibleDraftItems = draftItems.filter(
@@ -670,342 +648,212 @@ export function NewMemoryPage({
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <p style={styles.brand}>{t.brand}</p>
             <h1 style={styles.title}>{t.title}</h1>
           </div>
-          <OnlineStatusBadge locale={locale} />
         </header>
-        <p style={styles.sealGuidance}>
-          {isIosLikeDevice ? t.sealGuidanceIos || t.sealGuidance : t.sealGuidanceAndroid || t.sealGuidance}
-        </p>
-        {isFirstMemoryMode ? (
-          <section style={styles.noticeBox}>
-            <p style={styles.noticeTitle}>{t.firstMemoryQuickTitle}</p>
-            <p style={styles.hint}>{t.firstMemoryQuickBody}</p>
-            {!showAdvancedDetails ? (
-              <div style={styles.voiceActions}>
-                <button
-                  type="button"
-                  onClick={() => setShowAdvancedDetails(true)}
-                  style={styles.secondaryButton}
-                >
-                  {t.firstMemoryShowAdvanced}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowFileQuickEntry(true)}
-                  style={styles.secondaryButton}
-                >
-                  {t.firstMemoryAddFiles || "Add files (optional)"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowVideoQuickEntry(true)}
-                  style={styles.secondaryButton}
-                >
-                  {t.firstMemoryAddVideo || "Add video (optional)"}
-                </button>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
 
         <button type="button" onClick={onBack} style={styles.backButton}>
           {t.back}
         </button>
 
-        <label style={styles.label}>
-          {t.titleLabel}
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t.titlePlaceholder}
-            style={styles.input}
-          />
-        </label>
+        <p style={styles.helperLine}>{t.sealModeHint}</p>
 
         <label style={styles.label}>
-          {t.storyLabel}
           <textarea
             value={story}
             onChange={(e) => setStory(e.target.value)}
-            rows={6}
+            rows={5}
             placeholder={t.storyPlaceholder}
-            style={styles.textarea}
+            style={styles.textareaSeal}
           />
         </label>
-
-        {showAdvancedDetails ? (
-          <label style={styles.label}>
-            {t.timeCapsuleLabel}
-            <input
-              type="datetime-local"
-              value={releaseAtInput}
-              onChange={(e) => setReleaseAtInput(e.target.value)}
-              style={styles.input}
-            />
-            <small style={styles.hint}>{t.timeCapsuleHint}</small>
-          </label>
-        ) : null}
-
-        <label style={styles.label}>
-          {t.photosLabel}
-          <div style={styles.filePickerRow}>
-            <button
-              type="button"
-              onClick={() => photoInputRef.current?.click()}
-              style={styles.filePickerButton}
-            >
-              {t.choosePhotos}
-            </button>
-            <span style={styles.filePickerStatus}>
-              {photos.length ? `${photos.length}${t.photosSelectedSuffix}` : t.noPhotosSelected}
-              <span style={styles.filePickerMeta}>
-                {t.photosCountPrefix}
-                {photos.length}/{MAX_PHOTOS}
-                {t.photosCountSuffix}
-              </span>
-            </span>
-          </div>
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handlePhotosSelected}
-            style={styles.hiddenFileInput}
-          />
-          <small style={styles.hint}>{t.photosHint}</small>
-        </label>
-
-        {photos.length ? (
-          <div style={styles.photoGrid}>
-            {photos.map((photo) => (
-              <img
-                key={photo.id}
-                src={photo.dataUrl}
-                alt=""
-                style={styles.photoThumb}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {showAdvancedDetails || showFileQuickEntry || showVideoQuickEntry ? (
-          <label style={styles.label}>
-            {t.attachmentsLabel}
-            <div style={styles.filePickerRow}>
-              <button
-                type="button"
-                onClick={() => attachmentInputRef.current?.click()}
-                style={styles.filePickerButton}
-              >
-                {t.chooseAttachments}
-              </button>
-              <button
-                type="button"
-                onClick={() => videoInputRef.current?.click()}
-                style={styles.filePickerButton}
-              >
-                {t.chooseVideo || "Choose video"}
-              </button>
-              <span style={styles.filePickerStatus}>
-                {attachments.length
-                  ? `${attachments.length}${t.attachmentsSelectedSuffix}`
-                  : t.noAttachmentsSelected}
-              </span>
-            </div>
-            <input
-              ref={attachmentInputRef}
-              type="file"
-              accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
-              multiple
-              onChange={handleAttachmentsSelected}
-              style={styles.hiddenFileInput}
-            />
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept="video/*"
-              multiple
-              onChange={handleAttachmentsSelected}
-              style={styles.hiddenFileInput}
-            />
-            <small style={styles.hint}>{t.attachmentsHint}</small>
-            {attachments.length ? (
-              <ul style={styles.attachmentList}>
-                {attachments.map((item) => (
-                  <li key={item.id} style={styles.attachmentItem}>
-                    <span style={styles.attachmentName}>{item.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAttachments((prev) => prev.filter((it) => it.id !== item.id))
-                      }
-                      style={styles.clearButton}
-                    >
-                      {t.removeAttachment}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </label>
-        ) : null}
-
-        <button type="button" onClick={handleSave} disabled={saving} style={styles.linkButton}>
-          {saving ? t.saving : t.save}
-        </button>
-        <button type="button" onClick={handleSealNow} disabled={saving} style={styles.primaryButton}>
-          {isIosLikeDevice ? t.sealNowOptionalIos || t.sealNow : t.sealNow}
-        </button>
         <button
           type="button"
-          onClick={() => void handleSecureSave()}
-          disabled={secureSaveBusy || saving || ringTapBusy}
-          style={styles.secondaryButton}
+          onClick={() => setDetailsOpen((v) => !v)}
+          style={styles.detailsToggle}
         >
-          {secureSaveBusy ? t.sealFallbackWorking : t.sealSecureQuickAction || t.sealFallbackAction}
+          {detailsOpen ? t.hideDetails : t.addDetails}
         </button>
-        <section style={styles.backlogBox}>
-          <div style={styles.voiceActions}>
-            <p style={styles.backlogTitle}>{t.draftBoxTitle}</p>
-            <button
-              type="button"
-              style={styles.secondaryButton}
-              onClick={() => setDraftBoxOpen((v) => !v)}
-            >
-              {draftBoxOpen ? t.draftBoxHide || "Hide draft box" : t.draftBoxShow || "Show draft box"}
-            </button>
-          </div>
-          {draftBoxOpen ? (
-            !visibleDraftItems.length ? (
-              <p style={styles.hint}>{t.draftBoxEmpty}</p>
-            ) : (
-              <>
-                <div style={styles.voiceActions}>
-                  <button
-                    type="button"
-                    style={styles.secondaryButton}
-                    disabled={saving || !selectedDraftIds.length}
-                    onClick={() => void sealDraftItems(selectedDraftIds)}
-                  >
-                    {t.draftSealSelected.replace("{n}", String(selectedDraftIds.length))}
-                  </button>
+        {detailsOpen ? (
+          <>
+            <label style={styles.label}>
+              {t.titleLabel}
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t.titlePlaceholder}
+                style={styles.input}
+              />
+            </label>
+            <label style={styles.label}>
+              {t.photosLabel}
+              <div style={styles.filePickerRow}>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  style={styles.filePickerButton}
+                >
+                  {t.choosePhotos}
+                </button>
+                <span style={styles.filePickerStatus}>
+                  {photos.length ? `${photos.length}${t.photosSelectedSuffix}` : t.noPhotosSelected}
+                </span>
+              </div>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handlePhotosSelected}
+                style={styles.hiddenFileInput}
+              />
+              {photos.length ? (
+                <div style={styles.photoGrid}>
+                  {photos.map((photo) => (
+                    <img
+                      key={photo.id}
+                      src={photo.dataUrl}
+                      alt=""
+                      style={styles.photoThumb}
+                    />
+                  ))}
                 </div>
+              ) : null}
+            </label>
+            <label style={styles.label}>
+              {t.attachmentsLabel}
+              <div style={styles.filePickerRow}>
+                <button
+                  type="button"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  style={styles.filePickerButton}
+                >
+                  {t.chooseAttachments}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => videoInputRef.current?.click()}
+                  style={styles.filePickerButton}
+                >
+                  {t.chooseVideo}
+                </button>
+                <span style={styles.filePickerStatus}>
+                  {attachments.length} / {MAX_ATTACHMENTS}
+                </span>
+              </div>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
+                multiple
+                onChange={handleAttachmentsSelected}
+                style={styles.hiddenFileInput}
+              />
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                multiple
+                onChange={handleAttachmentsSelected}
+                style={styles.hiddenFileInput}
+              />
+              <small style={styles.hint}>
+                {t.attachmentsHint}
+              </small>
+              {attachments.length ? (
                 <ul style={styles.attachmentList}>
-                  {visibleDraftItems.map((item) => (
+                  {attachments.map((item) => (
                     <li key={item.id} style={styles.attachmentItem}>
-                      <label style={styles.toggleLabel}>
-                        <input
-                          type="checkbox"
-                          checked={selectedDraftIds.includes(item.id)}
-                          onChange={(e) => {
-                            setSelectedDraftIds((prev) =>
-                              e.target.checked
-                                ? [...prev, item.id]
-                                : prev.filter((id) => id !== item.id)
-                            );
-                          }}
-                        />
-                        {item.title || t.untitled}
-                      </label>
-                      <div style={styles.voiceActions}>
-                        <button
-                          type="button"
-                          style={styles.secondaryButton}
-                          onClick={() => editDraftItem(item)}
-                        >
-                          {t.draftEdit}
-                        </button>
-                        <button
-                          type="button"
-                          style={styles.secondaryButton}
-                          onClick={() => void sealDraftItems([item.id])}
-                        >
-                          {t.draftSealNow}
-                        </button>
-                      </div>
+                      <span style={styles.attachmentName}>
+                        {item.name}
+                        <span style={styles.attachmentSize}>
+                          {" "}
+                          ({formatAttachmentSize(item.size)})
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAttachments((prev) => prev.filter((it) => it.id !== item.id))
+                        }
+                        style={styles.clearButton}
+                      >
+                        {t.removeAttachment}
+                      </button>
                     </li>
                   ))}
                 </ul>
-              </>
-            )
-          ) : null}
-        </section>
+              ) : null}
+            </label>
+            <label style={styles.label}>
+              {t.timeCapsuleLabel}
+              <input
+                type="datetime-local"
+                value={releaseAtInput}
+                onChange={(e) => setReleaseAtInput(e.target.value)}
+                style={styles.input}
+              />
+            </label>
+          </>
+        ) : null}
+        <p style={styles.feedbackInline}>{feedback || "\u00A0"}</p>
+
+        <button
+          type="button"
+          onClick={handleSealNow}
+          disabled={saving}
+          style={styles.floatingPrimaryButton}
+        >
+          <span style={styles.floatingPrimaryMain}>
+            <span style={styles.ringIcon} aria-hidden>◌</span>
+            {t.sealNow}
+          </span>
+          <small style={styles.floatingPrimaryHint}>
+            {t.sealFabHint}
+          </small>
+        </button>
+        <div style={styles.secondaryActions}>
+          <button
+            type="button"
+            onClick={() => void handleSaveSecurelyFallback()}
+            disabled={saving}
+            style={styles.linkAction}
+          >
+            {t.sealSecureQuickAction || t.sealFallbackAction}
+          </button>
+        </div>
         {sealPromptOpen ? (
           <section style={styles.sealPromptBox}>
             <p style={styles.sealPromptTitle}>{t.sealPromptTitle}</p>
+            <p style={styles.noticeTitle}>{t.sealPromptRuleLine}</p>
             <p style={styles.sealPromptBody}>{t.sealPromptBody}</p>
-            {sealTicket ? (
-              <p style={styles.hint}>{t.sealTicketReady}</p>
-            ) : (
-              <p style={styles.hint}>{t.sealTouchInstruction}</p>
-            )}
+            <p style={styles.noticeTitle}>{t.memoryTypeTitle}</p>
+            <div style={styles.voiceActions}>
+              {[
+                { key: "text", label: t.memoryTypeText },
+                { key: "photo-video", label: t.memoryTypePhotoVideo },
+                { key: "voice", label: t.memoryTypeVoice },
+                { key: "mixed", label: t.memoryTypeMixed },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setMemoryType(item.key)}
+                  style={memoryType === item.key ? styles.primaryButton : styles.secondaryButton}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-            {isIosLikeDevice ? (
-              <p style={styles.hint}>{t.sealPromptIosHint}</p>
-            ) : null}
             <div style={styles.voiceActions}>
               <button
                 type="button"
-                onClick={() => void requestSealTicketFromRingTap()}
-                style={platformGuidance.isIos ? styles.secondaryButton : styles.primaryButton}
-                disabled={ringTapBusy || saving || secureSaveBusy}
+                onClick={() => void handleSealWithRingChoice()}
+                style={styles.primaryButton}
+                disabled={ringTapBusy || saving}
               >
-                {ringTapBusy ? t.sealTouchWorking : t.sealTouchRetry}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSecureSave()}
-                style={platformGuidance.isIos ? styles.primaryButton : styles.secondaryButton}
-                disabled={secureSaveBusy || saving || ringTapBusy}
-              >
-                {secureSaveBusy ? t.sealFallbackWorking : t.sealSecureQuickAction || t.sealFallbackAction}
-              </button>
-              <button
-                type="button"
-                onClick={handleViewTimeline}
-                style={platformGuidance.isIos ? styles.secondaryButton : styles.primaryButton}
-                disabled={!sealTicket || saving || ringTapBusy || secureSaveBusy}
-              >
-                {t.sealConfirmButton}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSealPromptOpen(false);
-                  clearSealFlowArm();
-                }}
-                style={styles.secondaryButton}
-              >
-                {t.sealPromptClose}
-              </button>
-            </div>
-            <div style={styles.noticeBox}>
-              <p style={styles.noticeTitle}>{t.sealFallbackTitle}</p>
-              <p style={styles.hint}>{t.sealFallbackBody}</p>
-              <input
-                type="password"
-                placeholder={t.sealFallbackPassword}
-                value={securePassword}
-                onChange={(e) => setSecurePassword(e.target.value)}
-                style={styles.input}
-              />
-              <input
-                type="text"
-                placeholder={t.sealFallbackRecovery}
-                value={secureRecoveryCode}
-                onChange={(e) => setSecureRecoveryCode(e.target.value)}
-                style={styles.input}
-              />
-              <button
-                type="button"
-                onClick={() => void handleSecureSave()}
-                style={platformGuidance.isIos ? styles.primaryButton : styles.secondaryButton}
-                disabled={secureSaveBusy || saving || ringTapBusy}
-              >
-                {secureSaveBusy ? t.sealFallbackWorking : t.sealFallbackAction}
+                {ringTapBusy ? t.sealTouchWorking : t.sealConfirmButton}
               </button>
             </div>
           </section>
@@ -1016,7 +864,6 @@ export function NewMemoryPage({
           </section>
         ) : null}
 
-        <p style={styles.feedback}>{feedback || "\u00A0"}</p>
         {pendingSealIds.length ? (
           <div style={styles.voiceActions}>
             <button
@@ -1028,7 +875,6 @@ export function NewMemoryPage({
             </button>
           </div>
         ) : null}
-        <p style={styles.hint}>{t.privacyHint}</p>
       </section>
       <SaveToHavenDialog
         locale={locale}
@@ -1099,6 +945,11 @@ function fileToAttachmentCandidate(file) {
   };
 }
 
+function formatAttachmentSize(size = 0) {
+  const mb = Number(size || 0) / (1024 * 1024);
+  return `${mb.toFixed(1)}MB`;
+}
+
 async function prepareAttachmentsForSave(attachments, t) {
   const prepared = [];
   for (const item of attachments) {
@@ -1142,27 +993,26 @@ const styles = {
     alignItems: "flex-start",
     gap: 10,
   },
-  brand: {
-    margin: 0,
-    color: "#d9c3b3",
-    fontSize: 12,
-    letterSpacing: "0.2em",
-    textTransform: "uppercase",
-  },
   title: {
     margin: "8px 0 0",
     fontSize: 28,
     fontWeight: 500,
   },
-  sealGuidance: {
+  helperLine: {
     margin: 0,
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #5a3b30",
-    background: "#1a1412",
-    color: "#f0c29e",
+    color: "#d9c3b3",
     fontSize: 12,
-    lineHeight: 1.6,
+    lineHeight: 1.5,
+  },
+  detailsToggle: {
+    justifySelf: "start",
+    border: "1px solid #5a3b30",
+    background: "transparent",
+    color: "#d9c3b3",
+    borderRadius: 999,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontSize: 12,
   },
   backButton: {
     justifySelf: "start",
@@ -1190,6 +1040,15 @@ const styles = {
     border: "1px solid #3a2d28",
     borderRadius: 10,
     background: "#1f1816",
+    color: "#f8efe7",
+    padding: "10px 12px",
+    resize: "vertical",
+  },
+  textareaSeal: {
+    border: "1px solid rgba(217, 166, 122, 0.55)",
+    borderRadius: 10,
+    background: "radial-gradient(circle at top, rgba(217, 166, 122, 0.14), #1b1411 58%)",
+    boxShadow: "inset 0 0 24px rgba(217, 166, 122, 0.12)",
     color: "#f8efe7",
     padding: "10px 12px",
     resize: "vertical",
@@ -1253,6 +1112,20 @@ const styles = {
     gap: 8,
     flexWrap: "wrap",
   },
+  secondaryActions: {
+    display: "grid",
+    gap: 4,
+    justifyItems: "start",
+  },
+  linkAction: {
+    border: "none",
+    background: "transparent",
+    color: "#d9c3b3",
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontSize: 12,
+    padding: 0,
+  },
   attachmentItem: {
     display: "flex",
     alignItems: "center",
@@ -1266,6 +1139,10 @@ const styles = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  attachmentSize: {
+    color: "rgba(217, 195, 179, 0.75)",
+    fontSize: 12,
+  },
   secondaryButton: {
     border: "1px solid #d9a67a",
     borderRadius: 999,
@@ -1273,16 +1150,6 @@ const styles = {
     color: "#f0c29e",
     padding: "8px 12px",
     cursor: "pointer",
-  },
-  linkButton: {
-    border: "none",
-    background: "transparent",
-    color: "#d9c3b3",
-    textDecoration: "underline",
-    padding: "2px 0 4px",
-    justifySelf: "start",
-    cursor: "pointer",
-    fontSize: 13,
   },
   clearButton: {
     border: "1px solid #5a3b30",
@@ -1352,10 +1219,52 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
   },
+  floatingPrimaryButton: {
+    border: "1px solid #d9a67a",
+    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
+    color: "#1b1411",
+    borderRadius: 999,
+    padding: "12px 16px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "grid",
+    gap: 4,
+    textAlign: "left",
+    boxShadow: "0 0 0 0 rgba(217, 166, 122, 0.35)",
+    animation: "havenPulse 2.2s ease-in-out infinite",
+  },
+  floatingPrimaryMain: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  ringIcon: {
+    display: "inline-block",
+    width: 18,
+    height: 18,
+    lineHeight: "16px",
+    textAlign: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(27, 20, 17, 0.55)",
+    fontSize: 11,
+  },
+  floatingPrimaryHint: {
+    color: "rgba(27, 20, 17, 0.8)",
+    fontWeight: 500,
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
   feedback: {
     margin: 0,
     minHeight: 18,
     color: "#f2d8c5",
+  },
+  feedbackInline: {
+    margin: 0,
+    minHeight: 18,
+    color: "#f2d8c5",
+    fontSize: 12,
+    lineHeight: 1.45,
   },
   feedbackToggles: {
     display: "flex",
@@ -1368,30 +1277,5 @@ const styles = {
     gap: 8,
     color: "#d9c3b3",
     fontSize: 12,
-  },
-  backlogBox: {
-    marginTop: 2,
-    border: "1px dashed #5a3b30",
-    borderRadius: 10,
-    padding: "10px 12px",
-    background: "rgba(26, 21, 18, 0.38)",
-    display: "grid",
-    gap: 6,
-  },
-  backlogTitle: {
-    margin: 0,
-    color: "#f0c29e",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  },
-  backlogList: {
-    margin: 0,
-    paddingLeft: 18,
-    color: "#d9c3b3",
-    fontSize: 12,
-    lineHeight: 1.5,
-    display: "grid",
-    gap: 4,
   },
 };
