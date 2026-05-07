@@ -2,7 +2,7 @@
 
 ## Product Goal
 
-Deliver a ritual-first NFC ring experience where users can:
+Deliver a ritual-first dynamic NFC ring experience where users can:
 - Capture a private moment
 - Seal it with a physical tap
 - Revisit sealed moments only by tapping the ring again
@@ -26,6 +26,8 @@ The product must stay low-frequency, privacy-preserving, and globally usable.
 2. NFC write is a **recovery-only capability**, not a primary user feature.
 3. No plaintext on server.
 4. Seal and vault entry require physical tap ritual.
+5. Production hardware is a dynamic SDM NFC ring; one verified tap entry resolves
+   to new binding, daily access, or seal confirmation.
 
 ## Acceptance Criteria (Hard)
 
@@ -57,8 +59,8 @@ The product must stay low-frequency, privacy-preserving, and globally usable.
 ### B. Backend (near-term)
 
 - Token authority APIs
-  - Issue token endpoint (server-only)
-  - Revoke token endpoint
+  - Dynamic SDM resolve endpoint (server-only verifier proxy)
+  - Legacy token issue/revoke endpoints for recovery compatibility
   - Audit trail for token lifecycle
 - Existing RPC alignment
   - `resolve_ring_by_token`

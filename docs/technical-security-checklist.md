@@ -5,6 +5,7 @@
 | Item | Status |
 |------|--------|
 | `user_nfc_rings` (`user_id`, `nfc_uid` **as hash**, `nickname`, `bound_at`, `last_used_at`, `is_active`) | Migration `0003_user_nfc_rings.sql` — server stores **SHA-256** of normalized UID (`nfc_uid_hash`), not raw wire UID. |
+| Dynamic NFC ring SDM state | Migration `0012_user_nfc_rings_sdm.sql` — tracks `sdm_enabled`, `last_sdm_counter`, and `last_sdm_verified_at` for replay rejection. |
 | Max one **active** binding per `(user_id, nfc_uid_hash)` | Partial unique index. |
 
 ## Local encryption
@@ -18,6 +19,7 @@
 
 | Route | Purpose |
 |-------|---------|
+| `POST /api/rings/sdm/resolve` | Verifies dynamic NFC ring SDM payload (`uid`, `ctr`, `cmac`, `picc`) through `sdm-backend`; returns `new_ring_binding`, `daily_access`, or `seal_confirmation`. |
 | `POST /api/nfc/bind` | Auth user; requires `X-Haven-Secondary-Verified: 1` and `privacy_acknowledged: true`; max 5 active rings. |
 | `GET /api/nfc/list` | Lists current user’s bindings. |
 | `POST /api/nfc/revoke` | Sets `is_active = false` (requires same secondary header). |
@@ -46,6 +48,9 @@
 - `NFC_LONG_SESSION_MAX_SECONDS` — optional long-session NFC JWT lifetime (seconds, default 10 years cap).
 - `NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS` — optional browser ring-grant TTL in days (default 90).
 - `NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS` — optional browser long ring-grant TTL in days (default 3650).
+- `SDM_BACKEND_URL` — internal URL for `icedevml/sdm-backend` (for host-local Docker, `http://127.0.0.1:5000`).
+- `SDM_BACKEND_VERIFY_PATH` — optional override; defaults to `/api/tag` for encrypted PICC data and `/api/tagpt` for plaintext UID/counter.
+- `MASTER_KEY` — required only in the `sdm-backend` server/container environment. Never commit or expose it to the Next.js client.
 
 ## Test scenarios
 

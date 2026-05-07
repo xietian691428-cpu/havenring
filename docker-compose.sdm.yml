@@ -1,0 +1,9 @@
+services:
+  sdm-backend:
+    image: icedevml/sdm-backend:latest
+    container_name: haven-sdm-backend
+    restart: unless-stopped
+    ports:
+      - "${SDM_BACKEND_PORT:-5000}:80"
+    environment:
+      MASTER_KEY: "${MASTER_KEY:?Set MASTER_KEY in the server environment}"

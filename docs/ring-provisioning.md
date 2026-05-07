@@ -36,14 +36,20 @@
 
 ## 4. Token authority
 
-- Token issuance is **server-side only** (mandatory).
+- Production ring authority is **SDM dynamic verification**. Token issuance is
+  kept only for legacy/recovery compatibility and remains server-side only.
 - Client-generated tokens are disallowed.
 - Required guarantees:
-  - Auditable issuance
+  - Auditable provisioning
   - Revocable credentials
+  - Fresh-tap verification through SDM read counters / CMAC
   - Controlled lifecycle for compromised rings
-- Canonical ring URL format:
-  - `https://<app-domain>/hub?token=<opaque>`
+- Canonical dynamic ring URL format:
+  - `https://<app-domain>/start?picc_data=<dynamic>&cmac=<dynamic>`
+  - Plain mirror compatibility: `https://<app-domain>/start?uid=<uid>&ctr=<counter>&cmac=<dynamic>`
+- `MASTER_KEY` belongs only in the server/container environment for
+  `icedevml/sdm-backend`. It must never appear in source code, committed config,
+  client bundles, Supabase tables, logs, analytics, or support transcripts.
 
 ## 5. Write reliability (Recovery Mode only)
 
@@ -96,18 +102,20 @@ Avoid unrestricted "free write" UX.
 
 Each ring is prewritten before user handoff:
 
-1. Server generates token and ring record.
-2. Store only `token_hash` in database (`rings.token_hash`).
-3. Write final `/hub?token=...` URL to ring.
-4. Read-back validation before packaging.
+1. Provision the dynamic NFC ring with the production SDM keyset.
+2. Write the canonical `/start?...SDM...` URL template to the ring.
+3. Read-back and server-verify at least one live tap through
+   `POST /api/rings/sdm/resolve`.
+4. Store only server-side binding identifiers such as `nfc_uid_hash`; never
+   store raw UID as plaintext.
 5. Mark ring as distribution-ready with immutable audit trail.
 
 ## 9. First-use claim flow (main flow)
 
 1. User receives ring.
 2. User taps ring.
-3. Browser opens PWA via `/hub?token=...`.
-4. App resolves ring and prompts claim.
+3. Browser opens PWA via `/start?...SDM...`.
+4. App verifies the dynamic tap and returns `scene = new_ring_binding`.
 5. User can immediately compose and seal.
 
 Acceptance requirement:

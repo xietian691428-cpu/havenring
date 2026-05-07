@@ -724,7 +724,10 @@ export function RingSetupWizard({
                 {t.scanCta}
               </button>
             ) : (
-              <p style={styles.working}>{t.scanWorking}</p>
+              <div style={styles.statusBox} role="status" aria-live="polite">
+                <p style={styles.noticeTitle}>{t.statusBindingTitle}</p>
+                <p style={styles.statusLine}>{t.statusBindingScanning}</p>
+              </div>
             )}
             <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>
               {t.ctaSkip}
@@ -758,6 +761,10 @@ export function RingSetupWizard({
           <>
             <h2 style={styles.title}>{t.verifyTitle}</h2>
             <p style={styles.body}>{t.verifyBody}</p>
+            <div style={styles.statusBox} role="status">
+              <p style={styles.noticeTitle}>{t.statusBindingTitle}</p>
+              <p style={styles.statusLine}>{t.statusBindingDetected}</p>
+            </div>
             <input
               type="password"
               placeholder={t.verifyPassword}
@@ -792,6 +799,10 @@ export function RingSetupWizard({
           <>
             <h2 style={styles.title}>{t.nameTitle}</h2>
             <p style={styles.body}>{t.nameBody}</p>
+            <div style={styles.statusBox} role="status">
+              <p style={styles.noticeTitle}>{t.statusBindingTitle}</p>
+              <p style={styles.statusLine}>{t.statusBindingDetected}</p>
+            </div>
             <input
               type="text"
               placeholder={t.namePlaceholder}

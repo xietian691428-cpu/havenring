@@ -1,10 +1,10 @@
 const EN = {
   title: "Capture this moment",
-  helperLine: "Touch your ring to seal this memory.",
+  helperLine: "Touch your trusted ring to begin the sacred ritual.",
   learnMore: "Learn more",
   modeQuickRecord: "Quick Record",
   modeSealMemory: "Seal Memory",
-  sealModeHint: "Touch your ring to seal this memory.",
+  sealModeHint: "Touch your trusted ring to begin the sacred ritual.",
   quickModeHint: "Quick Record saves fast drafts for daily thoughts.",
   back: "Back",
   titleLabel: "Title",
@@ -32,7 +32,7 @@ const EN = {
   saving: "Saving...",
   quickDraft: "Quick Draft",
   quickDraftHint: "Save instantly to your Draft Box.",
-  sealFabHint: "Touch your ring to seal this memory.",
+  sealFabHint: "Touch your trusted ring to begin the sacred ritual.",
   addDetails: "Add details",
   hideDetails: "Hide details",
   sealNow: "Seal with Ring — Make this memory sacred",
@@ -61,7 +61,7 @@ const EN = {
   feedbackNeedContent: "Add some memory content before saving.",
   feedbackSavingLocal: "Saving draft locally...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
-  feedbackReadyToSeal: "Ready to seal. Touch your ring now.",
+  feedbackReadyToSeal: "Touch your trusted ring to begin the sacred ritual.",
   feedbackMissingVerifiedTap:
     "No verified ring tap was detected. Please touch your ring and return to complete sealing.",
   feedbackDraftRestored: "Recovered your unsaved draft.",
@@ -78,9 +78,8 @@ const EN = {
   memoryTypeVoice: "Voice Note",
   memoryTypeMixed: "Mixed Memory",
   sealPromptTitle: "Seal This Memory?",
-  sealPromptRuleLine: "Only trusted rings can seal sacred memories.",
-  sealPromptBody:
-    "This memory will be end-to-end encrypted and marked as sacred. A trusted ring touch is required.",
+  sealPromptRuleLine: "Touch your trusted ring to begin the sacred ritual.",
+  sealPromptBody: "Waiting for your dynamic ring touch.",
   sealPromptIosHint:
     "On iPhone, open Haven from your Home Screen shortcut before touching the ring for a more reliable seal flow.",
   sealPromptDone: "I touched the ring",
@@ -90,6 +89,10 @@ const EN = {
   sealTouchWorking: "Reading ring...",
   sealTicketReady: "Ring verified. You can confirm sealing now.",
   sealConfirmButton: "Seal with Ring",
+  sealStatusTitle: "Seal physical confirmation",
+  sealStatusWaiting: "Touch your trusted ring to begin the sacred ritual.",
+  sealStatusReading: "Reading your ring. Keep it still near your phone.",
+  sealStatusVerified: "Trusted ring verified. Finishing the seal now.",
   sealSuccessWarm: "Your memory is now sealed, safe, and ready to keep.",
   sealNeedSignIn: "Please sign in again before sealing this memory.",
   sealRingReadFailed:
@@ -134,8 +137,8 @@ const EN = {
 
 export const NEW_MEMORY_PAGE_CONTENT = {
   en: EN,
-  fr: { ...EN, title: "Capturez ce moment", helperLine: "Touchez votre bague pour sceller ce souvenir.", sealModeHint: "Touchez votre bague pour sceller ce souvenir.", sealFabHint: "Touchez votre bague pour sceller ce souvenir.", sealSecureQuickAction: "Enregistrer securise avec Face ID", sealPromptRuleLine: "Seules les bagues de confiance peuvent sceller les souvenirs sacres.", back: "Retour", titleLabel: "Titre", storyLabel: "Histoire", photosLabel: "Photos", choosePhotos: "Choisir des photos", noPhotosSelected: "Aucune photo selectionnee", photosSelectedSuffix: " selectionnees" },
-  es: { ...EN, title: "Captura este momento", helperLine: "Toca tu anillo para sellar este recuerdo.", sealModeHint: "Toca tu anillo para sellar este recuerdo.", sealFabHint: "Toca tu anillo para sellar este recuerdo.", sealSecureQuickAction: "Guardar de forma segura con Face ID", sealPromptRuleLine: "Solo los anillos de confianza pueden sellar recuerdos sagrados.", back: "Volver", titleLabel: "Titulo", storyLabel: "Historia", photosLabel: "Fotos", choosePhotos: "Elegir fotos", noPhotosSelected: "Ninguna foto seleccionada", photosSelectedSuffix: " seleccionadas" },
-  de: { ...EN, title: "Halte diesen Moment fest", helperLine: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealModeHint: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealFabHint: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealSecureQuickAction: "Sicher mit Face ID speichern", sealPromptRuleLine: "Nur vertrauenswurdige Ringe konnen heilige Erinnerungen versiegeln.", back: "Zuruck", titleLabel: "Titel", storyLabel: "Geschichte", photosLabel: "Fotos", choosePhotos: "Fotos auswahlen", noPhotosSelected: "Keine Fotos ausgewahlt", photosSelectedSuffix: " ausgewahlt" },
-  it: { ...EN, title: "Cattura questo momento", helperLine: "Tocca l'anello per sigillare questo ricordo.", sealModeHint: "Tocca l'anello per sigillare questo ricordo.", sealFabHint: "Tocca l'anello per sigillare questo ricordo.", sealSecureQuickAction: "Salva in modo sicuro con Face ID", sealPromptRuleLine: "Solo gli anelli fidati possono sigillare ricordi sacri.", back: "Indietro", titleLabel: "Titolo", storyLabel: "Storia", photosLabel: "Foto", choosePhotos: "Scegli foto", noPhotosSelected: "Nessuna foto selezionata", photosSelectedSuffix: " selezionate" },
+  fr: { ...EN, title: "Capturez ce moment", helperLine: "Touchez votre bague pour sceller ce souvenir.", sealModeHint: "Touchez votre bague pour sceller ce souvenir.", sealFabHint: "Touchez votre bague pour sceller ce souvenir.", sealSecureQuickAction: "Enregistrer securise avec Face ID", sealStatusTitle: "Confirmation physique du scellement", sealStatusWaiting: "Touchez une bague de confiance pour confirmer physiquement ce souvenir sacre.", sealStatusReading: "Lecture de votre bague. Gardez-la immobile pres du telephone.", sealStatusVerified: "Bague de confiance verifiee. Le scellement se termine maintenant.", sealPromptRuleLine: "Seules les bagues de confiance peuvent sceller les souvenirs sacres.", back: "Retour", titleLabel: "Titre", storyLabel: "Histoire", photosLabel: "Photos", choosePhotos: "Choisir des photos", noPhotosSelected: "Aucune photo selectionnee", photosSelectedSuffix: " selectionnees" },
+  es: { ...EN, title: "Captura este momento", helperLine: "Toca tu anillo para sellar este recuerdo.", sealModeHint: "Toca tu anillo para sellar este recuerdo.", sealFabHint: "Toca tu anillo para sellar este recuerdo.", sealSecureQuickAction: "Guardar de forma segura con Face ID", sealStatusTitle: "Confirmacion fisica del sello", sealStatusWaiting: "Toca un anillo de confianza para confirmar fisicamente este recuerdo sagrado.", sealStatusReading: "Leyendo tu anillo. Mantenlo quieto cerca del telefono.", sealStatusVerified: "Anillo de confianza verificado. Terminando el sello ahora.", sealPromptRuleLine: "Solo los anillos de confianza pueden sellar recuerdos sagrados.", back: "Volver", titleLabel: "Titulo", storyLabel: "Historia", photosLabel: "Fotos", choosePhotos: "Elegir fotos", noPhotosSelected: "Ninguna foto seleccionada", photosSelectedSuffix: " seleccionadas" },
+  de: { ...EN, title: "Halte diesen Moment fest", helperLine: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealModeHint: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealFabHint: "Berühre deinen Ring, um diese Erinnerung zu versiegeln.", sealSecureQuickAction: "Sicher mit Face ID speichern", sealStatusTitle: "Physische Versiegelungsbestätigung", sealStatusWaiting: "Berühre einen vertrauenswürdigen Ring, um diese heilige Erinnerung physisch zu bestätigen.", sealStatusReading: "Dein Ring wird gelesen. Halte ihn ruhig nahe ans Telefon.", sealStatusVerified: "Vertrauenswürdiger Ring bestätigt. Die Versiegelung wird abgeschlossen.", sealPromptRuleLine: "Nur vertrauenswurdige Ringe konnen heilige Erinnerungen versiegeln.", back: "Zuruck", titleLabel: "Titel", storyLabel: "Geschichte", photosLabel: "Fotos", choosePhotos: "Fotos auswahlen", noPhotosSelected: "Keine Fotos ausgewahlt", photosSelectedSuffix: " ausgewahlt" },
+  it: { ...EN, title: "Cattura questo momento", helperLine: "Tocca l'anello per sigillare questo ricordo.", sealModeHint: "Tocca l'anello per sigillare questo ricordo.", sealFabHint: "Tocca l'anello per sigillare questo ricordo.", sealSecureQuickAction: "Salva in modo sicuro con Face ID", sealStatusTitle: "Conferma fisica del sigillo", sealStatusWaiting: "Tocca un anello fidato per confermare fisicamente questo ricordo sacro.", sealStatusReading: "Lettura dell'anello. Tienilo fermo vicino al telefono.", sealStatusVerified: "Anello fidato verificato. Il sigillo si sta completando.", sealPromptRuleLine: "Solo gli anelli fidati possono sigillare ricordi sacri.", back: "Indietro", titleLabel: "Titolo", storyLabel: "Storia", photosLabel: "Foto", choosePhotos: "Scegli foto", noPhotosSelected: "Nessuna foto selezionata", photosSelectedSuffix: " selezionate" },
 };

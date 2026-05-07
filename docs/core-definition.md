@@ -80,37 +80,43 @@ I read. I closed the app. It's locked away again until I tap next.
 
 That's the whole product. Everything else is scaffolding.
 
-## 4. The canonical NFC flow (one URL, two outcomes)
+## 4. The canonical NFC flow (one dynamic URL, three outcomes)
 
-The ring is programmed with exactly **one** NDEF URL:
+Haven Ring hardware is a **dynamic NFC ring**. Production rings use NTAG 424
+DNA Secure Dynamic Messaging (SDM), so each physical tap produces a fresh,
+server-verifiable URL. The SDM master key lives only in the server-side
+`sdm-backend` container environment; it is never committed, shipped to the
+browser, or stored in Supabase.
+
+The ring is programmed with exactly **one** dynamic NDEF URL template:
 
 ```
-https://<app>/hub?token=<opaque>
+https://<app>/start?picc_data=<dynamic>&cmac=<dynamic>
 ```
 
-`/hub` is a UI-less router. It decides what to do based on local state:
+Plain UID mirroring is supported only as a compatibility mode:
+`/start?uid=<uid>&ctr=<read-counter>&cmac=<dynamic>`.
+
+`/start` calls `POST /api/rings/sdm/resolve`, which validates the tap against
+`sdm-backend`, maps the verified UID to the active ring binding, rejects replayed
+read counters, and returns one of three scenes:
 
 ```
-User taps ring → /hub?token=T
+User taps dynamic ring → /start?...SDM...
     │
-    ├─ Local store has a pending moment?
-    │       │
-    │       ├─ YES → verify T server-side → seal pending moment
-    │       │         └─ full-screen "Sealed forever." ceremony
-    │       │             └─ returns user to empty input
-    │       │
-    │       └─ NO  → verify T server-side → resolve ringId
-    │                 └─ grant short-lived vault access (in-memory)
-    │                     └─ redirect to /vault/[ringId]
-    │                         └─ fetch ciphertext rows
-    │                             └─ client-side AES-GCM decrypt
-    │                                 └─ minimal read-only timeline
+    ├─ No active binding for verified UID
+    │     └─ scene = new_ring_binding
+    │
+    ├─ Active binding exists, no armed seal context
+    │     └─ scene = daily_access
+    │
+    └─ Active binding exists, authenticated owner has armed seal flow
+          └─ scene = seal_confirmation
 ```
 
-The same URL on the ring is *both* "seal this" and "let me remember". The
-product picks the right branch based on whether the user has a pending moment
-on this device. This is the only piece of state that differentiates the two
-outcomes.
+The same physical tap is *new ring binding*, *daily access*, and *seal
+confirmation*. The server verifies that the tap is real and fresh; local product
+state decides which trusted scene should continue.
 
 ## 5. Compose flow (unchanged)
 
@@ -193,7 +199,7 @@ To prevent scope creep, explicit non-goals:
 | Transport      | Supabase JS client (HTTPS)                       | Only ciphertext crosses the network                           |
 | Server state   | Supabase Postgres + Row Level Security           | Rings, sealed moments, no plaintext                           |
 | Auth           | Supabase Auth (owner of a ring)                  | Ring claiming, vault RLS, wipe authorisation                  |
-| Hardware       | NTAG / NDEF-encoded URL → `/hub?token=<t>`       | One URL, one gesture. The ring holds no secret.               |
+| Hardware       | Dynamic NTAG 424 DNA SDM URL → `/start?...`      | One dynamic URL, one gesture, replay-resistant tap proof      |
 
 ## 10. Language policy
 
@@ -208,8 +214,9 @@ To prevent scope creep, explicit non-goals:
 - Recovery copy, security prompts, and wipe confirmations must be translated
   consistently with the same legal/meaning precision as English.
 
-The ring itself holds no secret. It holds a URL with an opaque token. The token
-proves *"this specific ring was tapped right now"*, not identity, not content.
+The ring itself holds the SDM app configuration, not user content. A verified
+SDM response proves *"this specific ring was tapped right now"*, not identity,
+not plaintext content.
 
 ## 11. Decision guardrails for future work
 

@@ -24,11 +24,21 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Copy `.env.example` to your runtime environment and fill required values.
 
+Haven Ring hardware is a dynamic NFC ring. Production taps must resolve through
+Secure Dynamic Messaging (SDM) verification; the SDM master key lives only in
+the server/container environment and must never be committed.
+
 Required for NFC cloud login path:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_JWT_SECRET`
+
+Required for dynamic NFC ring verification:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SDM_BACKEND_URL` (for local Docker on the same host: `http://127.0.0.1:5000`)
+- `MASTER_KEY` (server/container environment only; consumed by `sdm-backend`)
 
 Optional but recommended:
 
@@ -37,6 +47,14 @@ Optional but recommended:
 - `NFC_LONG_SESSION_MAX_SECONDS`
 - `NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS`
 - `NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS`
+- `SDM_BACKEND_VERIFY_PATH` (defaults to `/api/tag` for encrypted `picc`, `/api/tagpt` for plaintext `uid` + `ctr`)
+- `SDM_BACKEND_PORT` (Docker host port for `docker-compose.sdm.yml`, default `5000`)
+
+Run the SDM verifier with Docker:
+
+```bash
+MASTER_KEY="$MASTER_KEY" docker compose -f docker-compose.sdm.yml up -d
+```
 
 ## Learn More
 

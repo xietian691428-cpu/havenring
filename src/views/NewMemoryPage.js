@@ -1,38 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { createMemory } from "../services/localStorageService";
-import {
-  listDraftItems,
-  removeDraftItem,
-  saveDraftItem,
-} from "../services/draftBoxService";
+import { saveDraftItem } from "../services/draftBoxService";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { NEW_MEMORY_PAGE_CONTENT } from "../content/newMemoryPageContent";
-import {
-  getApiErrorCode,
-  getUserFriendlyMessage,
-} from "../utils/userFriendlyApiErrors";
 import {
   isFirstMemoryCompleted,
   markFirstMemoryCompleted,
   trackFirstRunEvent,
 } from "../services/firstRunTelemetryService";
 import { armSealFlow, clearSealFlowArm } from "../../lib/seal-flow";
-import { readNfcScanFull } from "../services/nfcRingService";
-import { normalizeNfcUidInput } from "../../lib/nfc-uid-browser";
-import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
-const SEAL_UNDO_WINDOW_MS = 6000;
+const PENDING_SEAL_DRAFT_IDS_KEY = "haven.pending_seal_draft_ids.v1";
 
 function clearDraftSnapshot() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+}
+
+function writePendingSealDraftIds(ids = []) {
+  if (typeof window === "undefined") return;
+  if (!ids.length) {
+    window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
+    return;
+  }
+  window.localStorage.setItem(PENDING_SEAL_DRAFT_IDS_KEY, JSON.stringify(ids));
+}
+
+function clearPendingSealDraftIds() {
+  writePendingSealDraftIds([]);
 }
 
 /**
@@ -46,8 +47,6 @@ function clearDraftSnapshot() {
 export function NewMemoryPage({
   onBack,
   onSaved,
-  onSaveMemory,
-  onViewTimeline,
   locale = "en",
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
@@ -58,27 +57,17 @@ export function NewMemoryPage({
   const [attachments, setAttachments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const { soundEnabled, hapticEnabled, soundScope, updateFeedbackPrefs } =
-    useFeedbackPrefs();
+  const { soundEnabled, hapticEnabled, soundScope } = useFeedbackPrefs();
   const [saveDialog, setSaveDialog] = useState({
     open: false,
     status: "saving",
     errorMessage: "",
   });
   const [sealPromptOpen, setSealPromptOpen] = useState(false);
-  const [memoryType, setMemoryType] = useState("text");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [draftItems, setDraftItems] = useState([]);
-  const [selectedDraftIds, setSelectedDraftIds] = useState([]);
   const [editingDraftId, setEditingDraftId] = useState("");
-  const [pendingSealIds, setPendingSealIds] = useState([]);
-  const [draftBoxOpen, setDraftBoxOpen] = useState(false);
-  const [sealTicket, setSealTicket] = useState("");
-  const [ringTapBusy, setRingTapBusy] = useState(false);
   const [ringTapError, setRingTapError] = useState("");
-  const [sealSuccessToast, setSealSuccessToast] = useState("");
   const [isFirstMemoryMode, setIsFirstMemoryMode] = useState(false);
-  const sealTimerRef = useRef(null);
 
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
@@ -97,34 +86,12 @@ export function NewMemoryPage({
     window.setTimeout(() => setFeedback(message), 0);
   }
 
-  function celebrateSealSuccess() {
-    triggerSuccessFeedback({
-      soundEnabled,
-      hapticEnabled,
-      allowSound: true,
-    });
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate([60, 40, 90, 40, 120]);
-    }
-    setSealSuccessToast(t.sealSuccessWarm);
-    window.setTimeout(() => setSealSuccessToast(""), 2200);
-  }
-
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
-    setIsFirstMemoryMode(!firstDone);
-  }, []);
-
-  useEffect(() => {
-    void loadDraftBox();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (sealTimerRef.current) {
-        window.clearTimeout(sealTimerRef.current);
-      }
-    };
+    const timer = window.setTimeout(() => {
+      setIsFirstMemoryMode(!firstDone);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -296,9 +263,8 @@ export function NewMemoryPage({
         releaseAt,
       });
       setEditingDraftId(savedDraft.id);
-      await loadDraftBox();
       if (openSealPromptOnSuccess) {
-        setPendingSealIds([savedDraft.id]);
+        writePendingSealDraftIds([savedDraft.id]);
       }
       setFeedback(t.feedbackSaved);
       setSaveDialog(
@@ -342,70 +308,6 @@ export function NewMemoryPage({
     }
   }
 
-  async function loadDraftBox() {
-    const rows = await listDraftItems();
-    setDraftItems(rows);
-    setSelectedDraftIds((prev) => prev.filter((id) => rows.some((d) => d.id === id)));
-  }
-
-  async function sealDraftItems(ids = []) {
-    if (!ids.length) return;
-    if (sealTimerRef.current) return;
-    setSaving(true);
-    try {
-      setPendingSealIds(ids);
-      setSelectedDraftIds([]);
-      setFeedbackNotice(
-        t.feedbackUndoWindow.replace("{n}", String(ids.length))
-      );
-      sealTimerRef.current = window.setTimeout(async () => {
-        try {
-          await loadDraftBox();
-          setSealPromptOpen(true);
-          armSealFlow();
-          setFeedbackNotice(t.feedbackReadyToSeal);
-        } catch {
-          setFeedback(t.feedbackSaveFailed);
-        } finally {
-          sealTimerRef.current = null;
-          setPendingSealIds([]);
-          setSaving(false);
-        }
-      }, SEAL_UNDO_WINDOW_MS);
-    } catch {
-      setFeedback(t.feedbackSaveFailed);
-      setSaving(false);
-    }
-  }
-
-  function undoPendingSeal() {
-    if (!sealTimerRef.current) return;
-    window.clearTimeout(sealTimerRef.current);
-    sealTimerRef.current = null;
-    setPendingSealIds([]);
-    setSaving(false);
-    setFeedbackNotice(t.feedbackUndoDone);
-  }
-
-  function editDraftItem(item) {
-    setEditingDraftId(item.id);
-    setTitle(item.title || "");
-    setStory(item.story || "");
-    setReleaseAtInput(
-      item.releaseAt ? new Date(item.releaseAt).toISOString().slice(0, 16) : ""
-    );
-    setPhotos(Array.isArray(item.photo) ? item.photo : []);
-    setAttachments(
-      Array.isArray(item.attachments)
-        ? item.attachments.map((row) => ({
-            ...row,
-            file: null,
-          }))
-        : []
-    );
-    setFeedbackNotice(t.feedbackDraftRestored);
-  }
-
   function handleCreateAnother() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(false);
@@ -415,21 +317,16 @@ export function NewMemoryPage({
     setPhotos([]);
     setAttachments([]);
     setEditingDraftId("");
-    setSealTicket("");
     setRingTapError("");
     setFeedback(t.feedbackReadyNext);
     clearSealFlowArm();
+    clearPendingSealDraftIds();
     clearDraftSnapshot();
-  }
-
-  function handleViewTimeline() {
-    void finalizePendingSealsAndExit();
   }
 
   function handleOpenSealPrompt() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(true);
-    setSealTicket("");
     setRingTapError("");
     armSealFlow();
     setFeedbackNotice(t.feedbackReadyToSeal);
@@ -439,216 +336,16 @@ export function NewMemoryPage({
     await handleSave({ openSealPromptOnSuccess: true, showDialogOnSuccess: false });
   }
 
-  async function handleQuickDraft() {
-    await handleSave({ openSealPromptOnSuccess: false, showDialogOnSuccess: false });
-  }
-
   async function handleSaveSecurelyFallback() {
     await handleSave({ openSealPromptOnSuccess: false, showDialogOnSuccess: false });
   }
-
-  function collectPendingSealPayloads() {
-    const payloads = [];
-    for (const id of pendingSealIds) {
-      const item = draftItems.find((row) => row.id === id);
-      if (!item) continue;
-      payloads.push({
-        id,
-        title: item.title || t.untitled,
-        story: item.story || "",
-        photo: Array.isArray(item.photo) ? item.photo : [],
-        attachments: Array.isArray(item.attachments) ? item.attachments : [],
-        releaseAt: Number(item.releaseAt || 0) || 0,
-      });
-    }
-    return payloads;
-  }
-
-  async function cacheSealedMemoriesLocally(payloads = []) {
-    for (const item of payloads) {
-      const localPayload = {
-        id: item.id,
-        title: item.title || t.untitled,
-        story: item.story || "",
-        photo: Array.isArray(item.photo) ? item.photo : [],
-        voice: null,
-        attachments: Array.isArray(item.attachments) ? item.attachments : [],
-        releaseAt: Number(item.releaseAt || 0) || 0,
-        tags: [],
-      };
-      if (typeof onSaveMemory === "function") {
-        await onSaveMemory(localPayload);
-      } else {
-        await createMemory(localPayload);
-      }
-    }
-  }
-
-  async function requestSealTicketFromRingTap() {
-    if (!pendingSealIds.length) return;
-    setRingTapBusy(true);
-    setRingTapError("");
-    try {
-      const scan = await readNfcScanFull();
-      const rawUid = scan?.serialNumber || scan?.text || "";
-      const uid = normalizeNfcUidInput(rawUid);
-      if (!uid) {
-        throw new Error(t.sealRingReadFailed);
-      }
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data?.session?.access_token || "";
-      if (!accessToken) {
-        throw new Error(t.sealNeedSignIn);
-      }
-      const res = await fetch("/api/seal/ring-tap", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          nfc_uid: uid,
-          draft_ids: pendingSealIds,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.seal_ticket) {
-        const errorCode = getApiErrorCode(json, res.status);
-        throw new Error(getUserFriendlyMessage(errorCode, t));
-      }
-      const nextTicket = String(json.seal_ticket);
-      setSealTicket(nextTicket);
-      setFeedbackNotice(t.sealTicketReady);
-      return nextTicket;
-    } catch (error) {
-      setSealTicket("");
-      setRingTapError(
-        error instanceof Error ? error.message : t.errGenericWarmFallback
-      );
-      return "";
-    } finally {
-      setRingTapBusy(false);
-    }
-  }
-
-  async function finalizePendingSealsAndExit(ticketOverride = "") {
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
-    if (!pendingSealIds.length) {
-      setSealPromptOpen(false);
-      clearSealFlowArm();
-      onViewTimeline?.();
-      return;
-    }
-    const ticketToUse = String(ticketOverride || sealTicket || "");
-    if (!ticketToUse) {
-      setFeedback(t.feedbackMissingVerifiedTap);
-      return;
-    }
-    setSaving(true);
-    try {
-      const draftPayloads = collectPendingSealPayloads();
-      if (!draftPayloads.length) {
-        throw new Error(t.feedbackSaveFailed);
-      }
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data?.session?.access_token || "";
-      if (!accessToken) {
-        throw new Error(t.sealNeedSignIn);
-      }
-      const precheckRes = await fetch("/api/seal/finalize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          seal_ticket: ticketToUse,
-          draft_ids: pendingSealIds,
-          mode: "precheck",
-        }),
-      });
-      const precheckJson = await precheckRes.json().catch(() => ({}));
-      if (!precheckRes.ok || !precheckJson?.ok) {
-        const errorCode = getApiErrorCode(precheckJson, precheckRes.status);
-        throw new Error(getUserFriendlyMessage(errorCode, t));
-      }
-      const commitRes = await fetch("/api/seal/finalize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          seal_ticket: ticketToUse,
-          draft_ids: pendingSealIds,
-          mode: "commit",
-          draft_payloads: draftPayloads,
-        }),
-      });
-      const commitJson = await commitRes.json().catch(() => ({}));
-      if (!commitRes.ok || !commitJson?.ok) {
-        const errorCode = getApiErrorCode(commitJson, commitRes.status);
-        throw new Error(getUserFriendlyMessage(errorCode, t));
-      }
-      await cacheSealedMemoriesLocally(draftPayloads);
-      for (const id of pendingSealIds) {
-        await removeDraftItem(id);
-      }
-      await loadDraftBox();
-      clearDraftSnapshot();
-      setPendingSealIds([]);
-      setSealTicket("");
-      setSealPromptOpen(false);
-      clearSealFlowArm();
-      celebrateSealSuccess();
-      if (isFirstMemoryMode) {
-        markFirstMemoryCompleted();
-        setIsFirstMemoryMode(false);
-        void trackFirstRunEvent("first_memory_saved", {
-          locale,
-          metadata: { mode: "seal_commit" },
-        });
-      }
-      onSaved?.();
-      onViewTimeline?.();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t.errGenericWarmFallback;
-      setFeedback(message);
-      setRingTapError(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function persistPendingSeals() {
-    const draftPayloads = collectPendingSealPayloads();
-    if (!draftPayloads.length) {
-      throw new Error(t.feedbackSaveFailed);
-    }
-    await cacheSealedMemoriesLocally(draftPayloads);
-    for (const id of pendingSealIds) {
-      await removeDraftItem(id);
-    }
-  }
-
-  async function handleSealWithRingChoice() {
-    const ticket = await requestSealTicketFromRingTap();
-    if (!ticket) return;
-    await finalizePendingSealsAndExit(ticket);
-  }
-
-  const visibleDraftItems = draftItems.filter(
-    (item) => !pendingSealIds.includes(item.id)
-  );
 
   return (
     <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <h1 style={styles.title}>{t.title}</h1>
+            <h1 style={styles.title}>Capture this moment</h1>
           </div>
         </header>
 
@@ -825,55 +522,12 @@ export function NewMemoryPage({
         {sealPromptOpen ? (
           <section style={styles.sealPromptBox}>
             <p style={styles.sealPromptTitle}>{t.sealPromptTitle}</p>
-            <p style={styles.noticeTitle}>{t.sealPromptRuleLine}</p>
-            <p style={styles.sealPromptBody}>{t.sealPromptBody}</p>
-            <p style={styles.noticeTitle}>{t.memoryTypeTitle}</p>
-            <div style={styles.voiceActions}>
-              {[
-                { key: "text", label: t.memoryTypeText },
-                { key: "photo-video", label: t.memoryTypePhotoVideo },
-                { key: "voice", label: t.memoryTypeVoice },
-                { key: "mixed", label: t.memoryTypeMixed },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setMemoryType(item.key)}
-                  style={memoryType === item.key ? styles.primaryButton : styles.secondaryButton}
-                >
-                  {item.label}
-                </button>
-              ))}
+            <p style={styles.sealPromptBody}>{t.sealPromptRuleLine}</p>
+            <div style={styles.statusBanner} role="status" aria-live="polite">
+              <p style={styles.sealPromptBody}>{t.sealStatusWaiting}</p>
             </div>
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-            <div style={styles.voiceActions}>
-              <button
-                type="button"
-                onClick={() => void handleSealWithRingChoice()}
-                style={styles.primaryButton}
-                disabled={ringTapBusy || saving}
-              >
-                {ringTapBusy ? t.sealTouchWorking : t.sealConfirmButton}
-              </button>
-            </div>
           </section>
-        ) : null}
-        {sealSuccessToast ? (
-          <section style={styles.successToast} role="status">
-            <p style={styles.successToastText}>{sealSuccessToast}</p>
-          </section>
-        ) : null}
-
-        {pendingSealIds.length ? (
-          <div style={styles.voiceActions}>
-            <button
-              type="button"
-              onClick={undoPendingSeal}
-              style={styles.secondaryButton}
-            >
-              {t.undoSealAction}
-            </button>
-          </div>
         ) : null}
       </section>
       <SaveToHavenDialog
@@ -995,8 +649,9 @@ const styles = {
   },
   title: {
     margin: "8px 0 0",
-    fontSize: 28,
-    fontWeight: 500,
+    fontSize: 34,
+    fontWeight: 650,
+    letterSpacing: "-0.02em",
   },
   helperLine: {
     margin: 0,
@@ -1118,13 +773,14 @@ const styles = {
     justifyItems: "start",
   },
   linkAction: {
-    border: "none",
-    background: "transparent",
+    border: "1px solid #5a3b30",
+    background: "rgba(255,255,255,0.03)",
     color: "#d9c3b3",
-    textDecoration: "underline",
+    textDecoration: "none",
     cursor: "pointer",
-    fontSize: 12,
-    padding: 0,
+    fontSize: 13,
+    padding: "10px 14px",
+    borderRadius: 999,
   },
   attachmentItem: {
     display: "flex",
@@ -1161,11 +817,11 @@ const styles = {
   },
   sealPromptBox: {
     border: "1px solid #d9a67a",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 16,
     display: "grid",
-    gap: 8,
-    background: "#1b1512",
+    gap: 10,
+    background: "linear-gradient(135deg, rgba(70, 45, 32, 0.9), #1b1512 62%)",
   },
   sealPromptTitle: {
     margin: 0,
@@ -1185,6 +841,14 @@ const styles = {
     display: "grid",
     gap: 8,
     background: "rgba(26, 21, 18, 0.45)",
+  },
+  statusBanner: {
+    border: "1px solid rgba(217, 166, 122, 0.42)",
+    borderRadius: 12,
+    padding: "10px 12px",
+    display: "grid",
+    gap: 6,
+    background: "rgba(217, 166, 122, 0.1)",
   },
   noticeTitle: {
     margin: 0,
@@ -1223,14 +887,14 @@ const styles = {
     border: "1px solid #d9a67a",
     background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
     color: "#1b1411",
-    borderRadius: 999,
-    padding: "12px 16px",
-    fontWeight: 700,
+    borderRadius: 24,
+    padding: "18px 20px",
+    fontWeight: 800,
     cursor: "pointer",
     display: "grid",
-    gap: 4,
+    gap: 6,
     textAlign: "left",
-    boxShadow: "0 0 0 0 rgba(217, 166, 122, 0.35)",
+    boxShadow: "0 18px 46px rgba(0,0,0,0.35), 0 0 0 0 rgba(217, 166, 122, 0.35)",
     animation: "havenPulse 2.2s ease-in-out infinite",
   },
   floatingPrimaryMain: {
@@ -1250,8 +914,8 @@ const styles = {
   },
   floatingPrimaryHint: {
     color: "rgba(27, 20, 17, 0.8)",
-    fontWeight: 500,
-    fontSize: 11,
+    fontWeight: 600,
+    fontSize: 12,
     lineHeight: 1.3,
   },
   feedback: {

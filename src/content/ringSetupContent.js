@@ -11,6 +11,10 @@ const EN = {
   scanCta: "Start scanning",
   scanWorking: "Listening for NFC…",
   scanRetry: "Try again",
+  statusBindingTitle: "New ring binding",
+  statusBindingScanning: "Waiting for a ring touch. Keep the ring still near your phone.",
+  statusBindingDetected:
+    "Ring touch received. This is a new ring setup flow; confirm it is you, then name the ring.",
   iosNfcTitle: "NFC setup on iPhone",
   iosNfcBody:
     "Your ring has been pre-configured to open this sanctuary. We will now connect it to your account.",
@@ -148,6 +152,11 @@ export const RING_SETUP_CONTENT = {
     scanCta: "Demarrer la lecture",
     scanWorking: "Ecoute NFC…",
     scanRetry: "Reessayer",
+    statusBindingTitle: "Liaison d'une nouvelle bague",
+    statusBindingScanning:
+      "En attente du toucher de bague. Gardez la bague immobile pres du telephone.",
+    statusBindingDetected:
+      "Bague detectee. Ceci est une configuration de nouvelle bague ; confirmez votre identite, puis nommez-la.",
     iosNfcTitle: "NFC sur iPhone",
     iosNfcBody:
       "Votre bague est preconfiguree pour ouvrir ce sanctuaire. Nous allons maintenant la connecter a votre compte.",
@@ -175,6 +184,11 @@ export const RING_SETUP_CONTENT = {
     scanTitle: "Acerca el anillo al telefono",
     scanCta: "Empezar escaneo",
     scanWorking: "Buscando NFC…",
+    statusBindingTitle: "Vinculando nuevo anillo",
+    statusBindingScanning:
+      "Esperando el toque del anillo. Manténlo quieto cerca del teléfono.",
+    statusBindingDetected:
+      "Anillo detectado. Este es el flujo para vincular un nuevo anillo; confirma tu identidad y ponle nombre.",
     iosNfcTitle: "NFC en iPhone",
     verifyTitle: "Confirma que eres tu",
     nameTitle: "Nombre del anillo",
@@ -195,6 +209,11 @@ export const RING_SETUP_CONTENT = {
     scanTitle: "Ring ans Telefon halten",
     scanCta: "Scan starten",
     scanWorking: "NFC wird gesucht…",
+    statusBindingTitle: "Neuen Ring verknüpfen",
+    statusBindingScanning:
+      "Warte auf Ring-Berührung. Halte den Ring ruhig nahe ans Telefon.",
+    statusBindingDetected:
+      "Ring erkannt. Dies ist die Einrichtung eines neuen Rings; bestätige deine Identität und benenne ihn.",
     iosNfcTitle: "NFC auf dem iPhone",
     verifyTitle: "Bestatige deine Identitat",
     nameTitle: "Ring benennen",
@@ -215,6 +234,11 @@ export const RING_SETUP_CONTENT = {
     scanTitle: "Avvicina l'anello al telefono",
     scanCta: "Avvia scansione",
     scanWorking: "Ascolto NFC…",
+    statusBindingTitle: "Collegamento nuovo anello",
+    statusBindingScanning:
+      "In attesa del tocco dell'anello. Tienilo fermo vicino al telefono.",
+    statusBindingDetected:
+      "Anello rilevato. Questo è il flusso per collegare un nuovo anello; conferma la tua identità e dagli un nome.",
     iosNfcTitle: "NFC su iPhone",
     verifyTitle: "Conferma la tua identita",
     nameTitle: "Nome dell'anello",

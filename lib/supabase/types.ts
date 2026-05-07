@@ -46,6 +46,9 @@ export type UserNfcRingRow = {
   last_used_at: string | null;
   is_active: boolean;
   created_at: string;
+  sdm_enabled: boolean;
+  last_sdm_counter: number | null;
+  last_sdm_verified_at: string | null;
 };
 
 export type HavenRow = {
@@ -229,6 +232,9 @@ export type Database = {
           last_used_at?: string | null;
           is_active?: boolean;
           created_at?: string;
+          sdm_enabled?: boolean;
+          last_sdm_counter?: number | null;
+          last_sdm_verified_at?: string | null;
         };
         Update: Partial<UserNfcRingRow>;
         Relationships: [];
