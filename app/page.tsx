@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/LandingPage";
-import { SITE_ORIGIN } from "@/components/landing/constants";
+import { SITE_ORIGIN } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),

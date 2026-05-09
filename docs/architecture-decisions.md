@@ -65,9 +65,9 @@ supabase/migrations/    # DB schema (rings, user_nfc_rings, seal_tickets, entitl
 
 ### 2.1 App entry and shell split (completed)
 
-- **`app/page.tsx`** is the Next.js **`/`** entry. It owns the **first-run redirect** (`/start` when onboarding / first-memory FTUX flags are incomplete) and, when allowed, renders **`<AppShell />`** imported from **`@/src/app-shell/AppShell`**.
+- **`app/page.tsx`** is the Next.js **`/`** entry: the **marketing landing page** (SEO, canonical URL via `lib/site.ts`). The in-app shell mounts at **`app/app/page.tsx`** → route **`/app`** (first-run redirect to `/start`, then **`AppShell`**).
 - **`src/app-shell/AppShell.tsx`** wraps the tree: **`AppFlowProvider` → `SessionProvider` → `SubscriptionProvider` → `RingProvider` → `AppRouter`**. Global chrome and tab routing live under **`AppRouter`** / **`AppChrome`** — not in `app/page.tsx`.
-- **`src/App.js`** was removed as redundant; **`src/App.js.bak`** documents the old single-line re-export pattern. **Do not reintroduce** `src/App.js` — use **`AppShell`** directly.
+- **`src/App.js`** was removed as redundant. **Do not reintroduce** `src/App.js` — use **`AppShell`** directly from **`app/app/page.tsx`**.
 
 ---
 

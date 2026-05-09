@@ -2,6 +2,7 @@ import {
   getPreferredLocale,
   isSupportedLocale,
 } from "@/lib/i18n";
+import { APP_ENTRY_PATH } from "@/lib/site";
 import { redirect } from "next/navigation";
 
 type ClaimReason =
@@ -33,5 +34,5 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
   next.set("lang", locale);
   next.set("reason", reason);
   if (tokenParam) next.set("token", tokenParam);
-  redirect(`/?${next.toString()}`);
+  redirect(`${APP_ENTRY_PATH}?${next.toString()}`);
 }

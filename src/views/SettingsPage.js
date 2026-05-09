@@ -172,7 +172,7 @@ export function SettingsPage({
     setStatus(localeCopy.signingIn);
     try {
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = `${window.location.origin}/`;
+      const redirectTo = `${window.location.origin}/app`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: { redirectTo },

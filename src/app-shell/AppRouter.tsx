@@ -287,7 +287,7 @@ export function AppRouter() {
       const supabase = getSupabaseBrowserClient();
       const redirectTo = token
         ? `${window.location.origin}/hub?token=${encodeURIComponent(token)}`
-        : `${window.location.origin}/`;
+        : `${window.location.origin}/app`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },

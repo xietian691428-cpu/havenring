@@ -22,7 +22,22 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Environment Variables
 
-Copy `.env.example` to your runtime environment and fill required values.
+Copy `.env.example` to `.env.local` for development, or configure the same keys in your host (e.g. Vercel → Project → Settings → Environment Variables).
+
+### Production: one Next.js app + one Supabase project (`havenring.me`)
+
+Use a **single** deployment for the marketing site and the PWA shell (`/app`). Point **`havenring.me`** at that deployment (DNS → Vercel or your host). Run database migrations against the same Supabase project you use in production env vars.
+
+**Supabase Dashboard → Authentication → URL configuration**
+
+| Setting | Value |
+|--------|--------|
+| Site URL | `https://havenring.me` |
+| Redirect URLs | `https://havenring.me/**` (or explicitly list `/app`, `/start`, `/bind-ring`, `/hub` paths if you restrict wildcards) |
+
+OAuth and email magic links return to URLs under `havenring.me`; the app shell lives at **`/app`**, so ensure redirects include paths under your domain (the wildcard covers this).
+
+**SEO:** Set `NEXT_PUBLIC_SITE_URL=https://havenring.me` so `metadataBase` and Open Graph URLs stay canonical.
 
 Haven Ring hardware is a dynamic NFC ring. Production taps must resolve through
 Secure Dynamic Messaging (SDM) verification; the SDM master key lives only in
