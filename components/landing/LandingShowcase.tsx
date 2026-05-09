@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { LandingFadeIn, landingEase } from "./LandingMotion";
 
@@ -85,19 +86,40 @@ export function LandingShowcase() {
       <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-14 lg:flex-row lg:items-start lg:justify-between lg:gap-20">
         <LandingFadeIn className="flex max-w-xl flex-1 flex-col gap-6 lg:pt-4">
           <p className="text-[10px] font-medium uppercase tracking-[0.48em] text-amber-200/58">
-            Capture · Seal · Treasure
+            A Ring. A Sanctuary.
           </p>
           <h2 className="text-balance text-[clamp(1.75rem,4vw,2.65rem)] font-medium leading-[1.14] tracking-[0.02em] text-white">
-            No stage. No followers. Only the gravity of what you choose to keep.
+            Capture meaningful moments, then seal them with intention.
           </h2>
           <p className="text-pretty text-[15px] leading-[1.82] text-white/48">
-            The interface disappears on purpose: a page for words, a gesture for commitment. Your
-            phone becomes a quiet desk; your ring, the wax seal on a letter never mailed.
+            This is not another social product. It is a private sanctuary for moments that deserve
+            dignity, not distribution.
           </p>
           <p className="text-pretty text-[15px] leading-[1.82] text-white/38">
-            HavenRing does not rank your joy or monetize your grief. It holds the line between
-            inner life and infinite scroll — then lets you walk away.
+            For full visual continuity, we split the new poster into curated scenes below while
+            keeping the original poster fully visible above.
           </p>
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/[0.08] bg-black">
+              <Image
+                src="/landing/brand-poster-v2.png"
+                alt="HavenRing logo crop"
+                fill
+                sizes="(max-width:1024px) 46vw, 220px"
+                className="object-cover object-[12%_18%]"
+              />
+            </div>
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/[0.08] bg-black">
+              <Image
+                src="/landing/brand-poster-v2.png"
+                alt="HavenRing ring crop"
+                fill
+                sizes="(max-width:1024px) 46vw, 220px"
+                className="object-cover object-[22%_72%]"
+              />
+            </div>
+          </div>
         </LandingFadeIn>
 
         <motion.div

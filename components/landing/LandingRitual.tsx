@@ -42,11 +42,11 @@ export function LandingRitual() {
         >
           <div className="relative mx-auto aspect-[4/5] max-w-md overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-zinc-950 shadow-[0_70px_140px_-56px_rgba(0,0,0,0.92)] lg:mx-0 lg:max-w-none">
             <Image
-              src="/landing/hero-mood.png"
+              src="/landing/brand-poster-v2.png"
               alt="HavenRing — ceremony and stillness"
               fill
               sizes="(max-width:1024px) 100vw, 45vw"
-              className="object-cover object-[center_35%]"
+              className="object-cover object-[18%_72%]"
             />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-black/55 via-transparent to-amber-950/20" />
             <p className="landing-serif-headline absolute bottom-6 left-6 right-6 text-[14px] italic leading-relaxed text-white/58 sm:bottom-8 sm:left-8 sm:right-8 sm:text-[15px]">

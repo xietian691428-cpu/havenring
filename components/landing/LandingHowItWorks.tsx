@@ -7,25 +7,25 @@ const STEPS = [
   {
     num: "01",
     title: "Write",
-    body: "Put language around what you felt — a glance, a vow, a grief you do not owe the internet.",
+    body: "Capture a thought, memory, or feeling that matters.",
     hint: "Journal",
   },
   {
     num: "02",
     title: "Touch",
-    body: "Bring your ring to your phone. The gesture is small; the intention is not.",
+    body: "Tap your ring on your phone to seal it.",
     hint: "NFC",
   },
   {
     num: "03",
     title: "Seal",
-    body: "That moment becomes encrypted and yours alone — not performance, not content.",
+    body: "Your moment is encrypted and stored privately.",
     hint: "Lock",
   },
   {
     num: "04",
     title: "Treasure",
-    body: "Return when you need warmth, proof, or silence. No algorithm decides what survives.",
+    body: "Revisit your sealed moments whenever you want.",
     hint: "Vault",
   },
 ] as const;
@@ -39,11 +39,10 @@ export function LandingHowItWorks() {
             How it works
           </p>
           <h2 className="mt-5 max-w-3xl text-balance text-[clamp(1.85rem,4.5vw,2.75rem)] font-medium leading-[1.15] tracking-[0.02em] text-white">
-            From impulse to artifact — four quiet movements.
+            Preserve what matters in four quiet steps.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-relaxed text-white/48">
-            Write, touch, seal, treasure. No stage. No followers. Only the gravity of what you
-            choose to keep.
+            Write. Touch. Seal. Treasure. A ring, a sanctuary.
           </p>
         </LandingFadeIn>
 

@@ -1,15 +1,22 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function LandingNav() {
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-[90] flex justify-center px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
-      <div className="pointer-events-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/[0.08] bg-black/55 px-4 py-2.5 backdrop-blur-md">
+      <div className="pointer-events-auto flex w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/[0.08] bg-black/60 px-4 py-2.5 backdrop-blur-md">
         <Link
           href="/"
-          className="text-[10px] font-medium tracking-[0.42em] text-white/95 hover:text-white"
+          className="relative block h-7 w-[170px] overflow-hidden rounded-md border border-white/[0.06] bg-black/35"
           aria-label="HavenRing home"
         >
-          HAVENRING
+          <Image
+            src="/landing/brand-poster-v2.png"
+            alt="HavenRing"
+            fill
+            sizes="170px"
+            className="object-cover object-[14%_10%]"
+          />
         </Link>
         <nav className="flex items-center gap-2 sm:gap-3">
           <Link
