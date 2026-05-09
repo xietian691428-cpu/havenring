@@ -1,4 +1,6 @@
+/** SessionStorage “armed” window for Seal-with-Ring (see `src/features/seal`). */
 const SEAL_ARMED_KEY = "haven.seal.armed.v1";
+/** Keep consistent with server ticket TTL defaults (`lib/seal-shared.ts`). */
 const SEAL_ARM_TTL_MS = 5 * 60 * 1000;
 
 export function armSealFlow() {

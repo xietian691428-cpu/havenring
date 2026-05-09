@@ -1,19 +1,22 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolvePlatformTarget } from "@/src/hooks/usePlatformTarget";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import { getPlatformGuidance } from "@/src/utils/platformGuidance";
-import { clearSealFlowArm, isSealFlowArmed } from "@/lib/seal-flow";
-import { getDraftItem, removeDraftItem } from "@/src/services/draftBoxService";
+import {
+  abandonInProgressSealOnStartPage,
+  finalizeSealChainFromSdmResponse,
+  getSealSdmContextPayload,
+} from "@/src/features/seal";
+import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 
 const FTUX_STARTED_KEY = "haven.ftux.started.v1";
-const PROD_ORIGIN = "https://www.havenring.me";
+const PROD_ORIGIN = "https://havenring.me";
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
-const PENDING_SEAL_DRAFT_IDS_KEY = "haven.pending_seal_draft_ids.v1";
 
 type SdmScene = "new_ring_binding" | "daily_access" | "seal_confirmation";
 
@@ -27,6 +30,34 @@ type SdmResolveState =
       ownerId: string | null;
     }
   | { kind: "failed"; message: string };
+
+function isSealNfcLaunchSearch(search: string): boolean {
+  const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const cmac = sp.get("cmac") || "";
+  const picc = sp.get("picc") || sp.get("picc_data") || "";
+  const uid = sp.get("uid") || "";
+  const ctr = sp.get("ctr") || "";
+  return Boolean(cmac) && (Boolean(picc) || (Boolean(uid) && Boolean(ctr)));
+}
+
+/** OAuth return URL: reads the live `/start` query so redirects never miss NFC params if the user signs in immediately. */
+function buildOAuthReturnUrl(safeOrigin: string): string {
+  if (typeof window === "undefined") return `${safeOrigin}/`;
+  const rawSearch = window.location.search || "";
+  const sp = new URLSearchParams(
+    rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch
+  );
+  const claimRaw = sp.get("claim") || "";
+  const claimNormalized = normalizeClaimValue(claimRaw);
+  if (claimNormalized) {
+    return `${safeOrigin}/start?claim=${encodeURIComponent(claimRaw.trim())}`;
+  }
+  if (isSealNfcLaunchSearch(rawSearch)) {
+    const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
+    return qs ? `${safeOrigin}/start?${qs}` : `${safeOrigin}/start`;
+  }
+  return `${safeOrigin}/`;
+}
 
 function normalizeClaimValue(input: string): string {
   const raw = String(input || "").trim();
@@ -108,42 +139,6 @@ function getSdmNextStep(state: SdmResolveState) {
   return "Next step: sign in or continue, then Haven opens the sanctuary for this ring.";
 }
 
-function readPendingSealDraftIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(PENDING_SEAL_DRAFT_IDS_KEY) || "[]"
-    );
-    return Array.isArray(parsed)
-      ? parsed.map((id) => String(id || "").trim()).filter(Boolean).slice(0, 20)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function clearPendingSealDraftIds() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
-}
-
-async function collectDraftPayloads(draftIds: string[]) {
-  const payloads = [];
-  for (const id of draftIds) {
-    const item = await getDraftItem(id);
-    if (!item) continue;
-    payloads.push({
-      id,
-      title: String(item.title || "Untitled memory"),
-      story: String(item.story || ""),
-      photo: Array.isArray(item.photo) ? item.photo : [],
-      attachments: Array.isArray(item.attachments) ? item.attachments : [],
-      releaseAt: Number(item.releaseAt || 0) || 0,
-    });
-  }
-  return payloads;
-}
-
 function getSdmCardStyle(state: SdmResolveState): CSSProperties {
   if (state.kind === "failed") return styles.sdmCardFailed;
   if (state.kind === "ready" && state.scene === "seal_confirmation") {
@@ -172,69 +167,12 @@ export default function StartClient() {
     "idle" | "waiting_signin" | "claiming" | "claimed" | "failed" | "skipped"
   >("idle");
   const [sdmState, setSdmState] = useState<SdmResolveState>({ kind: "idle" });
-  const [sdmQuery, setSdmQuery] = useState("");
   const platform = useMemo(() => resolvePlatformTarget(), []);
   const guidance = useMemo(() => getPlatformGuidance(platform), [platform]);
   const hero = START_PAGE_CONTENT.hero;
   const hasVideoHero = Boolean(hero.video);
   const claimAttemptedRef = useRef(false);
-
-  async function finalizeSdmSeal(opts: {
-    sealTicket: string;
-    draftIds: string[];
-    accessToken: string;
-  }) {
-    if (!opts.sealTicket || !opts.draftIds.length || !opts.accessToken) {
-      throw new Error("Missing seal confirmation data.");
-    }
-    const draftPayloads = await collectDraftPayloads(opts.draftIds);
-    if (draftPayloads.length !== opts.draftIds.length) {
-      throw new Error("Your saved draft could not be found. Return to the memory page and try again.");
-    }
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${opts.accessToken}`,
-    };
-    const precheckRes = await fetch("/api/seal/finalize", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        seal_ticket: opts.sealTicket,
-        draft_ids: opts.draftIds,
-        mode: "precheck",
-      }),
-    });
-    const precheckJson = await precheckRes.json().catch(() => ({}));
-    if (!precheckRes.ok || precheckJson?.ok !== true) {
-      throw new Error(
-        typeof precheckJson?.error === "string"
-          ? precheckJson.error
-          : "Seal verification could not be completed."
-      );
-    }
-    const commitRes = await fetch("/api/seal/finalize", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        seal_ticket: opts.sealTicket,
-        draft_ids: opts.draftIds,
-        mode: "commit",
-        draft_payloads: draftPayloads,
-      }),
-    });
-    const commitJson = await commitRes.json().catch(() => ({}));
-    if (!commitRes.ok || commitJson?.ok !== true) {
-      throw new Error(
-        typeof commitJson?.error === "string"
-          ? commitJson.error
-          : "Seal could not be completed."
-      );
-    }
-    await Promise.all(opts.draftIds.map((id) => removeDraftItem(id)));
-    clearPendingSealDraftIds();
-    clearSealFlowArm();
-    window.location.assign("/seal-success");
-  }
+  const pendingSealTapRef = useRef(false);
 
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
@@ -243,9 +181,8 @@ export default function StartClient() {
 
   function continueWithoutRing() {
     if (typeof window === "undefined") return;
-    clearPendingSealDraftIds();
-    clearSealFlowArm();
-    window.location.assign("/");
+    abandonInProgressSealOnStartPage();
+    window.location.assign("/app");
   }
 
   useEffect(() => {
@@ -256,19 +193,11 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
-    const pendingSealDraftIds = readPendingSealDraftIds();
-    const context =
-      isSealFlowArmed() || pendingSealDraftIds.length ? "seal_confirmation" : "";
+    const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
+    pendingSealTapRef.current =
+      Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
 
-    const kept = new URLSearchParams();
-    if (uid) kept.set("uid", uid);
-    if (ctr) kept.set("ctr", ctr);
-    if (cmac) kept.set("cmac", cmac);
-    if (picc) kept.set("picc", picc);
-    if (context) kept.set("context", context);
-    const query = kept.toString();
     const initialStateTimer = window.setTimeout(() => {
-      setSdmQuery(query);
       setSdmState({ kind: "resolving" });
       setNotice("Reading ring status...");
     }, 0);
@@ -281,19 +210,26 @@ export default function StartClient() {
         const accessToken = sessionData.session?.access_token || "";
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const res = await fetch("/api/rings/sdm/resolve", {
-          method: "POST",
-          headers,
-          signal: controller.signal,
-          body: JSON.stringify({
-            uid,
-            ctr,
-            cmac,
-            picc,
-            context,
-            draft_ids: pendingSealDraftIds,
-          }),
-        });
+        let res: Response;
+        try {
+          res = await fetch("/api/rings/sdm/resolve", {
+            method: "POST",
+            headers,
+            signal: controller.signal,
+            body: JSON.stringify({
+              uid,
+              ctr,
+              cmac,
+              picc,
+              context,
+              draft_ids: pendingSealDraftIds,
+            }),
+          });
+        } catch {
+          throw new Error(
+            "Could not reach Haven to verify this tap. Check your connection and try again — your draft stays on this device."
+          );
+        }
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data?.valid !== true) {
           throw new Error(
@@ -324,7 +260,7 @@ export default function StartClient() {
             throw new Error("Ring confirmed. Return to your memory and tap Seal with Ring again.");
           }
           setNotice("Ring confirmed. Completing the seal...");
-          await finalizeSdmSeal({
+          await finalizeSealChainFromSdmResponse({
             sealTicket: String(data.sealTicket),
             draftIds: pendingSealDraftIds,
             accessToken,
@@ -333,10 +269,14 @@ export default function StartClient() {
       })
       .catch((error) => {
         if (controller.signal.aborted) return;
+        const baseMsg =
+          error instanceof Error ? error.message : "This ring could not be verified.";
+        const sealHint = pendingSealTapRef.current
+          ? " Sign in if needed, then open Capture again and touch your ring to retry sealing."
+          : "";
         setSdmState({
           kind: "failed",
-          message:
-            error instanceof Error ? error.message : "This ring could not be verified.",
+          message: `${baseMsg}${sealHint}`,
         });
         setNotice("Ring verification failed. Please try touching again.");
       });
@@ -367,8 +307,8 @@ export default function StartClient() {
     if (typeof window === "undefined") return;
     const timer = window.setTimeout(() => {
       setClaimToken("");
-      setNotice("Setup complete! You can now start saving memories.");
-      window.history.replaceState({}, "", "/");
+      setNotice("30-Day Haven Plus activated! You can now try Seal with Ring.");
+      window.history.replaceState({}, "", "/app");
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [claimState]);
@@ -386,7 +326,7 @@ export default function StartClient() {
     return () => window.clearTimeout(timer);
   }, [claimState]);
 
-  async function claimRingWithToken(accessToken: string) {
+  const claimRingWithToken = useCallback(async (accessToken: string) => {
     if (!claimToken || claimAttemptedRef.current) return;
     claimAttemptedRef.current = true;
     setClaimState("claiming");
@@ -415,8 +355,15 @@ export default function StartClient() {
         );
         return;
       }
+      if (data?.subscription) {
+        cacheSubscriptionStatus(data.subscription);
+      }
       setClaimState("claimed");
-      setNotice("Setup complete! You can now start saving memories.");
+      setNotice(
+        data?.plusTrialActivated
+          ? "30-Day Haven Plus activated! You can now try Seal with Ring."
+          : "Setup complete! You can now start saving memories."
+      );
     } catch {
       claimAttemptedRef.current = false;
       setClaimState("failed");
@@ -424,7 +371,7 @@ export default function StartClient() {
         "Ring setup timed out. You can retry now, or continue without ring for now."
       );
     }
-  }
+  }, [claimToken]);
 
   useEffect(() => {
     if (!claimToken) return;
@@ -450,7 +397,7 @@ export default function StartClient() {
       active = false;
       authSub.subscription.unsubscribe();
     };
-  }, [claimToken]);
+  }, [claimRingWithToken, claimToken]);
 
   function getFriendlyAuthError(message: string, provider: "apple" | "google") {
     const normalized = String(message || "").toLowerCase();
@@ -474,11 +421,7 @@ export default function StartClient() {
         origin.includes("localhost") || origin.includes("127.0.0.1")
           ? PROD_ORIGIN
           : origin;
-      const redirectTo = claimToken
-        ? `${safeOrigin}/start?claim=${encodeURIComponent(claimToken)}`
-        : sdmQuery
-          ? `${safeOrigin}/start?${sdmQuery}`
-        : `${safeOrigin}/`;
+      const redirectTo = buildOAuthReturnUrl(safeOrigin);
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },
@@ -606,7 +549,7 @@ export default function StartClient() {
                     setClaimToken("");
                     setNotice("You can continue now and connect a ring later in My Rings.");
                     if (typeof window !== "undefined") {
-                      window.history.replaceState({}, "", "/");
+                      window.history.replaceState({}, "", "/app");
                     }
                   }}
                   style={styles.secondaryButton}
@@ -642,7 +585,7 @@ export default function StartClient() {
           </button>
           <p style={styles.linkLine}>
             Already have an account?{" "}
-            <Link href="/" style={styles.link}>
+            <Link href="/app" style={styles.link}>
               Sign in
             </Link>
           </p>

@@ -51,6 +51,20 @@ export type UserNfcRingRow = {
   last_sdm_verified_at: string | null;
 };
 
+export type UserEntitlementPlan = "free" | "plus";
+export type PlusSubscriptionStatus = "none" | "active" | "past_due" | "canceled";
+
+export type UserEntitlementRow = {
+  user_id: string;
+  plan: UserEntitlementPlan;
+  plus_trial_start: string | null;
+  plus_trial_end: string | null;
+  plus_subscription_status: PlusSubscriptionStatus;
+  plus_subscription_end: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type HavenRow = {
   id: string;
   created_by: string;
@@ -237,6 +251,21 @@ export type Database = {
           last_sdm_verified_at?: string | null;
         };
         Update: Partial<UserNfcRingRow>;
+        Relationships: [];
+      };
+      user_entitlements: {
+        Row: UserEntitlementRow;
+        Insert: {
+          user_id: string;
+          plan?: UserEntitlementPlan;
+          plus_trial_start?: string | null;
+          plus_trial_end?: string | null;
+          plus_subscription_status?: PlusSubscriptionStatus;
+          plus_subscription_end?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<UserEntitlementRow>;
         Relationships: [];
       };
       ring_events: {

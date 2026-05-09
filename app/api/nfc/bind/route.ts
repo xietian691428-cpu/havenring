@@ -7,8 +7,10 @@ import {
   requireAuthenticatedUser,
   requireBearerToken,
 } from "@/lib/supabase/server";
-
-const MAX_RINGS = 5;
+import {
+  activatePlusTrialForUser,
+  getUserSubscriptionStatus,
+} from "@/lib/subscription";
 
 type BindBody = {
   nfc_uid?: unknown;
@@ -69,6 +71,10 @@ export async function POST(req: NextRequest) {
     const nickname = String(body.nickname ?? "").trim() || "Ring";
     const accessToken = requireBearerToken(req);
     const supabase = getSupabaseUserClient(accessToken);
+    const subscription = await getUserSubscriptionStatus(supabase, user.id).catch(
+      () => null
+    );
+    const ringLimit = subscription?.ringLimit ?? 1;
 
     const { count, error: countError } = await supabase
       .from("user_nfc_rings")
@@ -82,9 +88,16 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    if ((count ?? 0) >= MAX_RINGS) {
+    if ((count ?? 0) >= ringLimit) {
       return NextResponse.json(
-        { error: `Maximum ${MAX_RINGS} active rings per account.` },
+        {
+          error:
+            ringLimit === 1
+              ? "Free supports 1 active ring. Upgrade to Haven Plus for up to 5 rings."
+              : `Maximum ${ringLimit} active rings per account.`,
+          code: "RING_LIMIT_REACHED",
+          ringLimit,
+        },
         { status: 409 }
       );
     }
@@ -111,7 +124,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    return NextResponse.json({ ring: data });
+    const plusTrial = await activatePlusTrialForUser(supabase, user.id).catch(
+      () => null
+    );
+
+    return NextResponse.json({
+      ring: data,
+      plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
+      plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
+      subscription: plusTrial,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error.";
     if (msg === "UNAUTHENTICATED") {

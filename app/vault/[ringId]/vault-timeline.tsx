@@ -141,7 +141,7 @@ export function VaultTimeline({ ringId }: Props) {
       lockedRef.current = true;
       await supabase.auth.signOut().catch(() => {});
       reset();
-      router.replace("/");
+      router.replace("/app");
     };
 
     const onVisibility = () => {
@@ -164,7 +164,7 @@ export function VaultTimeline({ ringId }: Props) {
   }, [load.kind, reset, router]);
 
   const handleLeave = useCallback(() => {
-    router.replace("/");
+    router.replace("/app");
   }, [router]);
 
   const handleWipeConfirmed = useCallback(async () => {
@@ -292,7 +292,7 @@ export function VaultTimeline({ ringId }: Props) {
                 {load.reason}
               </p>
               <Link
-                href="/"
+                href="/app"
                 className="text-xs tracking-[0.3em] uppercase text-white/40 hover:text-white/70 transition-colors"
               >
                 Return
@@ -315,7 +315,7 @@ export function VaultTimeline({ ringId }: Props) {
                 {load.message}
               </p>
               <Link
-                href="/"
+                href="/app"
                 className="text-xs tracking-[0.3em] uppercase text-white/40 hover:text-white/70 transition-colors"
               >
                 Return
@@ -339,7 +339,7 @@ export function VaultTimeline({ ringId }: Props) {
                 and ready for a new chapter.
               </p>
               <Link
-                href="/"
+                href="/app"
                 className="mt-8 text-xs tracking-[0.3em] uppercase text-white/40 hover:text-white/70 transition-colors"
               >
                 Leave

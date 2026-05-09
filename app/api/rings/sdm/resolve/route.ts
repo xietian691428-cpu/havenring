@@ -1,7 +1,13 @@
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { API_RATE_POLICIES, enforceIpRateLimit } from "@/lib/api-rate-limit";
 import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import {
+  hashSealTicketSecret,
+  parseSealDraftIds,
+  sealTicketExpiryMs,
+  SEAL_CONFIRMATION_CONTEXT,
+} from "@/lib/seal-shared";
 import { getSupabaseAdminClient, requireAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -57,27 +63,6 @@ function getReadCounter(payload: Record<string, unknown>) {
 
 function isClientInputError(message: string) {
   return message === "MISSING_SDM_PARAMS" || message === "MISSING_CMAC";
-}
-
-function sealTicketTtlMs() {
-  const raw = process.env.NFC_SEAL_TICKET_TTL_SECONDS;
-  const fallbackMs = 5 * 60 * 1000;
-  if (!raw) return fallbackMs;
-  const sec = Number.parseInt(raw, 10);
-  if (!Number.isFinite(sec) || sec < 60) return fallbackMs;
-  return Math.min(sec, 15 * 60) * 1000;
-}
-
-function sha256(text: string) {
-  return createHash("sha256").update(text).digest("hex");
-}
-
-function parseDraftIds(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((row) => String(row || "").trim())
-    .filter(Boolean)
-    .slice(0, 20);
 }
 
 async function verifySdmPayload(body: ResolveBody): Promise<SdmVerification> {
@@ -156,12 +141,12 @@ async function issueSealTicket(opts: {
   if (!opts.draftIds.length) return null;
   const admin = getSupabaseAdminClient();
   const ticket = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
-  const expiresAt = new Date(Date.now() + sealTicketTtlMs()).toISOString();
+  const expiresAt = new Date(Date.now() + sealTicketExpiryMs()).toISOString();
   const { error } = await admin.from("seal_tickets" as never).insert({
     user_id: opts.userId,
     ring_uid_hash: opts.uidHash,
     draft_ids: opts.draftIds,
-    ticket_hash: sha256(ticket),
+    ticket_hash: hashSealTicketSecret(ticket),
     expires_at: expiresAt,
   } as never);
   if (error) {
@@ -216,7 +201,7 @@ export async function POST(req: NextRequest) {
     let scene: SdmScene = ring ? "daily_access" : "new_ring_binding";
     let currentUserId = "";
 
-    if (ring && context === "seal_confirmation") {
+    if (ring && context === SEAL_CONFIRMATION_CONTEXT) {
       try {
         const user = await requireAuthenticatedUser(req);
         currentUserId = user.id;
@@ -246,12 +231,12 @@ export async function POST(req: NextRequest) {
     }
 
     let sealTicket: { ticket: string; expiresAt: string } | null = null;
-    if (scene === "seal_confirmation" && currentUserId && ring) {
+    if (scene === SEAL_CONFIRMATION_CONTEXT && currentUserId && ring) {
       try {
         sealTicket = await issueSealTicket({
           userId: currentUserId,
           uidHash,
-          draftIds: parseDraftIds(body.draft_ids),
+          draftIds: parseSealDraftIds(body.draft_ids),
         });
       } catch (error) {
         const code = error instanceof Error ? error.message : "SEAL_TICKET_ISSUE_FAILED";

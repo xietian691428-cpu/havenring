@@ -128,7 +128,7 @@ export function HubRouter() {
   const permissionDeniedParam = searchParams.get("nfc") === "denied";
   const fallbackToHome = useCallback(
     (reason: string) => {
-      const next = new URL("/", window.location.origin);
+      const next = new URL("/app", window.location.origin);
       next.searchParams.set(
         "ring",
         reason === "seal_not_ready" ? "sealhelp" : "signin"
@@ -356,7 +356,7 @@ export function HubRouter() {
           </p>
           <button
             type="button"
-            onClick={() => router.replace("/")}
+            onClick={() => router.replace("/app")}
             className="text-sm tracking-[0.24em] uppercase text-white/80 hover:text-white transition-colors"
           >
             {t("common.return")}

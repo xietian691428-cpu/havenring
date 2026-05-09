@@ -1,5 +1,29 @@
+"use client";
+
+import type { CSSProperties, ReactNode } from "react";
 import { APP_CHROME_CONTENT } from "../content/appChromeContent";
+import { getSubscriptionLabel } from "../features/subscription";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+
+export type ActiveTab = "timeline" | "explore" | "seal" | "rings";
+
+export type AppChromeProps = {
+  locale?: string;
+  showBottomNav?: boolean;
+  activeTab?: ActiveTab;
+  showTemporaryBanner?: boolean;
+  statusSignedIn?: boolean;
+  statusRingBound?: boolean;
+  statusSealRequiresRing?: boolean;
+  subscriptionLabel?: string;
+  onTabTimeline?: () => void;
+  onTabExplore?: () => void;
+  onTabSeal?: () => void;
+  onTabRings?: () => void;
+  onNavigateSettings?: () => void;
+  onNavigateHelp?: () => void;
+  children?: ReactNode;
+};
 
 /**
  * Top: minimal glass bar / bottom: 4-tab sanctuary navigation.
@@ -12,6 +36,7 @@ export function AppChrome({
   statusSignedIn = false,
   statusRingBound = false,
   statusSealRequiresRing = false,
+  subscriptionLabel,
   onTabTimeline,
   onTabExplore,
   onTabSeal,
@@ -19,9 +44,16 @@ export function AppChrome({
   onNavigateSettings,
   onNavigateHelp,
   children,
-}) {
-  const t = APP_CHROME_CONTENT[locale] || APP_CHROME_CONTENT.en;
-  const tab = (id, label, onClick, isActive) => (
+}: AppChromeProps) {
+  const subscriptionPillLabel =
+    subscriptionLabel ?? getSubscriptionLabel(undefined);
+  const t = APP_CHROME_CONTENT[locale as keyof typeof APP_CHROME_CONTENT] || APP_CHROME_CONTENT.en;
+  const tab = (
+    id: ActiveTab,
+    label: string,
+    onClick?: () => void,
+    isActive?: boolean
+  ) => (
     <button
       key={id}
       type="button"
@@ -60,6 +92,7 @@ export function AppChrome({
             <span style={styles.statusPill}>
               {statusSealRequiresRing ? t.statusSealRingRecommended : t.statusSealSecureOnly}
             </span>
+            <span style={styles.statusPill}>{subscriptionPillLabel}</span>
           </div>
         </div>
         <div style={styles.topActions}>
@@ -102,10 +135,7 @@ export function AppChrome({
       </div>
 
       {showBottomNav ? (
-        <nav
-          style={styles.tabBar}
-          aria-label={t.bottomNavAria}
-        >
+        <nav style={styles.tabBar} aria-label={t.bottomNavAria}>
           <div style={styles.tabInner}>
             {tab("timeline", t.tabTimeline, onTabTimeline, activeTab === "timeline")}
             {tab("explore", t.tabExplore, onTabExplore, activeTab === "explore")}
@@ -135,7 +165,7 @@ export function AppChrome({
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   wrapper: {
     minHeight: "100vh",
     color: sanctuaryTheme.cream,

@@ -31,7 +31,7 @@ export function SealCeremony() {
         transition={{ delay: 3.2, duration: 1.2 }}
       >
         <Link
-          href="/"
+          href="/app"
           className="text-xs tracking-[0.25em] uppercase text-white/40 hover:text-white/70 transition-colors"
         >
           Return

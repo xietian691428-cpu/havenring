@@ -8,7 +8,7 @@ export default function SealSuccessPage() {
     <main className="fixed inset-0 z-50 flex items-center justify-center bg-black text-white">
       <SealCeremony />
       <noscript>
-        <Link href="/" className="text-white/60 underline">
+        <Link href="/app" className="text-white/60 underline">
           Return
         </Link>
       </noscript>

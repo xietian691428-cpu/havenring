@@ -1,6 +1,11 @@
-import { randomUUID, createHash } from "crypto";
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import {
+  hashSealTicketSecret,
+  parseSealDraftIds,
+  sealTicketExpiryMs,
+} from "@/lib/seal-shared";
 import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
@@ -13,27 +18,6 @@ type RingTapBody = {
   nfc_uid?: unknown;
   draft_ids?: unknown;
 };
-
-function sealTicketTtlMs() {
-  const raw = process.env.NFC_SEAL_TICKET_TTL_SECONDS;
-  const fallbackMs = 5 * 60 * 1000;
-  if (!raw) return fallbackMs;
-  const sec = Number.parseInt(raw, 10);
-  if (!Number.isFinite(sec) || sec < 60) return fallbackMs;
-  return Math.min(sec, 15 * 60) * 1000;
-}
-
-function sha256(text: string) {
-  return createHash("sha256").update(text).digest("hex");
-}
-
-function parseDraftIds(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((row) => String(row || "").trim())
-    .filter(Boolean)
-    .slice(0, 20);
-}
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now();
@@ -63,7 +47,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const draftIds = parseDraftIds(body.draft_ids);
+    const draftIds = parseSealDraftIds(body.draft_ids);
     if (!draftIds.length) {
       await recordSealTelemetry(null, {
         endpoint: "ring_tap",
@@ -120,8 +104,8 @@ export async function POST(req: NextRequest) {
     }
 
     const ticket = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
-    const ticketHash = sha256(ticket);
-    const expiresAt = new Date(Date.now() + sealTicketTtlMs()).toISOString();
+    const ticketHash = hashSealTicketSecret(ticket);
+    const expiresAt = new Date(Date.now() + sealTicketExpiryMs()).toISOString();
     const { error: insertErr } = await admin.from("seal_tickets" as never).insert({
       user_id: user.id,
       ring_uid_hash: uidHash,

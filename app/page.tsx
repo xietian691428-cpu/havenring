@@ -1,45 +1,32 @@
-"use client";
-import { useEffect, useState } from "react";
-import HavenPwaApp from "@/src/App";
-import { isFirstMemoryCompleted } from "@/src/services/firstRunTelemetryService";
+import type { Metadata } from "next";
+import { LandingPage } from "@/components/landing/LandingPage";
+import { SITE_ORIGIN } from "@/components/landing/constants";
 
-const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
-const FTUX_STARTED_KEY = "haven.ftux.started.v1";
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_ORIGIN),
+  title: {
+    default: "HavenRing — Keep what matters.",
+    template: "%s — HavenRing",
+  },
+  description:
+    "A ring. Your moments. Only for you. Capture, seal, and treasure private memories — no feeds, no followers.",
+  openGraph: {
+    title: "HavenRing — Keep what matters.",
+    description:
+      "Capture meaningful moments and seal them with a touch. Private by design.",
+    url: SITE_ORIGIN,
+    siteName: "HavenRing",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "HavenRing — Keep what matters.",
+    description:
+      "A ring. Your moments. Only for you. Capture, seal, and treasure private memories.",
+  },
+};
 
-export default function HomeEntryPage() {
-  const [canRenderApp, setCanRenderApp] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
-
-  useEffect(() => {
-    const onboardingDone = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
-    const firstMemoryDone = isFirstMemoryCompleted();
-    const startedFromStart = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
-    if (!startedFromStart && (!onboardingDone || !firstMemoryDone)) {
-      setRedirecting(true);
-      window.location.replace("/start");
-      return;
-    }
-    if (startedFromStart) {
-      window.localStorage.removeItem(FTUX_STARTED_KEY);
-    }
-    setCanRenderApp(true);
-  }, []);
-
-  if (!canRenderApp) {
-    return redirecting ? (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#120f0e",
-          color: "#d9c3b3",
-          fontFamily: "Inter, system-ui, sans-serif",
-        }}
-      >
-        Preparing your memory sanctuary...
-      </main>
-    ) : null;
-  }
-  return <HavenPwaApp />;
+export default function Home() {
+  return <LandingPage />;
 }

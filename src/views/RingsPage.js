@@ -1,18 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
 import {
   getBoundRings,
-  MAX_BOUND_RINGS,
   RING_COLOR_OPTIONS,
   removeBoundRingByCloudId,
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
+import {
+  canUseFeature,
+  getPlanBadgeLabel,
+  getRingSlotLimitUpsellNotice,
+  getSubscriptionSummary,
+} from "../features/subscription";
+import { getFreeEntitlements } from "../services/subscriptionService";
 
 export function RingsPage({
   locale = "en",
+  userEntitlements = getFreeEntitlements(),
   onOpenRingSetup,
 }) {
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
@@ -130,8 +137,10 @@ export function RingsPage({
   }
 
   useEffect(() => {
-    void loadCloudRings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = window.setTimeout(() => {
+      void loadCloudRings();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   function askRevoke(ring) {
@@ -204,6 +213,10 @@ export function RingsPage({
     setLocalRings(getBoundRings());
   }
 
+  const ringLimitReached = !canUseFeature(userEntitlements, "expand_ring_slots", {
+    currentRingCount: rings.length,
+  });
+
   return (
     <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
       <section style={styles.shell}>
@@ -212,6 +225,14 @@ export function RingsPage({
             <h1 style={styles.title}>{t.title}</h1>
           </div>
         </header>
+        <section style={styles.guideCard}>
+          <p style={styles.guideTitle}>{getPlanBadgeLabel(userEntitlements)}</p>
+          <p style={styles.guideBody}>{getSubscriptionSummary(userEntitlements)}</p>
+          <p style={styles.guideOneLine}>
+            Ring limit: {rings.length} / {userEntitlements?.maxRings ?? 1}
+          </p>
+        </section>
+
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
           <p style={styles.guideBody}>{t.quickGuideIntro}</p>
@@ -300,9 +321,17 @@ export function RingsPage({
         )}
 
         <div style={styles.actions}>
-          <button type="button" onClick={onOpenRingSetup} style={styles.primaryBtn}>
+          <button
+            type="button"
+            onClick={onOpenRingSetup}
+            style={ringLimitReached ? styles.secondaryBtn : styles.primaryBtn}
+            disabled={ringLimitReached}
+          >
             {t.openSetup}
           </button>
+          {ringLimitReached ? (
+            <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
+          ) : null}
         </div>
 
         {verifyOpen ? (

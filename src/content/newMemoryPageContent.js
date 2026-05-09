@@ -33,6 +33,13 @@ const EN = {
   quickDraft: "Quick Draft",
   quickDraftHint: "Save instantly to your Draft Box.",
   sealFabHint: "Touch your trusted ring to begin the sacred ritual.",
+  sealFabUpgradeHint: "Haven Plus unlocks the physical ring ritual.",
+  upgradeSealWithRing:
+    "Unlock Seal with Ring with Haven Plus — 30 days free with your ring. Free users can still Save Securely with Face ID.",
+  planDualTrackHint:
+    "Readable drafts stay in your local Draft Box until you seal. Seal with Ring adds the memory to your encrypted sanctuary timeline.",
+  sealNeedsNetworkHint:
+    "You need a network connection to finish sealing after the ring touch. Your draft stays on this device.",
   addDetails: "Add details",
   hideDetails: "Hide details",
   sealNow: "Seal with Ring — Make this memory sacred",
@@ -67,6 +74,8 @@ const EN = {
   feedbackDraftRestored: "Recovered your unsaved draft.",
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
+  feedbackSealPrepNeedDraftSave:
+    "Save this memory securely first — then tap “Touch ring to seal” on the card.",
   untitled: "Untitled memory",
   canvasUnavailable: "Canvas not available.",
   compressionFailed: "Compression failed.",

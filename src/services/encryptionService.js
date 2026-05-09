@@ -228,3 +228,16 @@ export async function rotateLocalKey() {
     db.close();
   }
 }
+
+/**
+ * Crypto port for repositories (`localMemoryStore`, future blob stores).
+ * Only repositories should call these; UI sends plaintext domain objects inward.
+ */
+export const localCrypto = {
+  encryptValue,
+  decryptValue,
+  encryptJson,
+  decryptJson,
+  deriveUserWrappingKey,
+  rotateLocalKey,
+};

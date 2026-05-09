@@ -1,50 +1,76 @@
+// @ts-nocheck — orchestrates legacy JS views; tighten types when views migrate to TS.
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppChrome } from "./components/AppChrome";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type TouchEvent,
+} from "react";
+import { AppChrome, type ActiveTab } from "./AppChrome";
 import {
   RingSetupWizard,
   RING_SETUP_DISMISSED_KEY,
-} from "./components/RingSetupWizard";
-import { HomePage } from "./views/HomePage";
-import { TimelinePage } from "./views/TimelinePage";
-import { ExplorePage } from "./views/ExplorePage";
-import { RingsPage } from "./views/RingsPage";
-import { NewMemoryPage } from "./views/NewMemoryPage";
-import { MemoryDetailPage } from "./views/MemoryDetailPage";
-import { SettingsPage } from "./views/SettingsPage";
-import { HelpCenterPage } from "./views/HelpCenterPage";
-import { useMemories } from "./hooks/useMemories";
-import { useSupabaseSession } from "./hooks/useSupabaseSession";
-import { usePwaLocale } from "./i18n/pwaLocale";
-import { getSupabaseBrowserClient } from "../lib/supabase/client";
-import { getBoundRingCount } from "./services/ringRegistryService";
-import { scheduleWelcomeToast } from "./utils/welcomeToast";
+} from "../components/RingSetupWizard";
+import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
+import { useMemories } from "../hooks/useMemories";
+import { useRingRegistryContext } from "../providers/RingProvider";
+import { useSessionContext } from "../providers/SessionProvider";
+import { useSubscriptionContext } from "../providers/SubscriptionProvider";
+import { ExplorePage } from "../views/ExplorePage";
+import { HelpCenterPage } from "../views/HelpCenterPage";
+import { HomePage } from "../views/HomePage";
+import { MemoryDetailPage } from "../views/MemoryDetailPage";
+import { NewMemoryPage } from "../views/NewMemoryPage";
+import { RingsPage } from "../views/RingsPage";
+import { SettingsPage } from "../views/SettingsPage";
+import { TimelinePage } from "../views/TimelinePage";
+import { usePwaLocale } from "../i18n/pwaLocale";
+import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { useAppFlow } from "../state/appFlowContext";
+import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelectors";
+import { getSecuritySummary } from "../services/deviceTrustService";
+import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
+import { getBoundRingCount } from "../services/ringRegistryService";
 import {
   isTemporaryDeviceModeEnabled,
   TEMP_DEVICE_MODE_EVENT,
   wipeTemporaryDevice,
-} from "./services/temporaryDeviceService";
-import { AppFlowProvider, useAppFlow } from "./state/appFlowContext";
-import { getFlowPrimaryUi, getRecoveryActionIntent } from "./state/appFlowSelectors";
-import { FIRST_MEMORY_DONE_KEY } from "./services/firstRunTelemetryService";
-import { getSecuritySummary } from "./services/deviceTrustService";
+} from "../services/temporaryDeviceService";
+import { scheduleWelcomeToast } from "../utils/welcomeToast";
 
-export default function App() {
-  return (
-    <AppFlowProvider>
-      <AppOrchestrator />
-    </AppFlowProvider>
+type Route =
+  | { name: "home"; memoryId: null }
+  | { name: "timeline"; memoryId: null }
+  | { name: "explore"; memoryId: null }
+  | { name: "rings"; memoryId: null }
+  | { name: "new"; memoryId: null }
+  | { name: "settings"; memoryId: null }
+  | { name: "help"; memoryId: null }
+  | { name: "detail"; memoryId: string };
+
+type AppFlowDispatch = (action: Record<string, unknown> & { type: string }) => void;
+
+type MinimalFlowState = {
+  mainState: string;
+  recoveryErrorType?: string;
+  pwaInstalled?: boolean;
+  pwaDeferred?: boolean;
+};
+
+export function AppRouter() {
+  const [route, setRoute] = useState<Route>({ name: "timeline", memoryId: null });
+  const [transitionDirection, setTransitionDirection] = useState<"forward" | "back">(
+    "forward"
   );
-}
-
-function AppOrchestrator() {
-  const [route, setRoute] = useState({ name: "timeline", memoryId: null });
-  const [transitionDirection, setTransitionDirection] = useState("forward");
   const [swipeDx, setSwipeDx] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const locale = usePwaLocale();
-  const touchStartRef = useRef(null);
+  const touchStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const {
     memories,
     loading,
@@ -61,8 +87,9 @@ function AppOrchestrator() {
     syncActiveRingNow,
     createMemory,
   } = useMemories();
-  const { session: supabaseSession, loading: sessionLoading } =
-    useSupabaseSession();
+  const { session: supabaseSession, sessionLoading } = useSessionContext();
+  const { entitlements } = useSubscriptionContext();
+  const { boundRingCount, bumpRingRegistry } = useRingRegistryContext();
   const [hideNfcPrompt, setHideNfcPrompt] = useState(false);
   const [quickSigningIn, setQuickSigningIn] = useState(false);
   const [quickSignInError, setQuickSignInError] = useState("");
@@ -71,85 +98,102 @@ function AppOrchestrator() {
   const [temporaryModeBanner, setTemporaryModeBanner] = useState(() =>
     isTemporaryDeviceModeEnabled()
   );
-  const { flowState, dispatchFlow } = useAppFlow();
+  const { flowState, dispatchFlow } = useAppFlow() as {
+    flowState: MinimalFlowState;
+    dispatchFlow: AppFlowDispatch;
+  };
   const loginSyncDoneForSessionRef = useRef("");
   const tempWipeStartedRef = useRef(false);
 
-  const selectedMemory = useMemo(
-    () => memories.find((m) => m.id === route.memoryId) || null,
-    [memories, route.memoryId]
-  );
-  const flowPrimaryUi = useMemo(
-    () => getFlowPrimaryUi(flowState, locale),
-    [flowState, locale]
-  );
-  const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
-
-  const flowPrimaryAction = useCallback((intent = "primary") => {
-    if (!flowPrimaryUi) return;
-    if (flowState.mainState === "RING_SETUP_GATE") {
-      openRingSetup();
-      return;
-    }
-    if (flowState.mainState === "SYNC_GATE") {
-      void syncNow();
-      return;
-    }
-    if (flowState.mainState === "PWA_INSTALL_GATE") {
-      if (intent === "defer_pwa") {
-        dispatchFlow({ type: "PWA_DEFERRED" });
-        return;
-      }
-      openRingSetup();
-      navigateTo({ name: "home", memoryId: null }, "back");
-      return;
-    }
-    if (flowState.mainState === "RECOVERY") {
-      const errorType = String(flowState.recoveryErrorType || "");
-      const actionIntent = getRecoveryActionIntent(errorType);
-      if (actionIntent === "reauth") {
-        dispatchFlow({ type: "RECOVERY_DISMISSED" });
-        navigateTo({ name: "home", memoryId: null }, "back");
-        return;
-      }
-      if (actionIntent === "open_ring_setup") {
-        openRingSetup();
-        return;
-      }
-      if (actionIntent === "rebuild_and_sync") {
-        void syncNow().finally(() => {
-          dispatchFlow({ type: "RECOVERY_DISMISSED" });
-        });
-        return;
-      }
-      void syncNow().finally(() => {
-        dispatchFlow({ type: "RECOVERY_DISMISSED" });
-      });
-    }
-  }, [flowPrimaryUi, flowState.mainState, flowState.recoveryErrorType, openRingSetup, syncNow]);
+  function navigateTo(nextRoute: Route, direction: "forward" | "back" = "forward") {
+    setTransitionDirection(direction);
+    setRoute(nextRoute);
+  }
 
   function openRingSetup() {
     setRingSetupKey((k) => k + 1);
     setRingSetupOpen(true);
   }
 
+  const selectedMemory = useMemo(() => {
+    return (
+      (memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ??
+      null
+    );
+  }, [memories, route.memoryId]);
+  const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
+  const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
+
+  const flowPrimaryAction = useCallback(
+    (intent: string = "primary") => {
+      if (!flowPrimaryUi) return;
+      if (flowState.mainState === "RING_SETUP_GATE") {
+        openRingSetup();
+        return;
+      }
+      if (flowState.mainState === "SYNC_GATE") {
+        void syncNow();
+        return;
+      }
+      if (flowState.mainState === "PWA_INSTALL_GATE") {
+        if (intent === "defer_pwa") {
+          dispatchFlow({ type: "PWA_DEFERRED" });
+          return;
+        }
+        openRingSetup();
+        navigateTo({ name: "home", memoryId: null }, "back");
+        return;
+      }
+      if (flowState.mainState === "RECOVERY") {
+        const errorType = String(flowState.recoveryErrorType || "");
+        const actionIntent = getRecoveryActionIntent(errorType);
+        if (actionIntent === "reauth") {
+          dispatchFlow({ type: "RECOVERY_DISMISSED" });
+          navigateTo({ name: "home", memoryId: null }, "back");
+          return;
+        }
+        if (actionIntent === "open_ring_setup") {
+          openRingSetup();
+          return;
+        }
+        if (actionIntent === "rebuild_and_sync") {
+          void syncNow().finally(() => {
+            dispatchFlow({ type: "RECOVERY_DISMISSED" });
+          });
+          return;
+        }
+        void syncNow().finally(() => {
+          dispatchFlow({ type: "RECOVERY_DISMISSED" });
+        });
+      }
+    },
+    [
+      flowPrimaryUi,
+      flowState.mainState,
+      flowState.recoveryErrorType,
+      dispatchFlow,
+      syncNow,
+    ]
+  );
+
   function handleAfterOnboarding() {
     if (typeof window === "undefined") return;
     const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
-    if (!dismissed && getBoundRingCount() === 0) {
+    if (!dismissed && boundRingCount === 0) {
       openRingSetup();
     }
   }
 
-  function handleRingSetupFinished(payload) {
-    const nickname = payload?.nickname || "friend";
+  function handleRingSetupFinished(payload: { nickname?: string } | undefined) {
+    const nickname = payload?.nickname ?? "friend";
     scheduleWelcomeToast({ nickname });
     setRingSetupOpen(false);
     navigateTo({ name: "timeline", memoryId: null }, "forward");
     void refresh();
+    bumpRingRegistry();
   }
 
-  const activeTab = useMemo(() => {
+  const activeTab = useMemo((): ActiveTab => {
     if (route.name === "explore") return "explore";
     if (route.name === "rings") return "rings";
     if (route.name === "new") return "seal";
@@ -157,33 +201,48 @@ function AppOrchestrator() {
   }, [route.name]);
 
   const showBottomNav = !["new", "detail", "help"].includes(route.name);
-  const boundRingCount = getBoundRingCount();
 
-  const shellProps = {
-    locale,
-    showBottomNav,
-    activeTab,
-    onTabTimeline: async () => {
-      await refresh();
-      navigateTo({ name: "timeline", memoryId: null }, "back");
-    },
-    onTabExplore: () => navigateTo({ name: "explore", memoryId: null }, "forward"),
-    onTabSeal: () => navigateTo({ name: "new", memoryId: null }, "forward"),
-    onTabRings: () => navigateTo({ name: "rings", memoryId: null }, "forward"),
-    onNavigateSettings: () =>
-      navigateTo({ name: "settings", memoryId: null }, "forward"),
-    onNavigateHelp: () => navigateTo({ name: "help", memoryId: null }, "forward"),
-    showTemporaryBanner: temporaryModeBanner,
-    statusSignedIn: Boolean(supabaseSession),
-    statusRingBound: boundRingCount > 0,
-    statusSealRequiresRing: boundRingCount > 0,
-  };
+  const shellProps = useMemo(
+    (): ComponentProps<typeof AppChrome> => ({
+      locale,
+      showBottomNav,
+      activeTab,
+      onTabTimeline: async () => {
+        await refresh();
+        navigateTo({ name: "timeline", memoryId: null }, "back");
+      },
+      onTabExplore: () => navigateTo({ name: "explore", memoryId: null }, "forward"),
+      onTabSeal: () => navigateTo({ name: "new", memoryId: null }, "forward"),
+      onTabRings: () => navigateTo({ name: "rings", memoryId: null }, "forward"),
+      onNavigateSettings: () =>
+        navigateTo({ name: "settings", memoryId: null }, "forward"),
+      onNavigateHelp: () =>
+        navigateTo({ name: "help", memoryId: null }, "forward"),
+      showTemporaryBanner: temporaryModeBanner,
+      statusSignedIn: Boolean(supabaseSession),
+      statusRingBound: boundRingCount > 0,
+      statusSealRequiresRing: Boolean(
+        canUseFeature(entitlements, "seal_with_ring") && boundRingCount > 0
+      ),
+      subscriptionLabel: getSubscriptionLabel(entitlements),
+    }),
+    [
+      locale,
+      showBottomNav,
+      activeTab,
+      refresh,
+      temporaryModeBanner,
+      supabaseSession,
+      boundRingCount,
+      entitlements,
+    ]
+  );
 
-  function renderWithShell(content) {
+  function renderWithShell(content: ReactNode) {
     const dragStyle = {
       transform: swipeDx > 0 ? `translateX(${swipeDx}px)` : "translateX(0px)",
       transition: isSwiping ? "none" : "transform 220ms ease-out",
-      willChange: "transform",
+      willChange: "transform" as const,
     };
 
     return (
@@ -199,24 +258,19 @@ function AppOrchestrator() {
     );
   }
 
-  function navigateTo(nextRoute, direction = "forward") {
-    setTransitionDirection(direction);
-    setRoute(nextRoute);
-  }
-
   const scheduleBackgroundSync = useCallback(() => {
     const run = () => {
       void syncNow().catch(() => null);
       void refresh().catch(() => null);
     };
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
       window.requestIdleCallback(run, { timeout: 1500 });
       return;
     }
-    window.setTimeout(run, 400);
+    setTimeout(run, 400);
   }, [syncNow, refresh]);
 
-  async function handleQuickSignIn(provider, token) {
+  async function handleQuickSignIn(provider: "apple" | "google", token: string) {
     setQuickSigningIn(true);
     setQuickSignInError("");
     try {
@@ -248,7 +302,7 @@ function AppOrchestrator() {
     }
   }
 
-  async function openMemoryFromRingParams(memoryId) {
+  async function openMemoryFromRingParams(memoryId: string | null | undefined) {
     if (!memoryId) return;
     await refresh();
     navigateTo({ name: "detail", memoryId }, "forward");
@@ -266,10 +320,10 @@ function AppOrchestrator() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const memoryId =
-      params.get("memoryId") || params.get("memory") || params.get("m");
+      params.get("memoryId") ?? params.get("memory") ?? params.get("m");
     if (!memoryId) return;
     void openMemoryFromRingParams(memoryId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot deep link hydration
   }, []);
 
   useEffect(() => {
@@ -297,9 +351,10 @@ function AppOrchestrator() {
         ? "android"
         : "other";
     const webNfcAvailable = typeof window !== "undefined" && "NDEFReader" in window;
+    const nav = window.navigator as Navigator & { standalone?: boolean };
     const pwaInstalled = Boolean(
       window.matchMedia?.("(display-mode: standalone)")?.matches ||
-        window.navigator?.standalone === true
+        nav.standalone === true
     );
     const security = getSecuritySummary();
     dispatchFlow({
@@ -312,7 +367,7 @@ function AppOrchestrator() {
       trustedCurrentDevice: Boolean(security.trustedCurrentDevice),
       requireSecondaryOnRingEntry: true,
     });
-  }, [supabaseSession]);
+  }, [supabaseSession, dispatchFlow]);
 
   useEffect(() => {
     dispatchFlow({
@@ -323,7 +378,7 @@ function AppOrchestrator() {
       type: "RINGS_CHANGED",
       hasBoundRing: getBoundRingCount() > 0,
     });
-  }, [supabaseSession, ringSetupOpen, route.name]);
+  }, [supabaseSession, ringSetupOpen, route.name, dispatchFlow]);
 
   useEffect(() => {
     dispatchFlow({ type: "SYNC_STATUS", syncing: Boolean(syncing) });
@@ -338,12 +393,12 @@ function AppOrchestrator() {
       }
       dispatchFlow({
         type: "SYNC_HARD_FAILED",
-        errorType: syncHealth.reason || "auth_expired",
+        errorType: syncHealth.reason ?? "auth_expired",
       });
       return;
     }
     dispatchFlow({ type: "SYNC_RECOVERED" });
-  }, [syncing, syncHealth, supabaseSession, sessionLoading]);
+  }, [syncing, syncHealth, supabaseSession, sessionLoading, dispatchFlow]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -376,20 +431,21 @@ function AppOrchestrator() {
   }, [flowState.mainState, ringSetupOpen]);
 
   useEffect(() => {
-    const onModeChanged = (evt) => {
-      const enabled = Boolean(evt?.detail?.enabled);
+    const onModeChanged = (evt: Event) => {
+      const ce = evt as CustomEvent<{ enabled?: boolean }>;
+      const enabled = Boolean(ce?.detail?.enabled);
       setTemporaryModeBanner(enabled);
     };
-    const onStorage = (evt) => {
+    const onStorage = (evt: StorageEvent) => {
       if (evt.key === "haven.session.temporaryDevice.v1") {
         setTemporaryModeBanner(isTemporaryDeviceModeEnabled());
       }
     };
-    window.addEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged);
-    window.addEventListener("storage", onStorage);
+    window.addEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged as EventListener);
+    window.addEventListener("storage", onStorage as EventListener);
     return () => {
-      window.removeEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged);
-      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(TEMP_DEVICE_MODE_EVENT, onModeChanged as EventListener);
+      window.removeEventListener("storage", onStorage as EventListener);
     };
   }, []);
 
@@ -425,9 +481,9 @@ function AppOrchestrator() {
     }
   }
 
-  function handleTouchStart(event) {
+  function handleTouchStart(event: TouchEvent) {
     if (!["detail", "new", "help"].includes(route.name)) return;
-    const touch = event.changedTouches?.[0];
+    const touch = event.changedTouches[0];
     if (!touch) return;
     if (touch.clientX > 32) {
       touchStartRef.current = null;
@@ -442,10 +498,10 @@ function AppOrchestrator() {
     setIsSwiping(true);
   }
 
-  function handleTouchMove(event) {
+  function handleTouchMove(event: TouchEvent) {
     const start = touchStartRef.current;
     if (!start) return;
-    const touch = event.changedTouches?.[0];
+    const touch = event.changedTouches[0];
     if (!touch) return;
     const deltaX = Math.max(0, touch.clientX - start.x);
     const deltaY = Math.abs(touch.clientY - start.y);
@@ -456,11 +512,11 @@ function AppOrchestrator() {
     setSwipeDx(Math.min(deltaX, 120));
   }
 
-  function handleTouchEnd(event) {
+  function handleTouchEnd(event: TouchEvent) {
     const start = touchStartRef.current;
     touchStartRef.current = null;
     if (!start) return;
-    const touch = event.changedTouches?.[0];
+    const touch = event.changedTouches[0];
     if (!touch) return;
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
@@ -483,7 +539,7 @@ function AppOrchestrator() {
     setIsSwiping(false);
   }
 
-  let mainContent = null;
+  let mainContent: ReactNode = null;
 
   if (route.name === "timeline") {
     mainContent = (
@@ -492,7 +548,7 @@ function AppOrchestrator() {
           locale={locale}
           memories={memories}
           loading={loading}
-          error={error}
+          error={error ?? ""}
           syncing={syncing}
           integrityWarning={integrityWarning}
           cloudPlaceholders={cloudPlaceholders}
@@ -537,6 +593,7 @@ function AppOrchestrator() {
       <FadePage pageKey="rings" direction={transitionDirection}>
         <RingsPage
           locale={locale}
+          userEntitlements={entitlements}
           onOpenRingSetup={openRingSetup}
           onOpenSettings={() =>
             navigateTo({ name: "settings", memoryId: null }, "forward")
@@ -549,6 +606,7 @@ function AppOrchestrator() {
       <FadePage pageKey="new" direction={transitionDirection}>
         <NewMemoryPage
           locale={locale}
+          userEntitlements={entitlements}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onSaveMemory={createMemory}
           onSaved={async () => {
@@ -557,7 +615,9 @@ function AppOrchestrator() {
           onViewTimeline={() =>
             navigateTo({ name: "timeline", memoryId: null }, "back")
           }
-          onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
+          onOpenHelp={() =>
+            navigateTo({ name: "help", memoryId: null }, "forward")
+          }
         />
       </FadePage>
     );
@@ -579,7 +639,9 @@ function AppOrchestrator() {
         <SettingsPage
           locale={locale}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-          onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
+          onOpenHelp={() =>
+            navigateTo({ name: "help", memoryId: null }, "forward")
+          }
           onLocalDataCleared={async () => {
             await refresh().catch(() => null);
           }}
@@ -644,7 +706,15 @@ function AppOrchestrator() {
   );
 }
 
-function FadePage({ pageKey, children, direction }) {
+function FadePage({
+  pageKey,
+  children,
+  direction,
+}: {
+  pageKey: string;
+  children: ReactNode;
+  direction: "forward" | "back";
+}) {
   return (
     <div
       key={pageKey}

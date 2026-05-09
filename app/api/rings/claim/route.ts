@@ -5,6 +5,7 @@ import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
+import { activatePlusTrialForUser } from "@/lib/subscription";
 
 type ClaimBody = { token?: unknown };
 
@@ -113,6 +114,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (claimedRows && claimedRows.length > 0) {
+      const plusTrial = user
+        ? await activatePlusTrialForUser(admin, user.id).catch(() => null)
+        : null;
       try {
         await admin.from("ring_events").insert({
           ring_id: claimedRows[0].id,
@@ -131,6 +135,9 @@ export async function POST(req: NextRequest) {
           ringId: claimedRows[0].id,
           claimed: true,
           alreadyClaimed: false,
+          plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
+          plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
+          subscription: plusTrial,
         },
         { status: 200 }
       );
@@ -155,6 +162,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (existingRows && existingRows.length > 0) {
+      const plusTrial = user
+        ? await activatePlusTrialForUser(admin, user.id).catch(() => null)
+        : null;
       try {
         await admin.from("ring_events").insert({
           ring_id: existingRows[0].id,
@@ -173,6 +183,9 @@ export async function POST(req: NextRequest) {
           ringId: existingRows[0].id,
           claimed: true,
           alreadyClaimed: true,
+          plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
+          plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
+          subscription: plusTrial,
         },
         { status: 200 }
       );
@@ -233,11 +246,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (user && ring.owner_id === user.id) {
+      const plusTrial = await activatePlusTrialForUser(admin, user.id).catch(() => null);
       return NextResponse.json(
         {
           ringId: ring.id,
           claimed: true,
           alreadyClaimed: true,
+          plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
+          plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
+          subscription: plusTrial,
         },
         { status: 200 }
       );

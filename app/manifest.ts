@@ -6,8 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Haven",
     description:
       "Seal a private moment with a touch of the ring. Sealed forever.",
-    id: "/",
-    start_url: "/",
+    id: "/app",
+    start_url: "/app",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

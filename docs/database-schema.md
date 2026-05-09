@@ -386,10 +386,19 @@ Applied via `supabase/migrations/0003_user_nfc_rings.sql`:
 - Partial unique index on `(user_id, nfc_uid_hash) WHERE is_active` — max one active binding per fingerprint per user.
 - SDM state from `supabase/migrations/0012_user_nfc_rings_sdm.sql`:
   `sdm_enabled`, `last_sdm_counter`, `last_sdm_verified_at`.
-  `last_sdm_counter` is used by `/api/rings/sdm/resolve` to reject replayed
-  dynamic NFC ring taps.
+  `last_sdm_counter` is used by `/api/rings/sdm/resolve` and the compatibility
+  `/api/sdm/verify` route to reject replayed dynamic NFC ring taps.
 
 API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/list`, `/api/nfc/revoke`; login bootstrap `/api/auth/nfc-login` (JWT requires `SUPABASE_JWT_SECRET`).
+
+## `user_entitlements` (Free / Haven Plus)
+
+Applied via `supabase/migrations/0013_user_entitlements.sql`:
+
+- Free: 2 GB local-first storage, 1 active ring, Save Securely only.
+- Haven Plus: 50 GB local + cloud storage, up to 5 active rings, Seal with Ring, family sharing up to 4 people, AI insights, priority support, and full backup.
+- Successful hardware claim or NFC bind grants a one-time 30-day Plus trial via `plus_trial_start` and `plus_trial_end`.
+- After `plus_trial_end`, the app computes the user as Free unless `plus_subscription_status = 'active'`.
 
 ## `moments.content_sha256`
 

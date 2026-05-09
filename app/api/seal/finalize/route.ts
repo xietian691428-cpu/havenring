@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getSupabaseAdminClient,
@@ -6,6 +5,7 @@ import {
   requireBearerToken,
 } from "@/lib/supabase/server";
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
+import { hashSealTicketSecret, MAX_SEAL_DRAFT_IDS, parseSealDraftIdsSorted } from "@/lib/seal-shared";
 import { recordSealTelemetry } from "@/lib/sealTelemetry";
 
 type FinalizeBody = {
@@ -14,19 +14,6 @@ type FinalizeBody = {
   mode?: unknown;
   draft_payloads?: unknown;
 };
-
-function sha256(text: string) {
-  return createHash("sha256").update(text).digest("hex");
-}
-
-function parseDraftIds(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((row) => String(row || "").trim())
-    .filter(Boolean)
-    .slice(0, 20)
-    .sort();
-}
 
 type DraftPayload = {
   id: string;
@@ -66,7 +53,7 @@ function parseDraftPayloads(input: unknown): DraftPayload[] {
       };
     })
     .filter((row) => row.id)
-    .slice(0, 20);
+    .slice(0, MAX_SEAL_DRAFT_IDS);
 }
 
 export async function POST(req: NextRequest) {
@@ -76,7 +63,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser(req);
     const body = (await req.json()) as FinalizeBody;
     const ticket = typeof body.seal_ticket === "string" ? body.seal_ticket.trim() : "";
-    const draftIds = parseDraftIds(body.draft_ids);
+    const draftIds = parseSealDraftIdsSorted(body.draft_ids);
     const mode = typeof body.mode === "string" ? body.mode : "precheck";
     const draftPayloads = parseDraftPayloads(body.draft_payloads);
     const limitRes = await enforceUserIpRateLimit({
@@ -115,7 +102,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ticketHash = sha256(ticket);
+    const ticketHash = hashSealTicketSecret(ticket);
     const admin = getSupabaseAdminClient();
     const { data: ticketRow, error: findErr } = await admin
       .from("seal_tickets" as never)
@@ -185,7 +172,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const expected = parseDraftIds(row.draft_ids);
+    const expected = parseSealDraftIdsSorted(row.draft_ids);
     if (JSON.stringify(expected) !== JSON.stringify(draftIds)) {
       await recordSealTelemetry(admin, {
         user_id: user.id,

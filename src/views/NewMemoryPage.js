@@ -9,31 +9,26 @@ import {
   markFirstMemoryCompleted,
   trackFirstRunEvent,
 } from "../services/firstRunTelemetryService";
-import { armSealFlow, clearSealFlowArm } from "../../lib/seal-flow";
+import {
+  clearSealPrepState,
+  gateSealWithRingAccess,
+  primeSealPrepAfterDraftPersisted,
+} from "../features/seal";
+import {
+  getPlanBadgeLabel,
+  getSubscriptionSummary,
+} from "../features/subscription";
+import { getFreeEntitlements } from "../services/subscriptionService";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
-const PENDING_SEAL_DRAFT_IDS_KEY = "haven.pending_seal_draft_ids.v1";
 
 function clearDraftSnapshot() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(DRAFT_STORAGE_KEY);
-}
-
-function writePendingSealDraftIds(ids = []) {
-  if (typeof window === "undefined") return;
-  if (!ids.length) {
-    window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
-    return;
-  }
-  window.localStorage.setItem(PENDING_SEAL_DRAFT_IDS_KEY, JSON.stringify(ids));
-}
-
-function clearPendingSealDraftIds() {
-  writePendingSealDraftIds([]);
 }
 
 /**
@@ -48,8 +43,10 @@ export function NewMemoryPage({
   onBack,
   onSaved,
   locale = "en",
+  userEntitlements = getFreeEntitlements(),
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
+  const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [releaseAtInput, setReleaseAtInput] = useState("");
@@ -68,6 +65,9 @@ export function NewMemoryPage({
   const [editingDraftId, setEditingDraftId] = useState("");
   const [ringTapError, setRingTapError] = useState("");
   const [isFirstMemoryMode, setIsFirstMemoryMode] = useState(false);
+  const [networkOnline, setNetworkOnline] = useState(
+    () => typeof navigator !== "undefined" && navigator.onLine
+  );
 
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
@@ -85,6 +85,18 @@ export function NewMemoryPage({
     setFeedback("");
     window.setTimeout(() => setFeedback(message), 0);
   }
+
+  useEffect(() => {
+    if (!sealPromptOpen) return undefined;
+    const sync = () => setNetworkOnline(navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, [sealPromptOpen]);
 
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
@@ -264,7 +276,7 @@ export function NewMemoryPage({
       });
       setEditingDraftId(savedDraft.id);
       if (openSealPromptOnSuccess) {
-        writePendingSealDraftIds([savedDraft.id]);
+        primeSealPrepAfterDraftPersisted(savedDraft.id);
       }
       setFeedback(t.feedbackSaved);
       setSaveDialog(
@@ -274,7 +286,6 @@ export function NewMemoryPage({
       );
       if (openSealPromptOnSuccess) {
         setSealPromptOpen(true);
-        armSealFlow();
         setFeedbackNotice(t.feedbackReadyToSeal);
       }
       // Keep the compose snapshot only for explicit draft saves.
@@ -319,20 +330,33 @@ export function NewMemoryPage({
     setEditingDraftId("");
     setRingTapError("");
     setFeedback(t.feedbackReadyNext);
-    clearSealFlowArm();
-    clearPendingSealDraftIds();
+    clearSealPrepState();
     clearDraftSnapshot();
   }
 
   function handleOpenSealPrompt() {
+    if (!canSealWithRing) {
+      setFeedbackNotice(t.upgradeSealWithRing);
+      return;
+    }
+    const draftId = String(editingDraftId || "").trim();
+    if (!draftId) {
+      setFeedbackNotice(t.feedbackSealPrepNeedDraftSave);
+      return;
+    }
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(true);
     setRingTapError("");
-    armSealFlow();
+    primeSealPrepAfterDraftPersisted(draftId);
     setFeedbackNotice(t.feedbackReadyToSeal);
   }
 
   async function handleSealNow() {
+    if (!canSealWithRing) {
+      setSealPromptOpen(false);
+      setFeedbackNotice(t.upgradeSealWithRing);
+      return;
+    }
     await handleSave({ openSealPromptOnSuccess: true, showDialogOnSuccess: false });
   }
 
@@ -354,6 +378,13 @@ export function NewMemoryPage({
         </button>
 
         <p style={styles.helperLine}>{t.sealModeHint}</p>
+        <section style={styles.planCard}>
+          <p style={styles.planTitle}>
+            {getPlanBadgeLabel(userEntitlements)}
+          </p>
+          <p style={styles.planBody}>{getSubscriptionSummary(userEntitlements)}</p>
+          <p style={{ ...styles.planBody, marginTop: 6 }}>{t.planDualTrackHint}</p>
+        </section>
 
         <label style={styles.label}>
           <textarea
@@ -499,14 +530,17 @@ export function NewMemoryPage({
           type="button"
           onClick={handleSealNow}
           disabled={saving}
-          style={styles.floatingPrimaryButton}
+          style={{
+            ...styles.floatingPrimaryButton,
+            ...(canSealWithRing ? null : styles.floatingPrimaryButtonLocked),
+          }}
         >
           <span style={styles.floatingPrimaryMain}>
             <span style={styles.ringIcon} aria-hidden>◌</span>
             {t.sealNow}
           </span>
           <small style={styles.floatingPrimaryHint}>
-            {t.sealFabHint}
+            {canSealWithRing ? t.sealFabHint : t.sealFabUpgradeHint}
           </small>
         </button>
         <div style={styles.secondaryActions}>
@@ -526,6 +560,9 @@ export function NewMemoryPage({
             <div style={styles.statusBanner} role="status" aria-live="polite">
               <p style={styles.sealPromptBody}>{t.sealStatusWaiting}</p>
             </div>
+            {!networkOnline ? (
+              <p style={{ ...styles.hint, marginTop: 8 }}>{t.sealNeedsNetworkHint}</p>
+            ) : null}
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
           </section>
         ) : null}
@@ -535,7 +572,11 @@ export function NewMemoryPage({
         open={saveDialog.open}
         status={saveDialog.status}
         errorMessage={saveDialog.errorMessage}
-        onSealNow={handleOpenSealPrompt}
+        onSealNow={
+          canSealWithRing
+            ? handleOpenSealPrompt
+            : () => setFeedbackNotice(t.upgradeSealWithRing)
+        }
         onCreateAnother={handleCreateAnother}
       />
     </main>
@@ -772,6 +813,28 @@ const styles = {
     gap: 4,
     justifyItems: "start",
   },
+  planCard: {
+    border: "1px solid rgba(217, 166, 122, 0.32)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    background: "rgba(217, 166, 122, 0.08)",
+    display: "grid",
+    gap: 4,
+  },
+  planTitle: {
+    margin: 0,
+    color: "#f0c29e",
+    fontSize: 12,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    fontWeight: 700,
+  },
+  planBody: {
+    margin: 0,
+    color: "#d9c3b3",
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
   linkAction: {
     border: "1px solid #5a3b30",
     background: "rgba(255,255,255,0.03)",
@@ -896,6 +959,9 @@ const styles = {
     textAlign: "left",
     boxShadow: "0 18px 46px rgba(0,0,0,0.35), 0 0 0 0 rgba(217, 166, 122, 0.35)",
     animation: "havenPulse 2.2s ease-in-out infinite",
+  },
+  floatingPrimaryButtonLocked: {
+    background: "linear-gradient(180deg, #b89578, #8f735e)",
   },
   floatingPrimaryMain: {
     display: "inline-flex",
