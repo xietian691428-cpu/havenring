@@ -9,19 +9,23 @@ export function LandingFooter() {
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-12 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-md">
-          <p className="flex items-start gap-3 text-sm leading-relaxed text-white/55">
-            <span className="mt-0.5 text-amber-200/50" aria-hidden>
+          <p className="flex items-start gap-3 text-sm leading-relaxed text-white/52">
+            <span className="mt-0.5 shrink-0 text-amber-200/48" aria-hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="h-6 w-6">
                 <path d="M12 21s-6-4.35-6-10a6 6 0 1112 0c0 5.65-6 10-6 10z" />
               </svg>
             </span>
-            Not everything needs to be shared. Some things just need to stay.
+            <span>
+              Not everything needs to be shared.
+              <span className="mt-1 block text-white/68">
+                Some things simply need to stay — untouched, unpriced, unposted.
+              </span>
+            </span>
           </p>
         </div>
         <div className="max-w-lg text-center lg:text-right">
-          <p className="text-sm leading-relaxed text-white/45">
-            HavenRing is more than a ring. It&apos;s a new way to hold on to what matters
-            most.
+          <p className="text-sm leading-relaxed text-white/42">
+            HavenRing is jewelry with memory — a tactile vow that what matters most need not become content.
           </p>
         </div>
       </div>
