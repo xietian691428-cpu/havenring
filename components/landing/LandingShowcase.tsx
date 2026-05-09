@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { LandingFadeIn, landingEase } from "./LandingMotion";
 
@@ -96,30 +95,9 @@ export function LandingShowcase() {
             dignity, not distribution.
           </p>
           <p className="text-pretty text-[15px] leading-[1.82] text-white/38">
-            For full visual continuity, we split the new poster into curated scenes below while
-            keeping the original poster fully visible above.
+            A single hero visual keeps the brand clear. The sections below stay clean so your eye
+            follows the story, not repeated artwork.
           </p>
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/[0.08] bg-black">
-              <Image
-                src="/landing/brand-poster-v2.png"
-                alt="HavenRing logo crop"
-                fill
-                sizes="(max-width:1024px) 46vw, 220px"
-                className="object-cover object-[12%_18%]"
-              />
-            </div>
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/[0.08] bg-black">
-              <Image
-                src="/landing/brand-poster-v2.png"
-                alt="HavenRing ring crop"
-                fill
-                sizes="(max-width:1024px) 46vw, 220px"
-                className="object-cover object-[22%_72%]"
-              />
-            </div>
-          </div>
         </LandingFadeIn>
 
         <motion.div
