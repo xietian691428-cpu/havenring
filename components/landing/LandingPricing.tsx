@@ -7,7 +7,7 @@ import { LandingFadeIn, landingEase } from "./LandingMotion";
 
 export function LandingPricing() {
   return (
-    <section className="scroll-mt-28 border-t border-white/[0.06] bg-[#050506] px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
+    <section className="landing-section-cv scroll-mt-28 border-t border-white/[0.06] bg-[#050506] px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:gap-14">
         <motion.div
           initial={{ opacity: 0, y: 28 }}

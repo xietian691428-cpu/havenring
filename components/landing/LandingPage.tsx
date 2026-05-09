@@ -1,18 +1,40 @@
+import dynamic from "next/dynamic";
 import { LandingNav } from "./LandingNav";
 import { LandingHero } from "./LandingHero";
-import { LandingShowcase } from "./LandingShowcase";
-import { LandingHowItWorks } from "./LandingHowItWorks";
-import { LandingRitual } from "./LandingRitual";
-import { LandingPrivacy } from "./LandingPrivacy";
-import { LandingPricing } from "./LandingPricing";
-import { LandingTestimonials } from "./LandingTestimonials";
-import { LandingFooter } from "./LandingFooter";
+
+const LandingShowcase = dynamic(() =>
+  import("./LandingShowcase").then((m) => ({ default: m.LandingShowcase }))
+);
+
+const LandingHowItWorks = dynamic(() =>
+  import("./LandingHowItWorks").then((m) => ({ default: m.LandingHowItWorks }))
+);
+
+const LandingRitual = dynamic(() =>
+  import("./LandingRitual").then((m) => ({ default: m.LandingRitual }))
+);
+
+const LandingPrivacy = dynamic(() =>
+  import("./LandingPrivacy").then((m) => ({ default: m.LandingPrivacy }))
+);
+
+const LandingPricing = dynamic(() =>
+  import("./LandingPricing").then((m) => ({ default: m.LandingPricing }))
+);
+
+const LandingTestimonials = dynamic(() =>
+  import("./LandingTestimonials").then((m) => ({ default: m.LandingTestimonials }))
+);
+
+const LandingFooter = dynamic(() =>
+  import("./LandingFooter").then((m) => ({ default: m.LandingFooter }))
+);
 
 export function LandingPage() {
   return (
     <>
       <LandingNav />
-      <main className="min-h-screen bg-black text-white">
+      <main className="landing-marketing min-h-screen scroll-smooth bg-black text-white">
         <LandingHero />
         <LandingShowcase />
         <LandingHowItWorks />

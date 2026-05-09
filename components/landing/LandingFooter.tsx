@@ -5,7 +5,7 @@ export function LandingFooter() {
   return (
     <footer
       id="waitlist"
-      className="border-t border-white/[0.08] bg-[#020203] px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-16"
+      className="landing-section-cv border-t border-white/[0.08] bg-[#020203] px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-16"
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-12 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-md">

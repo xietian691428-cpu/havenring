@@ -20,7 +20,7 @@ const QUOTES = [
 
 export function LandingTestimonials() {
   return (
-    <section className="scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(3.5rem,10vw,6rem)] sm:px-8">
+    <section className="landing-section-cv scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(3.5rem,10vw,6rem)] sm:px-8">
       <div className="mx-auto max-w-6xl">
         <motion.p
           className="text-center text-[10px] font-medium uppercase tracking-[0.48em] text-white/34"

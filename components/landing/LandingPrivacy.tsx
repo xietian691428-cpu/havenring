@@ -47,7 +47,7 @@ const ITEMS = [
 
 export function LandingPrivacy() {
   return (
-    <section className="scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
+    <section className="landing-section-cv scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
       <div className="mx-auto max-w-6xl">
         <LandingFadeIn>
           <p className="text-[10px] font-medium uppercase tracking-[0.48em] text-white/38">
@@ -69,7 +69,7 @@ export function LandingPrivacy() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-8% 0px" }}
               transition={{ duration: 0.75, delay: i * 0.07, ease: landingEase }}
-              className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-gradient-to-b from-zinc-950/95 to-black/80 p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] backdrop-blur-sm"
+              className="landing-privacy-card flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-gradient-to-b from-zinc-950/95 to-black/80 p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] backdrop-blur-sm"
             >
               <span className="text-amber-200/78">{item.icon}</span>
               <h3 className="text-[15px] font-medium leading-snug text-white/92">{item.title}</h3>

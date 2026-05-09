@@ -79,7 +79,7 @@ export function LandingShowcase() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section className="relative scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
+    <section className="landing-section-cv relative scroll-mt-28 border-t border-white/[0.06] bg-black px-5 py-[clamp(4rem,11vw,7rem)] sm:px-8">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_70%_30%,rgba(120,90,55,0.06),transparent_55%)]" aria-hidden />
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-14 lg:flex-row lg:items-start lg:justify-between lg:gap-20">
@@ -107,7 +107,7 @@ export function LandingShowcase() {
           viewport={{ once: true, margin: "-10% 0px" }}
           transition={{ duration: 1, ease: landingEase }}
         >
-          <div className="relative aspect-[9/18.5] w-[min(100%,300px)] overflow-hidden rounded-[2.35rem] border border-white/[0.09] bg-[#070708] shadow-[0_56px_110px_-48px_rgba(0,0,0,0.88)] ring-1 ring-white/[0.03]">
+          <div className="landing-phone-frame relative aspect-[9/18.5] w-[min(100%,300px)] overflow-hidden rounded-[2.35rem] border border-white/[0.09] bg-[#070708] shadow-[0_56px_110px_-48px_rgba(0,0,0,0.88)] ring-1 ring-white/[0.03]">
             <div
               aria-hidden
               className="absolute left-1/2 top-3 z-20 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-black/90"
