@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RegisterServiceWorker } from "./register-sw";
 import { ContrastToggle } from "./contrast-toggle";
 import { LanguageSwitcher } from "./language-switcher";
+import { SupabaseUrlSessionBootstrap } from "./supabase-url-session-bootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -61,6 +63,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${landingSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-black text-white selection:bg-white selection:text-black high-contrast">
+        <Script id="haven-www-apex-hash" strategy="beforeInteractive">
+          {`(function(){try{var h=location.hostname.toLowerCase();if(h==="www.havenring.me"){var t="https://havenring.me"+location.pathname+location.search+location.hash;if(location.href!==t)location.replace(t);}}catch(e){}})();`}
+        </Script>
+        <SupabaseUrlSessionBootstrap />
         <RegisterServiceWorker />
         <LanguageSwitcher />
         <ContrastToggle />

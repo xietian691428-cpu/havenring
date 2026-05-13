@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
 import {
   addBoundRing,
@@ -53,7 +54,8 @@ function isPermanentSession(session: Session | null): session is Session {
 function redirectUrlFor(uid: string) {
   const params = new URLSearchParams();
   params.set("uid", uid);
-  return `${window.location.origin}/bind-ring?${params.toString()}`;
+  const origin = canonicalAuthOriginFromLocation();
+  return `${origin}/bind-ring?${params.toString()}`;
 }
 
 export function BindRingClient({ initialUid }: BindRingClientProps) {

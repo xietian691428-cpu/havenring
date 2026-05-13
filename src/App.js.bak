@@ -1,0 +1,11 @@
+/**
+ * Backup of the former `src/App.js` entry (pre–direct AppShell import from `app/page.tsx`).
+ *
+ * Historical shape (2026): the real root was always `app-shell/AppShell.tsx` — this file only
+ * re-exported the default. New code should import:
+ *   `import AppShell from "@/src/app-shell/AppShell"`
+ * and must not depend on `src/App.js`.
+ *
+ * Previous one-liner was:
+ *   export { default } from "./app-shell/AppShell";
+ */

@@ -25,6 +25,7 @@ import {
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
@@ -172,7 +173,7 @@ export function SettingsPage({
     setStatus(localeCopy.signingIn);
     try {
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = `${window.location.origin}/app`;
+      const redirectTo = `${canonicalAuthOriginFromLocation()}/app`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: { redirectTo },

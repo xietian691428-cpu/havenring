@@ -31,6 +31,7 @@ import { SettingsPage } from "../views/SettingsPage";
 import { TimelinePage } from "../views/TimelinePage";
 import { usePwaLocale } from "../i18n/pwaLocale";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
 import { useAppFlow } from "../state/appFlowContext";
 import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelectors";
 import { getSecuritySummary } from "../services/deviceTrustService";
@@ -285,9 +286,10 @@ export function AppRouter() {
         return;
       }
       const supabase = getSupabaseBrowserClient();
+      const origin = canonicalAuthOriginFromLocation();
       const redirectTo = token
-        ? `${window.location.origin}/hub?token=${encodeURIComponent(token)}`
-        : `${window.location.origin}/app`;
+        ? `${origin}/hub?token=${encodeURIComponent(token)}`
+        : `${origin}/app`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },

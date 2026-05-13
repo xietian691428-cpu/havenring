@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
+import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolvePlatformTarget } from "@/src/hooks/usePlatformTarget";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
@@ -15,7 +17,6 @@ import {
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 
 const FTUX_STARTED_KEY = "haven.ftux.started.v1";
-const PROD_ORIGIN = "https://havenring.me";
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
 
 type SdmScene = "new_ring_binding" | "daily_access" | "seal_confirmation";
@@ -42,7 +43,9 @@ function isSealNfcLaunchSearch(search: string): boolean {
 
 /** OAuth return URL: reads the live `/start` query so redirects never miss NFC params if the user signs in immediately. */
 function buildOAuthReturnUrl(safeOrigin: string): string {
-  if (typeof window === "undefined") return `${safeOrigin}/`;
+  if (typeof window === "undefined") {
+    return `${safeOrigin}/start`;
+  }
   const rawSearch = window.location.search || "";
   const sp = new URLSearchParams(
     rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch
@@ -52,11 +55,15 @@ function buildOAuthReturnUrl(safeOrigin: string): string {
   if (claimNormalized) {
     return `${safeOrigin}/start?claim=${encodeURIComponent(claimRaw.trim())}`;
   }
+  const uidOnly = (sp.get("uid") || "").trim();
+  if (uidOnly && !sp.get("cmac")) {
+    return `${safeOrigin}/bind-ring?uid=${encodeURIComponent(uidOnly)}`;
+  }
   if (isSealNfcLaunchSearch(rawSearch)) {
     const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
     return qs ? `${safeOrigin}/start?${qs}` : `${safeOrigin}/start`;
   }
-  return `${safeOrigin}/`;
+  return `${safeOrigin}/start`;
 }
 
 function normalizeClaimValue(input: string): string {
@@ -173,6 +180,7 @@ export default function StartClient() {
   const hasVideoHero = Boolean(hero.video);
   const claimAttemptedRef = useRef(false);
   const pendingSealTapRef = useRef(false);
+  const bindRingRedirectDoneRef = useRef(false);
 
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
@@ -297,7 +305,7 @@ export default function StartClient() {
     const timer = window.setTimeout(() => {
       setClaimToken(normalized);
       setClaimState("waiting_signin");
-      setNotice("Connecting your ring...");
+      setNotice("Connecting your ring to your account…");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -330,7 +338,7 @@ export default function StartClient() {
     if (!claimToken || claimAttemptedRef.current) return;
     claimAttemptedRef.current = true;
     setClaimState("claiming");
-    setNotice("Connecting your ring...");
+    setNotice("Connecting your ring to your account…");
     try {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), CLAIM_REQUEST_TIMEOUT_MS);
@@ -362,7 +370,7 @@ export default function StartClient() {
       setNotice(
         data?.plusTrialActivated
           ? "30-Day Haven Plus activated! You can now try Seal with Ring."
-          : "Setup complete! You can now start saving memories."
+          : "Ring successfully linked! Welcome to your sanctuary."
       );
     } catch {
       claimAttemptedRef.current = false;
@@ -399,9 +407,49 @@ export default function StartClient() {
     };
   }, [claimRingWithToken, claimToken]);
 
+  useEffect(() => {
+    if (sdmState.kind !== "ready" || sdmState.scene !== "new_ring_binding") {
+      bindRingRedirectDoneRef.current = false;
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const uid = (new URLSearchParams(window.location.search).get("uid") || "").trim();
+    if (!uid) return;
+
+    const supabase = getSupabaseBrowserClient();
+    let active = true;
+
+    function go(session: Session | null) {
+      if (!active || bindRingRedirectDoneRef.current) return;
+      if (!session?.access_token) return;
+      bindRingRedirectDoneRef.current = true;
+      setNotice("Connecting your ring to your account…");
+      window.location.assign(`/bind-ring?uid=${encodeURIComponent(uid)}`);
+    }
+
+    void supabase.auth.getSession().then(({ data }) => go(data.session ?? null));
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      go(session ?? null);
+    });
+    return () => {
+      active = false;
+      authSub.subscription.unsubscribe();
+    };
+  }, [sdmState]);
+
+  /** Supabase OAuth errors are localized by Accept-Language; match EN + zh-CN for provider-disabled. */
+  function isOAuthProviderNotEnabledMessage(message: string): boolean {
+    const raw = String(message || "");
+    const lower = raw.toLowerCase();
+    if (lower.includes("provider is not enabled")) return true;
+    if (lower.includes("unsupported provider")) return true;
+    if (raw.includes("提供程序未启用")) return true;
+    if (raw.includes("不支持的提供程序")) return true;
+    return false;
+  }
+
   function getFriendlyAuthError(message: string, provider: "apple" | "google") {
-    const normalized = String(message || "").toLowerCase();
-    if (normalized.includes("provider is not enabled")) {
+    if (isOAuthProviderNotEnabledMessage(message)) {
       if (provider === "apple") {
         return "Apple Sign In is not ready yet. Please continue with Google.";
       }
@@ -416,11 +464,7 @@ export default function StartClient() {
     try {
       window.localStorage.setItem(FTUX_STARTED_KEY, "1");
       const supabase = getSupabaseBrowserClient();
-      const origin = window.location.origin || "";
-      const safeOrigin =
-        origin.includes("localhost") || origin.includes("127.0.0.1")
-          ? PROD_ORIGIN
-          : origin;
+      const safeOrigin = canonicalAuthOriginFromLocation();
       const redirectTo = buildOAuthReturnUrl(safeOrigin);
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -429,9 +473,7 @@ export default function StartClient() {
       if (error) {
         if (
           provider === "apple" &&
-          String(error.message || "")
-            .toLowerCase()
-            .includes("provider is not enabled")
+          isOAuthProviderNotEnabledMessage(String(error.message || ""))
         ) {
           setAppleProviderReady(false);
           setNotice("Apple Sign In is not ready yet. Redirecting to Google Sign In...");
@@ -513,10 +555,10 @@ export default function StartClient() {
               <p style={styles.claimTitle}>Ring setup in progress</p>
               <p style={styles.claimBody}>
                 {claimState === "claimed"
-                  ? "Your ring is securely connected to your account."
+                  ? "Ring successfully linked! Welcome to your sanctuary."
                   : claimState === "waiting_signin"
-                    ? "Please sign in first, then we will connect your ring automatically."
-                    : "Connecting your ring..."}
+                    ? "Connecting your ring to your account. Please sign in, then we will finish linking automatically."
+                    : "Connecting your ring to your account…"}
               </p>
               {claimState === "failed" ? (
                 <button
