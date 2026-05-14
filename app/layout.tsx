@@ -64,7 +64,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-black text-white selection:bg-white selection:text-black high-contrast">
         <Script id="haven-www-apex-hash" strategy="beforeInteractive">
-          {`(function(){try{var h=location.hostname.toLowerCase();if(h==="www.havenring.me"){var t="https://havenring.me"+location.pathname+location.search+location.hash;if(location.href!==t)location.replace(t);}}catch(e){}})();`}
+          {`(function(){try{var h=location.hostname.toLowerCase();if(h!=="www.havenring.me")return;var p=location.pathname||"";if(/^\\/(app|hub|bind-ring|vault)(\\/|$)/.test(p))return;var ha=location.hash||"";if(ha.indexOf("access_token=")>=0||ha.indexOf("error=")>=0||ha.indexOf("error_description=")>=0)return;var t="https://havenring.me"+p+location.search+ha;if(location.href!==t)location.replace(t);}catch(e){}})();`}
         </Script>
         <SupabaseUrlSessionBootstrap />
         <RegisterServiceWorker />
