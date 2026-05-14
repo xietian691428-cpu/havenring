@@ -5,6 +5,8 @@ const EN = {
   addPhotosCta: "Add Photos (max 6)",
   addVideoCta: "Add Video",
   addFilesCta: "Add Files",
+  videoAttachmentsLabel: "Videos",
+  videoPreviewPending: "Video preview loading…",
   optionalDetailsToggle: "Title & schedule (optional)",
   optionalDetailsHide: "Hide title & schedule",
   helpAriaLabel: "Help",
@@ -77,7 +79,9 @@ const EN = {
   feedbackMaxAttachmentsSuffix: " files allowed.",
   feedbackNeedContent: "Add some memory content before saving.",
   feedbackSavingLocal: "Saving draft locally...",
+  feedbackSavingTimeline: "Encrypting and saving to your timeline...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
+  feedbackSavedTimeline: "Saved to your timeline. You can open it from Home.",
   feedbackReadyToSeal: "Touch your trusted ring to begin the sacred ritual.",
   feedbackMissingVerifiedTap:
     "No verified ring tap was detected. Please touch your ring and return to complete sealing.",

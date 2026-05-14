@@ -16,6 +16,12 @@ export type SealWithRingGateResult =
 export function gateSealWithRingAccess(
   entitlements: UserEntitlements | null | undefined
 ): SealWithRingGateResult {
+  if (
+    typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_HAVEN_SEAL_RING_DEV === "1"
+  ) {
+    return { ok: true };
+  }
   return canSealWithRing(entitlements)
     ? { ok: true }
     : { ok: false, code: "upgrade_required" };

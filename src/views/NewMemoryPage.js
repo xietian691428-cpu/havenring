@@ -39,6 +39,7 @@ function clearDraftSnapshot() {
 export function NewMemoryPage({
   onBack,
   onSaved,
+  onSaveMemory,
   onOpenHelp,
   locale = "en",
   userEntitlements = getFreeEntitlements(),
@@ -71,6 +72,21 @@ export function NewMemoryPage({
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
   const videoInputRef = useRef(null);
+  const attachmentsRef = useRef(attachments);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach((item) => {
+        if (item?.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
+    };
+  }, []);
 
   const hasDraftContent = Boolean(
     title.trim() ||
@@ -196,7 +212,8 @@ export function NewMemoryPage({
     }
   }
 
-  async function handleAttachmentsSelected(event) {
+  async function handleAttachmentsSelected(event, opts = {}) {
+    const { preferVideo = false } = opts;
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
     const remainingSlots = Math.max(0, MAX_ATTACHMENTS - attachments.length);
@@ -217,7 +234,7 @@ export function NewMemoryPage({
           tooLargeNames.push(file.name || "file");
           continue;
         }
-        selected.push(fileToAttachmentCandidate(file));
+        selected.push(fileToAttachmentCandidate(file, { preferVideo }));
       }
       if (selected.length) {
         setAttachments((prev) => [...prev, ...selected]);
@@ -274,10 +291,28 @@ export function NewMemoryPage({
         releaseAt,
       });
       setEditingDraftId(savedDraft.id);
+      if (!openSealPromptOnSuccess && typeof onSaveMemory === "function") {
+        setFeedback(t.feedbackSavingTimeline);
+        await onSaveMemory({
+          id: savedDraft.id,
+          title: title.trim() || t.untitled,
+          story: story.trim(),
+          photo: photos.length > 0 ? photos : [],
+          attachments: draftAttachments,
+          releaseAt,
+          timelineAt: Date.now(),
+        });
+      }
       if (openSealPromptOnSuccess) {
         primeSealPrepAfterDraftPersisted(savedDraft.id);
       }
-      setFeedback(t.feedbackSaved);
+      setFeedback(
+        openSealPromptOnSuccess
+          ? t.feedbackSaved
+          : typeof onSaveMemory === "function"
+            ? t.feedbackSavedTimeline
+            : t.feedbackSaved
+      );
       setSaveDialog(
         showDialogOnSuccess
           ? { open: true, status: "success", errorMessage: "" }
@@ -360,7 +395,17 @@ export function NewMemoryPage({
   }
 
   async function handleSaveSecurelyFallback() {
-    await handleSave({ openSealPromptOnSuccess: false, showDialogOnSuccess: false });
+    await handleSave({ openSealPromptOnSuccess: false });
+  }
+
+  function removeAttachmentById(id) {
+    setAttachments((prev) => {
+      const removed = prev.find((it) => it.id === id);
+      if (removed?.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+      }
+      return prev.filter((it) => it.id !== id);
+    });
   }
 
   return (
@@ -432,7 +477,7 @@ export function NewMemoryPage({
           type="file"
           accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
           multiple
-          onChange={handleAttachmentsSelected}
+          onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: false })}
           style={styles.hiddenFileInput}
         />
         <input
@@ -440,7 +485,7 @@ export function NewMemoryPage({
           type="file"
           accept="video/*"
           multiple
-          onChange={handleAttachmentsSelected}
+          onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: true })}
           style={styles.hiddenFileInput}
         />
 
@@ -452,25 +497,75 @@ export function NewMemoryPage({
           </div>
         ) : null}
 
-        {attachments.length ? (
-          <ul style={styles.attachmentList}>
-            {attachments.map((item) => (
-              <li key={item.id} style={styles.attachmentItem}>
-                <span style={styles.attachmentName}>
-                  {item.name}
-                  <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAttachments((prev) => prev.filter((it) => it.id !== item.id))}
-                  style={styles.clearButton}
-                >
-                  {t.removeAttachment}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {(() => {
+          const videoItems = attachments.filter((item) =>
+            String(item.mimeType || "").startsWith("video/")
+          );
+          const fileItems = attachments.filter(
+            (item) => !String(item.mimeType || "").startsWith("video/")
+          );
+          return (
+            <>
+              {videoItems.length ? (
+                <div style={styles.videoSection} role="group" aria-label={t.videoAttachmentsLabel}>
+                  {videoItems.map((item) => {
+                    const src = item.previewUrl || item.dataUrl || "";
+                    return (
+                      <figure key={item.id} style={styles.videoFigure}>
+                        {src ? (
+                          <video
+                            src={src}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            style={styles.videoPreview}
+                          />
+                        ) : (
+                          <div style={styles.videoPlaceholder}>{t.videoPreviewPending}</div>
+                        )}
+                        <figcaption style={styles.videoCaption}>
+                          <span style={styles.attachmentName}>
+                            {item.name}
+                            <span style={styles.attachmentSize}>
+                              {" "}
+                              ({formatAttachmentSize(item.size)})
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachmentById(item.id)}
+                            style={styles.clearButton}
+                          >
+                            {t.removeAttachment}
+                          </button>
+                        </figcaption>
+                      </figure>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {fileItems.length ? (
+                <ul style={styles.attachmentList}>
+                  {fileItems.map((item) => (
+                    <li key={item.id} style={styles.attachmentItem}>
+                      <span style={styles.attachmentName}>
+                        {item.name}
+                        <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachmentById(item.id)}
+                        style={styles.clearButton}
+                      >
+                        {t.removeAttachment}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          );
+        })()}
 
         <button type="button" onClick={() => setDetailsOpen((v) => !v)} style={styles.optionalToggle}>
           {detailsOpen ? t.optionalDetailsHide : t.optionalDetailsToggle}
@@ -595,14 +690,27 @@ function blobToDataUrl(blob, t) {
   });
 }
 
-function fileToAttachmentCandidate(file) {
-  return {
+function fileToAttachmentCandidate(file, opts = {}) {
+  const { preferVideo = false } = opts;
+  let mimeType = String(file.type || "").trim();
+  if (!mimeType && preferVideo) {
+    mimeType = "video/mp4";
+  }
+  if (!mimeType) {
+    mimeType = "application/octet-stream";
+  }
+  const isVideo = mimeType.startsWith("video/");
+  const base = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: file.name || "attachment",
-    mimeType: file.type || "application/octet-stream",
+    name: file.name || (isVideo ? "Video" : "attachment"),
+    mimeType,
     size: file.size || 0,
     file,
   };
+  if (isVideo && typeof URL !== "undefined" && file) {
+    base.previewUrl = URL.createObjectURL(file);
+  }
+  return base;
 }
 
 function formatAttachmentSize(size = 0) {
@@ -742,6 +850,43 @@ const styles = {
     objectFit: "cover",
     borderRadius: 12,
     border: "1px solid rgba(55, 44, 38, 0.9)",
+  },
+  videoSection: {
+    display: "grid",
+    gap: 12,
+  },
+  videoFigure: {
+    margin: 0,
+    display: "grid",
+    gap: 8,
+    padding: "10px 10px 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(72, 58, 50, 0.95)",
+    background: "rgba(18, 15, 13, 0.85)",
+  },
+  videoPreview: {
+    width: "100%",
+    maxHeight: 220,
+    borderRadius: 10,
+    background: "#000",
+  },
+  videoPlaceholder: {
+    minHeight: 120,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 10,
+    background: "rgba(0,0,0,0.35)",
+    color: "rgba(232, 216, 206, 0.75)",
+    fontSize: 13,
+    padding: 16,
+    textAlign: "center",
+  },
+  videoCaption: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
   },
   attachmentList: {
     margin: 0,

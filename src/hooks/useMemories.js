@@ -4,6 +4,7 @@ import {
   deleteMemory,
   getAllMemories,
   getMemoryById,
+  saveMemory,
 } from "../services/localStorageService";
 import { computeMemoryBundleHash } from "../utils/memoryIntegrity";
 import {
@@ -131,6 +132,77 @@ export function useMemories() {
     },
     []
   );
+
+  /**
+   * Write composer output to the encrypted timeline (create or replace by id).
+   * Call after Draft Box persist so “Save securely” appears on the timeline.
+   */
+  const persistComposerMemory = useCallback(async (payload) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const id = String(payload?.id || "").trim();
+      if (!id) {
+        throw new Error("Missing memory id.");
+      }
+      const now = Date.now();
+      const enrichedPayload = {
+        ...payload,
+        id,
+        title: String(payload?.title || "").trim() || "Untitled memory",
+        story: String(payload?.story || ""),
+        photo: Array.isArray(payload?.photo) && payload.photo.length ? payload.photo : null,
+        attachments: Array.isArray(payload?.attachments) ? payload.attachments : [],
+        timelineAt: Number(payload?.timelineAt || now) || now,
+        releaseAt: Number(payload?.releaseAt || 0) || 0,
+      };
+      const contentSha = await computeMemoryBundleHash({
+        title: enrichedPayload.title,
+        story: enrichedPayload.story,
+        timelineAt: enrichedPayload.timelineAt,
+        releaseAt: enrichedPayload.releaseAt,
+        photos: Array.isArray(enrichedPayload.photo) ? enrichedPayload.photo : [],
+      });
+      await stageDraftForActiveRing({
+        id,
+        title: enrichedPayload.title || "",
+        timelineAt: enrichedPayload.timelineAt,
+        releaseAt: enrichedPayload.releaseAt,
+        content_sha256: contentSha,
+      });
+
+      const existing = await getMemoryById(id);
+      if (existing) {
+        await saveMemory({
+          ...existing,
+          title: enrichedPayload.title,
+          story: enrichedPayload.story,
+          photo: enrichedPayload.photo ?? existing.photo,
+          attachments: enrichedPayload.attachments,
+          releaseAt: enrichedPayload.releaseAt,
+          timelineAt: enrichedPayload.timelineAt,
+        });
+      } else {
+        await createMemory(enrichedPayload);
+      }
+
+      const created = await getMemoryById(id);
+      if (created) {
+        setMemories((prev) => {
+          const filtered = prev.filter((item) => item.id !== id);
+          return [created, ...filtered].sort((a, b) => b.timelineAt - a.timelineAt);
+        });
+      }
+      return created;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to save memory.";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   const runSync = useCallback(async () => {
     if (syncInFlightRef.current) {
@@ -347,6 +419,7 @@ export function useMemories() {
       syncNow: runSync,
       syncActiveRingNow: runSyncForActiveRing,
       createMemory: create,
+      persistComposerMemory,
       deleteMemory: remove,
     }),
     [
@@ -363,6 +436,7 @@ export function useMemories() {
       runSync,
       runSyncForActiveRing,
       create,
+      persistComposerMemory,
       remove,
     ]
   );

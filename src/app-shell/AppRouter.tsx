@@ -86,7 +86,7 @@ export function AppRouter() {
     refresh,
     syncNow,
     syncActiveRingNow,
-    createMemory,
+    persistComposerMemory,
   } = useMemories();
   const { session: supabaseSession, sessionLoading } = useSessionContext();
   const { entitlements } = useSubscriptionContext();
@@ -610,7 +610,7 @@ export function AppRouter() {
           locale={locale}
           userEntitlements={entitlements}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-          onSaveMemory={createMemory}
+          onSaveMemory={persistComposerMemory}
           onSaved={async () => {
             await refresh();
           }}
