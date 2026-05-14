@@ -1,12 +1,16 @@
 import { SITE_ORIGIN } from "@/lib/site";
 
-/** Production OAuth / magic-link host (no www). */
-export const PRODUCTION_AUTH_ORIGIN = "https://havenring.me";
-
 /**
- * Single origin for Supabase `redirectTo` on havenring production.
- * Always use apex so OAuth never lands on `www` (server/CDN www→apex redirects
- * strip URL fragments and break `#access_token=...` recovery).
+ * Origin for Supabase `redirectTo` and magic-link returns.
+ *
+ * On the production hostnames we normalize to `NEXT_PUBLIC_SITE_URL` (defaults
+ * to apex `https://havenring.me`) so OAuth does not rely on edge `www`→apex
+ * HTTP redirects that drop `#access_token=…`.
+ *
+ * Use the **live** `window.location.origin` when the page is clearly not public
+ * TLS on :443 (e.g. `http://havenring.me:3000` with hosts-file mapping, or
+ * HTTPS on a dev port). Otherwise `redirectTo` would point at production and
+ * the IdP could never round-trip to the dev server.
  */
 export function canonicalAuthOriginFromLocation(): string {
   if (typeof window === "undefined") {
@@ -17,7 +21,14 @@ export function canonicalAuthOriginFromLocation(): string {
     return window.location.origin.replace(/\/$/, "");
   }
   if (host === "havenring.me" || host === "www.havenring.me") {
-    return PRODUCTION_AUTH_ORIGIN;
+    if (window.location.protocol !== "https:") {
+      return window.location.origin.replace(/\/$/, "");
+    }
+    const port = window.location.port;
+    if (port && port !== "443") {
+      return window.location.origin.replace(/\/$/, "");
+    }
+    return SITE_ORIGIN.replace(/\/$/, "");
   }
   return window.location.origin.replace(/\/$/, "");
 }
