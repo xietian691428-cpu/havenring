@@ -18,10 +18,21 @@ import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 
 const MAX_PHOTOS = 6;
-const MAX_ATTACHMENTS = 5;
+const MAX_VIDEOS = 6;
+const MAX_FILE_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
+
+function isVideoMime(mime) {
+  return String(mime || "")
+    .toLowerCase()
+    .startsWith("video/");
+}
+
+function countVideoAttachments(items) {
+  return items.filter((a) => isVideoMime(a?.mimeType)).length;
+}
 
 function clearDraftSnapshot() {
   if (typeof window === "undefined") return;
@@ -52,6 +63,18 @@ export function NewMemoryPage({
   const [releaseAtInput, setReleaseAtInput] = useState("");
   const [photos, setPhotos] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const { videoItems, fileItems } = useMemo(() => {
+    const videos = [];
+    const files = [];
+    for (const item of attachments) {
+      if (isVideoMime(item.mimeType)) {
+        videos.push(item);
+      } else {
+        files.push(item);
+      }
+    }
+    return { videoItems: videos, fileItems: files };
+  }, [attachments]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
   const { soundEnabled, hapticEnabled, soundScope } = useFeedbackPrefs();
@@ -216,29 +239,53 @@ export function NewMemoryPage({
     const { preferVideo = false } = opts;
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const remainingSlots = Math.max(0, MAX_ATTACHMENTS - attachments.length);
-    if (remainingSlots === 0) {
-      setFeedback(
-        `${t.feedbackMaxAttachmentsPrefix}${MAX_ATTACHMENTS}${t.feedbackMaxAttachmentsSuffix}`
-      );
-      event.target.value = "";
-      return;
-    }
 
-    const allowedFiles = files.slice(0, remainingSlots);
     try {
       const selected = [];
       const tooLargeNames = [];
-      for (const file of allowedFiles) {
+      const wrongPickerVideos = [];
+      let skippedOverVideoCap = 0;
+      let skippedOverFileCap = 0;
+
+      for (const file of files) {
         if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
           tooLargeNames.push(file.name || "file");
           continue;
         }
-        selected.push(fileToAttachmentCandidate(file, { preferVideo }));
+
+        const cand = fileToAttachmentCandidate(file, { preferVideo });
+        const isVideo = isVideoMime(cand.mimeType);
+
+        if (preferVideo && !isVideo) {
+          continue;
+        }
+        if (!preferVideo && isVideo) {
+          wrongPickerVideos.push(file.name || "video");
+          continue;
+        }
+
+        const vidSel = countVideoAttachments(selected);
+        const fileSel = selected.length - vidSel;
+        const baseVideos = countVideoAttachments(attachments);
+        const baseFiles = attachments.length - baseVideos;
+
+        if (isVideo) {
+          if (baseVideos + vidSel >= MAX_VIDEOS) {
+            skippedOverVideoCap += 1;
+            continue;
+          }
+        } else if (baseFiles + fileSel >= MAX_FILE_ATTACHMENTS) {
+          skippedOverFileCap += 1;
+          continue;
+        }
+
+        selected.push(cand);
       }
+
       if (selected.length) {
         setAttachments((prev) => [...prev, ...selected]);
       }
+
       const messages = [];
       if (selected.length) {
         messages.push(
@@ -251,12 +298,31 @@ export function NewMemoryPage({
           `${t.feedbackAttachmentTooLargeManyPrefix}${tooLargeNames.length}${t.feedbackAttachmentTooLargeManyMiddle}${MAX_ATTACHMENT_SIZE_MB}${t.feedbackAttachmentTooLargeManySuffix}${preview}`
         );
       }
-      if (files.length > allowedFiles.length) {
+      if (wrongPickerVideos.length) {
+        const preview = wrongPickerVideos.slice(0, 2).join(", ");
         messages.push(
-          `${t.feedbackAttachmentSlotsExceededPrefix}${files.length - allowedFiles.length}${t.feedbackAttachmentSlotsExceededSuffix}${MAX_ATTACHMENTS}.`
+          `${t.feedbackWrongPickerVideosPrefix}${preview}${t.feedbackWrongPickerVideosSuffix}`
         );
       }
-      setFeedback(messages.join(" "));
+      if (skippedOverVideoCap > 0) {
+        messages.push(
+          t.feedbackSkippedVideoClips
+            .replace("{n}", String(skippedOverVideoCap))
+            .replace("{max}", String(MAX_VIDEOS))
+            .replace("{mb}", String(MAX_ATTACHMENT_SIZE_MB))
+        );
+      }
+      if (skippedOverFileCap > 0) {
+        messages.push(
+          t.feedbackSkippedFileAttachments
+            .replace("{n}", String(skippedOverFileCap))
+            .replace("{max}", String(MAX_FILE_ATTACHMENTS))
+            .replace("{mb}", String(MAX_ATTACHMENT_SIZE_MB))
+        );
+      }
+      if (messages.length) {
+        setFeedback(messages.join(" "));
+      }
     } catch {
       setFeedback(t.feedbackAttachmentError);
     } finally {
@@ -408,6 +474,10 @@ export function NewMemoryPage({
     });
   }
 
+  function removePhotoById(id) {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+  }
+
   return (
     <main style={styles.page}>
       <header style={styles.topBar}>
@@ -440,132 +510,142 @@ export function NewMemoryPage({
 
         <p style={styles.feedbackInline}>{feedback || "\u00A0"}</p>
 
-        <div style={styles.mediaRow}>
-          <button
-            type="button"
-            onClick={() => photoInputRef.current?.click()}
-            style={styles.mediaBtn}
-          >
-            📸 {t.addPhotosCta}
-          </button>
-          <button
-            type="button"
-            onClick={() => videoInputRef.current?.click()}
-            style={styles.mediaBtn}
-          >
-            🎥 {t.addVideoCta}
-          </button>
-          <button
-            type="button"
-            onClick={() => attachmentInputRef.current?.click()}
-            style={styles.mediaBtn}
-          >
-            📎 {t.addFilesCta}
-          </button>
-        </div>
+        <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
+          <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
 
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handlePhotosSelected}
-          style={styles.hiddenFileInput}
-        />
-        <input
-          ref={attachmentInputRef}
-          type="file"
-          accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
-          multiple
-          onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: false })}
-          style={styles.hiddenFileInput}
-        />
-        <input
-          ref={videoInputRef}
-          type="file"
-          accept="video/*"
-          multiple
-          onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: true })}
-          style={styles.hiddenFileInput}
-        />
-
-        {photos.length ? (
-          <div style={styles.photoGrid}>
-            {photos.map((photo) => (
-              <img key={photo.id} src={photo.dataUrl} alt="" style={styles.photoThumb} />
-            ))}
+          <div style={styles.mediaRow}>
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              style={styles.mediaBtn}
+            >
+              📸 {t.addPhotosCta}
+            </button>
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              style={styles.mediaBtn}
+            >
+              🎥 {t.addVideoCta}
+            </button>
+            <button
+              type="button"
+              onClick={() => attachmentInputRef.current?.click()}
+              style={styles.mediaBtn}
+            >
+              📎 {t.addFilesCta}
+            </button>
           </div>
-        ) : null}
 
-        {(() => {
-          const videoItems = attachments.filter((item) =>
-            String(item.mimeType || "").startsWith("video/")
-          );
-          const fileItems = attachments.filter(
-            (item) => !String(item.mimeType || "").startsWith("video/")
-          );
-          return (
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handlePhotosSelected}
+            style={styles.hiddenFileInput}
+          />
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            accept="audio/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z,application/pdf"
+            multiple
+            onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: false })}
+            style={styles.hiddenFileInput}
+          />
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            multiple
+            onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: true })}
+            style={styles.hiddenFileInput}
+          />
+
+          {photos.length > 0 ? (
             <>
-              {videoItems.length ? (
-                <div style={styles.videoSection} role="group" aria-label={t.videoAttachmentsLabel}>
-                  {videoItems.map((item) => {
-                    const src = item.previewUrl || item.dataUrl || "";
-                    return (
-                      <figure key={item.id} style={styles.videoFigure}>
-                        {src ? (
-                          <video
-                            src={src}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            style={styles.videoPreview}
-                          />
-                        ) : (
-                          <div style={styles.videoPlaceholder}>{t.videoPreviewPending}</div>
-                        )}
-                        <figcaption style={styles.videoCaption}>
-                          <span style={styles.attachmentName}>
-                            {item.name}
-                            <span style={styles.attachmentSize}>
-                              {" "}
-                              ({formatAttachmentSize(item.size)})
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeAttachmentById(item.id)}
-                            style={styles.clearButton}
-                          >
-                            {t.removeAttachment}
-                          </button>
-                        </figcaption>
-                      </figure>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {fileItems.length ? (
-                <ul style={styles.attachmentList}>
-                  {fileItems.map((item) => (
-                    <li key={item.id} style={styles.attachmentItem}>
-                      <span style={styles.attachmentName}>
-                        {item.name}
-                        <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
-                      </span>
+              <p style={styles.mediaSubLabel}>
+                {t.photosSectionHeading} · {photos.length}/{MAX_PHOTOS}
+              </p>
+              <div style={styles.photoGrid}>
+                {photos.map((photo) => (
+                  <div key={photo.id} style={styles.mediaThumbWrap}>
+                    <img src={photo.dataUrl} alt="" style={styles.photoThumb} />
+                    <button
+                      type="button"
+                      onClick={() => removePhotoById(photo.id)}
+                      style={styles.mediaRemoveOverlay}
+                      aria-label={t.removePhotoAria}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {videoItems.length > 0 ? (
+            <>
+              <p style={styles.mediaSubLabel}>
+                {t.videosSectionHeading} · {videoItems.length}/{MAX_VIDEOS}
+              </p>
+              <div style={styles.photoGrid} role="group" aria-label={t.videoAttachmentsLabel}>
+                {videoItems.map((item) => {
+                  const src = item.previewUrl || item.dataUrl || "";
+                  return (
+                    <div key={item.id} style={styles.mediaThumbWrap}>
+                      {src ? (
+                        <video
+                          src={src}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          style={styles.mediaCellVideo}
+                        />
+                      ) : (
+                        <div style={styles.videoPlaceholderCompact}>{t.videoPreviewPending}</div>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeAttachmentById(item.id)}
-                        style={styles.clearButton}
+                        style={styles.mediaRemoveOverlay}
+                        aria-label={t.removeVideoAria}
                       >
-                        {t.removeAttachment}
+                        ×
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </>
-          );
-        })()}
+          ) : null}
+
+          {fileItems.length > 0 ? (
+            <>
+              <p style={styles.mediaSubLabel}>
+                {t.filesSectionHeading} · {fileItems.length}/{MAX_FILE_ATTACHMENTS}
+              </p>
+              <ul style={styles.attachmentList}>
+                {fileItems.map((item) => (
+                  <li key={item.id} style={styles.attachmentItem}>
+                    <span style={styles.attachmentName}>
+                      {item.name}
+                      <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachmentById(item.id)}
+                      style={styles.clearButton}
+                    >
+                      {t.removeAttachment}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </section>
 
         <button type="button" onClick={() => setDetailsOpen((v) => !v)} style={styles.optionalToggle}>
           {detailsOpen ? t.optionalDetailsHide : t.optionalDetailsToggle}
@@ -595,6 +675,7 @@ export function NewMemoryPage({
 
         <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
         {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
+        {platform === "android" ? <p style={styles.iosHint}>{t.androidComposeHint}</p> : null}
       </div>
 
       <footer style={styles.fixedFooter}>
@@ -699,7 +780,7 @@ function fileToAttachmentCandidate(file, opts = {}) {
   if (!mimeType) {
     mimeType = "application/octet-stream";
   }
-  const isVideo = mimeType.startsWith("video/");
+  const isVideo = isVideoMime(mimeType);
   const base = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name || (isVideo ? "Video" : "attachment"),
@@ -826,6 +907,24 @@ const styles = {
     flexWrap: "wrap",
     gap: 10,
   },
+  mediaZone: {
+    display: "grid",
+    gap: 12,
+  },
+  mediaLimitsSummary: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "rgba(212, 198, 188, 0.82)",
+  },
+  mediaSubLabel: {
+    margin: "4px 0 0",
+    fontSize: 11,
+    fontWeight: 650,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "rgba(224, 206, 194, 0.68)",
+  },
   mediaBtn: {
     border: "1px solid rgba(90, 72, 62, 0.9)",
     borderRadius: 12,
@@ -835,6 +934,7 @@ const styles = {
     cursor: "pointer",
     fontSize: 14,
     fontWeight: 600,
+    WebkitTapHighlightColor: "transparent",
   },
   hiddenFileInput: {
     display: "none",
@@ -844,49 +944,55 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
     gap: 8,
   },
-  photoThumb: {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    objectFit: "cover",
+  mediaThumbWrap: {
+    position: "relative",
     borderRadius: 12,
+    overflow: "hidden",
     border: "1px solid rgba(55, 44, 38, 0.9)",
+    aspectRatio: "1 / 1",
+    background: "rgba(0,0,0,0.25)",
   },
-  videoSection: {
-    display: "grid",
-    gap: 12,
-  },
-  videoFigure: {
-    margin: 0,
-    display: "grid",
-    gap: 8,
-    padding: "10px 10px 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(72, 58, 50, 0.95)",
-    background: "rgba(18, 15, 13, 0.85)",
-  },
-  videoPreview: {
-    width: "100%",
-    maxHeight: 220,
-    borderRadius: 10,
-    background: "#000",
-  },
-  videoPlaceholder: {
-    minHeight: 120,
+  mediaRemoveOverlay: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,0.4)",
+    background: "rgba(14, 12, 11, 0.75)",
+    color: "#faf6f1",
+    fontSize: 20,
+    lineHeight: 1,
+    cursor: "pointer",
     display: "grid",
     placeItems: "center",
-    borderRadius: 10,
-    background: "rgba(0,0,0,0.35)",
-    color: "rgba(232, 216, 206, 0.75)",
-    fontSize: 13,
-    padding: 16,
-    textAlign: "center",
+    padding: 0,
+    WebkitTapHighlightColor: "transparent",
   },
-  videoCaption: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    flexWrap: "wrap",
+  photoThumb: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+  mediaCellVideo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    background: "#000",
+  },
+  videoPlaceholderCompact: {
+    width: "100%",
+    height: "100%",
+    minHeight: 72,
+    display: "grid",
+    placeItems: "center",
+    padding: 8,
+    textAlign: "center",
+    fontSize: 12,
+    color: "rgba(232, 216, 206, 0.72)",
   },
   attachmentList: {
     margin: 0,

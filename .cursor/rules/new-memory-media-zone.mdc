@@ -1,0 +1,39 @@
+---
+description: Guard New Memory composer media (photos, videos, files) from regressions
+globs: "**/NewMemoryPage.js"
+alwaysApply: false
+---
+
+# New Memory — media zone (do not regress)
+
+When editing `src/views/NewMemoryPage.js`, **preserve** the **media zone** contract unless the product owner explicitly changes requirements.
+
+## Invariants
+
+1. **Always visible after add**  
+   - **Photos**: grid of thumbnails (max **6**), each removable.  
+   - **Videos**: same **grid layout** as photos (max **6** clips), each with **inline preview** (`<video>` + blob `previewUrl` or saved `dataUrl`) and removable. Never reduce to “filename only” for video.  
+   - **Files** (non-video): list rows with name, size, remove (max **5**).
+
+2. **Slots (do not merge silently)**  
+   - Photos: **6** (separate `photos` state).  
+   - Videos: **6** (video MIME entries in `attachments`).  
+   - Other attachments: **5** (non-video in `attachments`).  
+   - **Do not** count videos and documents against a single shared cap without updating copy and UX.
+
+3. **Pickers**  
+   - **Add Videos** → `accept="video/*"`, `preferVideo: true`, iOS-friendly empty MIME → treat as video, **`URL.createObjectURL`** for preview.  
+   - **Add Files** → **exclude** `video/*` from `accept`; videos must use Add Videos. If a video slips through, show clear feedback pointing to Add Videos.
+
+4. **Limits copy**  
+   Keep a short **Western-style** limits line near the buttons (MB, counts, typical formats: MP4, MOV, WebM, PDF, Office, audio, zip).
+
+5. **Object URLs**  
+   Revoke `previewUrl` on remove and on unmount (`attachmentsRef` cleanup). Do not leak URLs across navigations.
+
+6. **Android parity**  
+   Same layout and previews as iOS; use `playsInline`, readable tap targets, `-webkit-tap-highlight-color` on overlay buttons where applicable.
+
+## Related strings
+
+`src/content/newMemoryPageContent.js` — keep EN keys for media limits / section labels in sync when changing caps or pickers.

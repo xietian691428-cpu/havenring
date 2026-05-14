@@ -3,15 +3,31 @@ const EN = {
   freePlanOneLiner:
     "Free plan: 2 GB local storage. Seal with Ring requires Haven Plus.",
   addPhotosCta: "Add Photos (max 6)",
-  addVideoCta: "Add Video",
-  addFilesCta: "Add Files",
+  addVideoCta: "Add Videos (max 6)",
+  addFilesCta: "Add Files (max 5)",
+  mediaZoneAria: "Photos, videos, and files",
+  mediaLimitsSummary:
+    "Photos: up to 6 (compressed on your device). Videos: up to 6 clips, max 10 MB each (MP4, MOV, WebM). Files: up to 5 attachments, max 10 MB each — PDF, Word, Excel, PowerPoint, audio, zip.",
+  photosSectionHeading: "Photos",
+  videosSectionHeading: "Videos",
+  filesSectionHeading: "Documents & audio",
+  removePhotoAria: "Remove photo",
+  removeVideoAria: "Remove video",
   videoAttachmentsLabel: "Videos",
-  videoPreviewPending: "Video preview loading…",
+  videoPreviewPending: "Preview…",
+  feedbackWrongPickerVideosPrefix: "Use “Add Videos” for clips. Skipped: ",
+  feedbackWrongPickerVideosSuffix: ".",
+  feedbackSkippedVideoClips:
+    "{n} clip(s) skipped — limit is {max} videos, {mb} MB each.",
+  feedbackSkippedFileAttachments:
+    "{n} file(s) skipped — limit is {max} documents or audio files, {mb} MB each.",
   optionalDetailsToggle: "Title & schedule (optional)",
   optionalDetailsHide: "Hide title & schedule",
   helpAriaLabel: "Help",
   iosComposeHint:
     "iPhone tip: open Haven from your Home Screen for the smoothest seal flow.",
+  androidComposeHint:
+    "Android: use Chrome or your Haven app from the Play Store; keep clips under 10 MB so saving stays quick.",
   helperLine: "Touch your trusted ring to begin the sacred ritual.",
   learnMore: "Learn more",
   modeQuickRecord: "Quick Record",
