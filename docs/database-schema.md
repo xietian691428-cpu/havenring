@@ -384,12 +384,13 @@ Applied via `supabase/migrations/0003_user_nfc_rings.sql`:
 
 - `nfc_uid_hash`: SHA-256 hex of normalized UID (never store raw UID).
 - Partial unique index on `(user_id, nfc_uid_hash) WHERE is_active` — max one active binding per fingerprint per user.
+- Global partial unique on `nfc_uid_hash WHERE is_active` (`0014_user_nfc_rings_global_active_uid.sql`) — at most one Haven account may hold an active binding per physical ring; rebind elsewhere requires revoke first.
 - SDM state from `supabase/migrations/0012_user_nfc_rings_sdm.sql`:
   `sdm_enabled`, `last_sdm_counter`, `last_sdm_verified_at`.
   `last_sdm_counter` is used by `/api/rings/sdm/resolve` and the compatibility
   `/api/sdm/verify` route to reject replayed dynamic NFC ring taps.
 
-API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/list`, `/api/nfc/revoke`; login bootstrap `/api/auth/nfc-login` (JWT requires `SUPABASE_JWT_SECRET`).
+API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/uid-status`, `/api/nfc/list`, `/api/nfc/revoke`; login bootstrap `/api/auth/nfc-login` (JWT requires `SUPABASE_JWT_SECRET`).
 
 ## `user_entitlements` (Free / Haven Plus)
 

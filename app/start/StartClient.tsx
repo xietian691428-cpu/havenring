@@ -29,6 +29,8 @@ type SdmResolveState =
       scene: SdmScene;
       ringId: string | null;
       ownerId: string | null;
+      /** Signed-in user id (any session), or null if signed out — used for binding copy only. */
+      viewerUserId: string | null;
     }
   | { kind: "failed"; message: string };
 
@@ -95,21 +97,30 @@ function getSdmSceneTitle(state: SdmResolveState) {
   if (state.kind === "failed") return "Ring Verification Failed";
   if (state.kind !== "ready") return "";
   if (state.scene === "new_ring_binding") {
-    return "New Ring Detected — Ready to connect to your account";
+    return "Not linked yet — this ring has no Haven account";
   }
   if (state.scene === "seal_confirmation") {
     return "Ring Confirmed — Ready to seal your memory";
   }
-  return "Trusted Ring — Welcome back to your sanctuary";
+  const self = state.viewerUserId || "";
+  const owner = state.ownerId || "";
+  if (self && owner && self === owner) {
+    return "Already linked — this ring is on your Haven account";
+  }
+  if (self && owner && self !== owner) {
+    return "Already linked — this ring belongs to another Haven account";
+  }
+  return "Already linked — this ring is on a Haven account";
 }
 
 function getSdmSceneLabel(state: SdmResolveState) {
   if (state.kind === "resolving") return "Dynamic NFC touch received";
   if (state.kind === "failed") return "Verification blocked";
   if (state.kind !== "ready") return "";
-  if (state.scene === "new_ring_binding") return "Scene: new ring binding";
+  if (state.scene === "new_ring_binding") return "Status: not linked";
   if (state.scene === "seal_confirmation") return "Scene: seal confirmation";
-  return "Scene: daily access";
+  if (state.scene === "daily_access") return "Status: linked";
+  return "Scene: ring tap";
 }
 
 function getSdmSceneBody(state: SdmResolveState) {
@@ -121,12 +132,20 @@ function getSdmSceneBody(state: SdmResolveState) {
   }
   if (state.kind !== "ready") return "";
   if (state.scene === "new_ring_binding") {
-    return "This verified ring is not connected to an account yet.";
+    return "Each ring can link to only one Haven account at a time. Sign in below, then link this ring — or continue without a ring if you are only browsing.";
   }
   if (state.scene === "seal_confirmation") {
     return "This verified ring belongs to you and is confirming the pending seal.";
   }
-  return "This verified ring is already trusted and linked to an account.";
+  const self = state.viewerUserId || "";
+  const owner = state.ownerId || "";
+  if (self && owner && self === owner) {
+    return "You can open the app and use this ring as usual. To move it to another account, unlink it first in My Rings.";
+  }
+  if (self && owner && self !== owner) {
+    return "To use this ring here, its current owner must unlink it in Haven (My Rings). One active link per ring.";
+  }
+  return "Sign in if this ring is yours. If it is already on another account, that owner must unlink it before you can link it here.";
 }
 
 function getSdmNextStep(state: SdmResolveState) {
@@ -138,12 +157,17 @@ function getSdmNextStep(state: SdmResolveState) {
   }
   if (state.kind !== "ready") return "";
   if (state.scene === "new_ring_binding") {
-    return "Next step: sign in, then connect this ring to your account.";
+    return "Next step: sign in, then connect this ring to your account (or skip if you are not ready).";
   }
   if (state.scene === "seal_confirmation") {
     return "Next step: stay on this screen while Haven completes the seal.";
   }
-  return "Next step: sign in or continue, then Haven opens the sanctuary for this ring.";
+  const self = state.viewerUserId || "";
+  const owner = state.ownerId || "";
+  if (self && owner && self !== owner) {
+    return "Next step: sign in with the account that owns this ring, or use a different ring.";
+  }
+  return "Next step: sign in or continue to open the app with this ring.";
 }
 
 function getSdmCardStyle(state: SdmResolveState): CSSProperties {
@@ -152,6 +176,11 @@ function getSdmCardStyle(state: SdmResolveState): CSSProperties {
     return styles.sdmCardSeal;
   }
   if (state.kind === "ready" && state.scene === "daily_access") {
+    const self = state.viewerUserId || "";
+    const owner = state.ownerId || "";
+    if (self && owner && self !== owner) {
+      return styles.sdmCardFailed;
+    }
     return styles.sdmCardTrusted;
   }
   return styles.sdmCardNew;
@@ -247,18 +276,24 @@ export default function StartClient() {
           );
         }
         const scene: SdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
+        const viewerUserId = sessionData.session?.user?.id ?? null;
         setSdmState({
           kind: "ready",
           scene,
           ringId: data.ringId || null,
           ownerId: data.ownerId || null,
+          viewerUserId,
         });
         setNotice(
           scene === "new_ring_binding"
-            ? "New ring detected. Ready to connect."
+            ? "Status: not linked — you can connect this ring to one Haven account."
             : scene === "seal_confirmation"
               ? "Ring confirmed. Sealing your memory."
-              : "Trusted ring detected. Opening your sanctuary."
+              : viewerUserId && data.ownerId && viewerUserId === data.ownerId
+                ? "Status: already linked to your account."
+                : viewerUserId && data.ownerId && viewerUserId !== data.ownerId
+                  ? "Status: linked to another account — unlink there first to move it."
+                  : "Status: already linked — sign in if this ring is yours."
         );
         if (scene === "seal_confirmation") {
           if (!accessToken) {

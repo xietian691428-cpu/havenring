@@ -75,6 +75,15 @@ export async function requireAuthenticatedUser(req: NextRequest): Promise<User> 
   return data.user;
 }
 
+/** Bearer sessions only; returns null if missing or invalid (no throw). */
+export async function getOptionalAuthenticatedUser(req: NextRequest): Promise<User | null> {
+  try {
+    return await requireAuthenticatedUser(req);
+  } catch {
+    return null;
+  }
+}
+
 export function isAnonymousUser(user: User): boolean {
   const provider = user.app_metadata?.provider;
   const anonymousFlag = (user as User & { is_anonymous?: boolean }).is_anonymous;

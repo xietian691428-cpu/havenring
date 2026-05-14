@@ -37,7 +37,10 @@ type BindResponse = {
   };
   plusTrialActivated?: boolean;
   error?: string;
+  code?: string;
 };
+
+type UidLinkState = "idle" | "checking" | "unlinked" | "yours" | "other" | "linked_unknown" | "error";
 
 interface BindRingClientProps {
   initialUid: string;
@@ -68,6 +71,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
   const [recoveryCode, setRecoveryCode] = useState("");
   const [bindState, setBindState] = useState<BindState>("idle");
   const [message, setMessage] = useState("");
+  const [uidLink, setUidLink] = useState<UidLinkState>("idle");
 
   useEffect(() => {
     let active = true;
@@ -91,6 +95,53 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!uid) {
+      queueMicrotask(() => setUidLink("idle"));
+      return;
+    }
+    const ac = new AbortController();
+    queueMicrotask(() => setUidLink("checking"));
+    void (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        const s = session;
+        if (isPermanentSession(s)) {
+          headers.Authorization = `Bearer ${s.access_token}`;
+        }
+        const res = await fetch(`/api/nfc/uid-status?uid=${encodeURIComponent(uid)}`, {
+          signal: ac.signal,
+          headers,
+        });
+        if (!res.ok) {
+          setUidLink("error");
+          return;
+        }
+        const j = (await res.json()) as {
+          linked?: boolean;
+          ownedByYou?: boolean;
+          linkedToOtherAccount?: boolean;
+        };
+        if (!j.linked) {
+          setUidLink("unlinked");
+          return;
+        }
+        if (j.ownedByYou) {
+          setUidLink("yours");
+          return;
+        }
+        if (j.linkedToOtherAccount) {
+          setUidLink("other");
+          return;
+        }
+        setUidLink("linked_unknown");
+      } catch {
+        if (!ac.signal.aborted) setUidLink("error");
+      }
+    })();
+    return () => ac.abort();
+  }, [uid, session]);
 
   async function signInWith(provider: "apple" | "google") {
     if (!uid) return;
@@ -183,9 +234,14 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       });
 
       const payload = (await response.json().catch(() => ({}))) as BindResponse;
-      if (!response.ok && response.status !== 409) {
+      if (!response.ok) {
         setBindState("error");
-        setMessage(payload.error || "Ring binding failed. Please try again.");
+        setMessage(
+          payload.error ||
+            (response.status === 409
+              ? "This ring cannot be linked right now. See the note above or try again."
+              : "Ring binding failed. Please try again.")
+        );
         return;
       }
 
@@ -224,6 +280,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
   }
 
   const signedOut = authState === "signed_out" || !isPermanentSession(session);
+  const blockNewBind = uidLink === "yours" || uidLink === "other" || uidLink === "checking";
 
   return (
     <main style={styles.page}>
@@ -238,6 +295,33 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
           <span style={styles.uidLabel}>Ring ID</span>
           <span style={styles.uidValue}>{uid}</span>
         </div>
+
+        {uidLink === "checking" ? (
+          <p style={styles.muted}>Checking whether this ring is already linked to a Haven account…</p>
+        ) : null}
+        {uidLink !== "idle" && uidLink !== "checking" ? (
+          <div
+            style={{
+              ...styles.ringStatusBox,
+              ...(uidLink === "unlinked" ? styles.ringStatusUnlinked : {}),
+              ...(uidLink === "yours" ? styles.ringStatusYours : {}),
+              ...(uidLink === "other" ? styles.ringStatusOther : {}),
+              ...(uidLink === "linked_unknown" ? styles.ringStatusUnknown : {}),
+              ...(uidLink === "error" ? styles.ringStatusError : {}),
+            }}
+            role="status"
+          >
+            {uidLink === "unlinked"
+              ? "Not linked: this ring is not on any Haven account yet. You can link it below (one active account per ring)."
+              : uidLink === "yours"
+                ? "Already linked to you: this ring is on your account. To re-link elsewhere, open My Rings in the app and unlink it first."
+                : uidLink === "other"
+                  ? "Linked to someone else: this ring is on another Haven account. That owner must unlink it in My Rings before you can link it here."
+                  : uidLink === "linked_unknown"
+                    ? "May already be linked: sign in to see if this ring is yours. If it is, use My Rings — do not link again until you have unlinked."
+                    : "Could not verify link status. If this is a brand-new ring, you can still try linking after sign-in."}
+          </div>
+        ) : null}
 
         {authState === "checking" ? (
           <p style={styles.muted}>Checking sign-in...</p>
@@ -302,7 +386,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
             <button
               type="button"
               onClick={() => void handleBind()}
-              disabled={bindState === "binding"}
+              disabled={bindState === "binding" || blockNewBind}
               style={styles.primaryButton}
             >
               {bindState === "binding" ? "Linking ring..." : "Confirm and link ring"}
@@ -385,6 +469,35 @@ const styles: Record<string, CSSProperties> = {
     color: "#f8efe7",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     overflowWrap: "anywhere",
+  },
+  ringStatusBox: {
+    margin: 0,
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(90, 59, 48, 0.7)",
+    fontSize: 14,
+    lineHeight: 1.5,
+    color: "#f8efe7",
+  },
+  ringStatusUnlinked: {
+    borderColor: "rgba(120, 200, 160, 0.55)",
+    background: "rgba(28, 48, 36, 0.55)",
+  },
+  ringStatusYours: {
+    borderColor: "rgba(217, 166, 122, 0.75)",
+    background: "rgba(48, 36, 24, 0.75)",
+  },
+  ringStatusOther: {
+    borderColor: "rgba(255, 140, 120, 0.55)",
+    background: "rgba(52, 28, 24, 0.72)",
+  },
+  ringStatusUnknown: {
+    borderColor: "rgba(140, 160, 200, 0.45)",
+    background: "rgba(28, 32, 44, 0.55)",
+  },
+  ringStatusError: {
+    borderColor: "rgba(120, 110, 100, 0.6)",
+    background: "rgba(30, 26, 24, 0.65)",
   },
   stack: {
     display: "grid",

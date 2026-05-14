@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {
+  getSupabaseAdminClient,
   getSupabaseUserClient,
   isAnonymousUser,
   requireAuthenticatedUser,
@@ -71,6 +72,41 @@ export async function POST(req: NextRequest) {
     const nickname = String(body.nickname ?? "").trim() || "Ring";
     const accessToken = requireBearerToken(req);
     const supabase = getSupabaseUserClient(accessToken);
+
+    const admin = getSupabaseAdminClient();
+    const { data: existingGlobal, error: existingErr } = await admin
+      .from("user_nfc_rings")
+      .select("id, user_id")
+      .eq("nfc_uid_hash", uidHash)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (existingErr) {
+      return NextResponse.json(
+        { error: existingErr.message || "Conflict check failed." },
+        { status: 500 }
+      );
+    }
+    if (existingGlobal) {
+      if (existingGlobal.user_id === user.id) {
+        return NextResponse.json(
+          {
+            error: "This ring is already linked to your account.",
+            code: "ALREADY_BOUND_SELF",
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        {
+          error:
+            "This ring is already linked to another Haven account. The owner must unlink it in My Rings before it can be linked here.",
+          code: "RING_BOUND_TO_OTHER_USER",
+        },
+        { status: 409 }
+      );
+    }
+
     const subscription = await getUserSubscriptionStatus(supabase, user.id).catch(
       () => null
     );
@@ -117,7 +153,11 @@ export async function POST(req: NextRequest) {
     if (error) {
       if (error.code === "23505") {
         return NextResponse.json(
-          { error: "This ring is already bound to your account." },
+          {
+            error:
+              "This ring was linked in another tab or account. Refresh and try again, or unlink it from the other account first.",
+            code: "BIND_CONFLICT",
+          },
           { status: 409 }
         );
       }
