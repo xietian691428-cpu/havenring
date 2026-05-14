@@ -1,5 +1,15 @@
 const EN = {
   title: "Capture this moment",
+  freePlanOneLiner:
+    "Free plan: 2 GB local storage. Seal with Ring requires Haven Plus.",
+  addPhotosCta: "Add Photos (max 6)",
+  addVideoCta: "Add Video",
+  addFilesCta: "Add Files",
+  optionalDetailsToggle: "Title & schedule (optional)",
+  optionalDetailsHide: "Hide title & schedule",
+  helpAriaLabel: "Help",
+  iosComposeHint:
+    "iPhone tip: open Haven from your Home Screen for the smoothest seal flow.",
   helperLine: "Touch your trusted ring to begin the sacred ritual.",
   learnMore: "Learn more",
   modeQuickRecord: "Quick Record",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { saveDraftItem } from "../services/draftBoxService";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
@@ -14,11 +14,8 @@ import {
   gateSealWithRingAccess,
   primeSealPrepAfterDraftPersisted,
 } from "../features/seal";
-import {
-  getPlanBadgeLabel,
-  getSubscriptionSummary,
-} from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
+import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 
 const MAX_PHOTOS = 6;
 const MAX_ATTACHMENTS = 5;
@@ -42,10 +39,12 @@ function clearDraftSnapshot() {
 export function NewMemoryPage({
   onBack,
   onSaved,
+  onOpenHelp,
   locale = "en",
   userEntitlements = getFreeEntitlements(),
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
+  const platform = useMemo(() => resolvePlatformTarget(), []);
   const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
@@ -366,44 +365,118 @@ export function NewMemoryPage({
 
   return (
     <main style={styles.page}>
-      <section style={styles.shell}>
-        <header style={styles.header}>
-          <div>
-            <h1 style={styles.title}>Capture this moment</h1>
-          </div>
-        </header>
-
-        <button type="button" onClick={onBack} style={styles.backButton}>
-          {t.back}
+      <header style={styles.topBar}>
+        <button type="button" onClick={onBack} style={styles.topBarBtn}>
+          ← {t.back}
         </button>
-
-        <p style={styles.helperLine}>{t.sealModeHint}</p>
-        <section style={styles.planCard}>
-          <p style={styles.planTitle}>
-            {getPlanBadgeLabel(userEntitlements)}
-          </p>
-          <p style={styles.planBody}>{getSubscriptionSummary(userEntitlements)}</p>
-          <p style={{ ...styles.planBody, marginTop: 6 }}>{t.planDualTrackHint}</p>
-        </section>
-
-        <label style={styles.label}>
-          <textarea
-            value={story}
-            onChange={(e) => setStory(e.target.value)}
-            rows={5}
-            placeholder={t.storyPlaceholder}
-            style={styles.textareaSeal}
-          />
-        </label>
+        <h1 style={styles.topBarTitle}>{t.title}</h1>
         <button
           type="button"
-          onClick={() => setDetailsOpen((v) => !v)}
-          style={styles.detailsToggle}
+          onClick={() => onOpenHelp?.()}
+          style={{ ...styles.topBarBtn, justifySelf: "end" }}
+          aria-label={t.helpAriaLabel}
         >
-          {detailsOpen ? t.hideDetails : t.addDetails}
+          ?
+        </button>
+      </header>
+
+      <div style={styles.scrollBody}>
+        <label style={styles.srOnly} htmlFor="haven-memory-story">
+          {t.storyLabel}
+        </label>
+        <textarea
+          id="haven-memory-story"
+          value={story}
+          onChange={(e) => setStory(e.target.value)}
+          rows={10}
+          placeholder={t.storyPlaceholder}
+          style={styles.textareaHero}
+        />
+
+        <p style={styles.feedbackInline}>{feedback || "\u00A0"}</p>
+
+        <div style={styles.mediaRow}>
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            style={styles.mediaBtn}
+          >
+            📸 {t.addPhotosCta}
+          </button>
+          <button
+            type="button"
+            onClick={() => videoInputRef.current?.click()}
+            style={styles.mediaBtn}
+          >
+            🎥 {t.addVideoCta}
+          </button>
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            style={styles.mediaBtn}
+          >
+            📎 {t.addFilesCta}
+          </button>
+        </div>
+
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handlePhotosSelected}
+          style={styles.hiddenFileInput}
+        />
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
+          multiple
+          onChange={handleAttachmentsSelected}
+          style={styles.hiddenFileInput}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          multiple
+          onChange={handleAttachmentsSelected}
+          style={styles.hiddenFileInput}
+        />
+
+        {photos.length ? (
+          <div style={styles.photoGrid}>
+            {photos.map((photo) => (
+              <img key={photo.id} src={photo.dataUrl} alt="" style={styles.photoThumb} />
+            ))}
+          </div>
+        ) : null}
+
+        {attachments.length ? (
+          <ul style={styles.attachmentList}>
+            {attachments.map((item) => (
+              <li key={item.id} style={styles.attachmentItem}>
+                <span style={styles.attachmentName}>
+                  {item.name}
+                  <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAttachments((prev) => prev.filter((it) => it.id !== item.id))}
+                  style={styles.clearButton}
+                >
+                  {t.removeAttachment}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <button type="button" onClick={() => setDetailsOpen((v) => !v)} style={styles.optionalToggle}>
+          {detailsOpen ? t.optionalDetailsHide : t.optionalDetailsToggle}
         </button>
         {detailsOpen ? (
-          <>
+          <div style={styles.optionalBlock}>
             <label style={styles.label}>
               {t.titleLabel}
               <input
@@ -414,106 +487,6 @@ export function NewMemoryPage({
               />
             </label>
             <label style={styles.label}>
-              {t.photosLabel}
-              <div style={styles.filePickerRow}>
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  style={styles.filePickerButton}
-                >
-                  {t.choosePhotos}
-                </button>
-                <span style={styles.filePickerStatus}>
-                  {photos.length ? `${photos.length}${t.photosSelectedSuffix}` : t.noPhotosSelected}
-                </span>
-              </div>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handlePhotosSelected}
-                style={styles.hiddenFileInput}
-              />
-              {photos.length ? (
-                <div style={styles.photoGrid}>
-                  {photos.map((photo) => (
-                    <img
-                      key={photo.id}
-                      src={photo.dataUrl}
-                      alt=""
-                      style={styles.photoThumb}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </label>
-            <label style={styles.label}>
-              {t.attachmentsLabel}
-              <div style={styles.filePickerRow}>
-                <button
-                  type="button"
-                  onClick={() => attachmentInputRef.current?.click()}
-                  style={styles.filePickerButton}
-                >
-                  {t.chooseAttachments}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => videoInputRef.current?.click()}
-                  style={styles.filePickerButton}
-                >
-                  {t.chooseVideo}
-                </button>
-                <span style={styles.filePickerStatus}>
-                  {attachments.length} / {MAX_ATTACHMENTS}
-                </span>
-              </div>
-              <input
-                ref={attachmentInputRef}
-                type="file"
-                accept="audio/*,video/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z"
-                multiple
-                onChange={handleAttachmentsSelected}
-                style={styles.hiddenFileInput}
-              />
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/*"
-                multiple
-                onChange={handleAttachmentsSelected}
-                style={styles.hiddenFileInput}
-              />
-              <small style={styles.hint}>
-                {t.attachmentsHint}
-              </small>
-              {attachments.length ? (
-                <ul style={styles.attachmentList}>
-                  {attachments.map((item) => (
-                    <li key={item.id} style={styles.attachmentItem}>
-                      <span style={styles.attachmentName}>
-                        {item.name}
-                        <span style={styles.attachmentSize}>
-                          {" "}
-                          ({formatAttachmentSize(item.size)})
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setAttachments((prev) => prev.filter((it) => it.id !== item.id))
-                        }
-                        style={styles.clearButton}
-                      >
-                        {t.removeAttachment}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </label>
-            <label style={styles.label}>
               {t.timeCapsuleLabel}
               <input
                 type="datetime-local"
@@ -522,60 +495,52 @@ export function NewMemoryPage({
                 style={styles.input}
               />
             </label>
-          </>
+          </div>
         ) : null}
-        <p style={styles.feedbackInline}>{feedback || "\u00A0"}</p>
 
-        <button
-          type="button"
-          onClick={handleSealNow}
-          disabled={saving}
-          style={{
-            ...styles.floatingPrimaryButton,
-            ...(canSealWithRing ? null : styles.floatingPrimaryButtonLocked),
-          }}
-        >
-          <span style={styles.floatingPrimaryMain}>
-            <span style={styles.ringIcon} aria-hidden>◌</span>
-            {t.sealNow}
-          </span>
-          <small style={styles.floatingPrimaryHint}>
-            {canSealWithRing ? t.sealFabHint : t.sealFabUpgradeHint}
-          </small>
-        </button>
-        <div style={styles.secondaryActions}>
-          <button
-            type="button"
-            onClick={() => void handleSaveSecurelyFallback()}
-            disabled={saving}
-            style={styles.linkAction}
-          >
-            {t.sealSecureQuickAction || t.sealFallbackAction}
-          </button>
-        </div>
+        <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
+        {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
+      </div>
+
+      <footer style={styles.fixedFooter}>
         {sealPromptOpen ? (
-          <section style={styles.sealPromptBox}>
+          <section style={styles.sealPromptCompact}>
             <p style={styles.sealPromptTitle}>{t.sealPromptTitle}</p>
-            <p style={styles.sealPromptBody}>{t.sealPromptRuleLine}</p>
             <div style={styles.statusBanner} role="status" aria-live="polite">
               <p style={styles.sealPromptBody}>{t.sealStatusWaiting}</p>
             </div>
-            {!networkOnline ? (
-              <p style={{ ...styles.hint, marginTop: 8 }}>{t.sealNeedsNetworkHint}</p>
-            ) : null}
+            {!networkOnline ? <p style={styles.hint}>{t.sealNeedsNetworkHint}</p> : null}
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
           </section>
         ) : null}
-      </section>
+        <button
+          type="button"
+          onClick={() => void handleSealNow()}
+          disabled={saving}
+          style={{
+            ...styles.footerPrimary,
+            ...(canSealWithRing ? {} : styles.footerPrimaryMuted),
+          }}
+        >
+          {t.sealNow}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSaveSecurelyFallback()}
+          disabled={saving}
+          style={styles.footerSecondary}
+        >
+          {t.sealSecureQuickAction || t.sealFallbackAction}
+        </button>
+      </footer>
+
       <SaveToHavenDialog
         locale={locale}
         open={saveDialog.open}
         status={saveDialog.status}
         errorMessage={saveDialog.errorMessage}
         onSealNow={
-          canSealWithRing
-            ? handleOpenSealPrompt
-            : () => setFeedbackNotice(t.upgradeSealWithRing)
+          canSealWithRing ? handleOpenSealPrompt : () => setFeedbackNotice(t.upgradeSealWithRing)
         }
         onCreateAnother={handleCreateAnother}
       />
@@ -667,134 +632,116 @@ async function prepareAttachmentsForSave(attachments, t) {
 const styles = {
   page: {
     minHeight: "100vh",
-    padding: 20,
-    background: "radial-gradient(circle at top, #281d18 0%, #120f0e 56%)",
-    color: "#f8efe7",
-    fontFamily: "Inter, system-ui, sans-serif",
-  },
-  shell: {
-    maxWidth: 860,
-    margin: "0 auto",
-    border: "1px solid #3a2d28",
-    borderRadius: 18,
-    background: "#171210",
-    padding: 16,
-    display: "grid",
-    gap: 12,
-  },
-  header: {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: "column",
+    background: "radial-gradient(circle at 50% 0%, #2a211c 0%, #151210 45%, #0e0c0b 100%)",
+    color: "#f3ece6",
+    fontFamily: "Inter, system-ui, sans-serif",
+    paddingBottom: "env(safe-area-inset-bottom, 0px)",
+  },
+  topBar: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) minmax(0,2.4fr) minmax(0,1fr)",
+    alignItems: "center",
+    gap: 6,
+    padding: "10px 12px 12px",
+    borderBottom: "1px solid rgba(55, 44, 38, 0.85)",
+    flexShrink: 0,
+    background: "rgba(18, 14, 12, 0.92)",
+  },
+  topBarBtn: {
+    border: "1px solid transparent",
+    background: "transparent",
+    color: "#e8d8ce",
+    borderRadius: 10,
+    padding: "8px 10px",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 500,
+    justifySelf: "start",
+  },
+  topBarTitle: {
+    margin: 0,
+    fontSize: 17,
+    fontWeight: 600,
+    letterSpacing: "-0.02em",
+    textAlign: "center",
+    color: "#faf6f1",
+  },
+  scrollBody: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "16px 16px 168px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    maxWidth: 720,
+    margin: "0 auto",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    clip: "rect(0,0,0,0)",
+    whiteSpace: "nowrap",
+    border: 0,
+  },
+  textareaHero: {
+    width: "100%",
+    minHeight: 200,
+    boxSizing: "border-box",
+    border: "1px solid rgba(72, 58, 50, 0.95)",
+    borderRadius: 16,
+    background: "rgba(22, 18, 16, 0.92)",
+    color: "#f8efe7",
+    padding: "16px 16px",
+    fontSize: 17,
+    lineHeight: 1.55,
+    resize: "vertical",
+    outline: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+  },
+  feedbackInline: {
+    margin: 0,
+    minHeight: 16,
+    color: "rgba(232, 216, 206, 0.82)",
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+  mediaRow: {
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
   },
-  title: {
-    margin: "8px 0 0",
-    fontSize: 34,
-    fontWeight: 650,
-    letterSpacing: "-0.02em",
-  },
-  helperLine: {
-    margin: 0,
-    color: "#d9c3b3",
-    fontSize: 12,
-    lineHeight: 1.5,
-  },
-  detailsToggle: {
-    justifySelf: "start",
-    border: "1px solid #5a3b30",
-    background: "transparent",
-    color: "#d9c3b3",
-    borderRadius: 999,
-    padding: "8px 12px",
+  mediaBtn: {
+    border: "1px solid rgba(90, 72, 62, 0.9)",
+    borderRadius: 12,
+    background: "rgba(30, 24, 21, 0.95)",
+    color: "#f3ece6",
+    padding: "11px 14px",
     cursor: "pointer",
-    fontSize: 12,
-  },
-  backButton: {
-    justifySelf: "start",
-    border: "1px solid #5a3b30",
-    background: "transparent",
-    color: "#f8efe7",
-    borderRadius: 999,
-    padding: "8px 12px",
-    cursor: "pointer",
-  },
-  label: {
-    display: "grid",
-    gap: 6,
-    color: "#f8efe7",
+    fontSize: 14,
     fontWeight: 600,
-  },
-  input: {
-    border: "1px solid #3a2d28",
-    borderRadius: 10,
-    background: "#1f1816",
-    color: "#f8efe7",
-    padding: "10px 12px",
-  },
-  textarea: {
-    border: "1px solid #3a2d28",
-    borderRadius: 10,
-    background: "#1f1816",
-    color: "#f8efe7",
-    padding: "10px 12px",
-    resize: "vertical",
-  },
-  textareaSeal: {
-    border: "1px solid rgba(217, 166, 122, 0.55)",
-    borderRadius: 10,
-    background: "radial-gradient(circle at top, rgba(217, 166, 122, 0.14), #1b1411 58%)",
-    boxShadow: "inset 0 0 24px rgba(217, 166, 122, 0.12)",
-    color: "#f8efe7",
-    padding: "10px 12px",
-    resize: "vertical",
   },
   hiddenFileInput: {
     display: "none",
   },
-  filePickerRow: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  filePickerButton: {
-    border: "1px dashed #5a3b30",
-    borderRadius: 10,
-    background: "#1f1816",
-    color: "#f8efe7",
-    padding: "8px 12px",
-    cursor: "pointer",
-  },
-  filePickerStatus: {
-    color: "#d9c3b3",
-    fontSize: 13,
-    display: "inline-flex",
-    alignItems: "baseline",
-    gap: 10,
-  },
-  filePickerMeta: {
-    color: "rgba(248, 239, 231, 0.65)",
-    fontSize: 12,
-    fontWeight: 500,
-    letterSpacing: "0.02em",
-  },
-  hint: {
-    margin: 0,
-    color: "#d9c3b3",
-    fontSize: 12,
-  },
   photoGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill,minmax(100px,1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
     gap: 8,
   },
   photoThumb: {
     width: "100%",
     aspectRatio: "1 / 1",
     objectFit: "cover",
-    borderRadius: 10,
-    border: "1px solid #3a2d28",
+    borderRadius: 12,
+    border: "1px solid rgba(55, 44, 38, 0.9)",
   },
   attachmentList: {
     margin: 0,
@@ -803,209 +750,156 @@ const styles = {
     display: "grid",
     gap: 6,
   },
-  voiceActions: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  secondaryActions: {
-    display: "grid",
-    gap: 4,
-    justifyItems: "start",
-  },
-  planCard: {
-    border: "1px solid rgba(217, 166, 122, 0.32)",
-    borderRadius: 14,
-    padding: "10px 12px",
-    background: "rgba(217, 166, 122, 0.08)",
-    display: "grid",
-    gap: 4,
-  },
-  planTitle: {
-    margin: 0,
-    color: "#f0c29e",
-    fontSize: 12,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase",
-    fontWeight: 700,
-  },
-  planBody: {
-    margin: 0,
-    color: "#d9c3b3",
-    fontSize: 12,
-    lineHeight: 1.45,
-  },
-  linkAction: {
-    border: "1px solid #5a3b30",
-    background: "rgba(255,255,255,0.03)",
-    color: "#d9c3b3",
-    textDecoration: "none",
-    cursor: "pointer",
-    fontSize: 13,
-    padding: "10px 14px",
-    borderRadius: 999,
-  },
   attachmentItem: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(55, 44, 38, 0.75)",
+    background: "rgba(20, 17, 15, 0.6)",
   },
   attachmentName: {
-    color: "#d9c3b3",
+    color: "#d9c9bf",
     fontSize: 13,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   attachmentSize: {
-    color: "rgba(217, 195, 179, 0.75)",
+    color: "rgba(217, 201, 191, 0.7)",
     fontSize: 12,
   },
-  secondaryButton: {
-    border: "1px solid #d9a67a",
-    borderRadius: 999,
-    background: "transparent",
-    color: "#f0c29e",
-    padding: "8px 12px",
-    cursor: "pointer",
-  },
   clearButton: {
-    border: "1px solid #5a3b30",
+    border: "1px solid rgba(90, 72, 62, 0.85)",
     borderRadius: 999,
     background: "transparent",
-    color: "#f3c6a5",
-    padding: "8px 12px",
+    color: "#f0c9a8",
+    padding: "6px 10px",
     cursor: "pointer",
+    fontSize: 12,
+    flexShrink: 0,
   },
-  sealPromptBox: {
-    border: "1px solid #d9a67a",
-    borderRadius: 16,
-    padding: 16,
+  optionalToggle: {
+    alignSelf: "flex-start",
+    border: "none",
+    background: "transparent",
+    color: "rgba(224, 206, 194, 0.75)",
+    cursor: "pointer",
+    fontSize: 13,
+    textDecoration: "underline",
+    textUnderlineOffset: 3,
+    padding: 0,
+  },
+  optionalBlock: {
+    display: "grid",
+    gap: 12,
+    paddingTop: 4,
+  },
+  label: {
+    display: "grid",
+    gap: 6,
+    color: "#e8dcd4",
+    fontWeight: 600,
+    fontSize: 13,
+  },
+  input: {
+    border: "1px solid rgba(72, 58, 50, 0.95)",
+    borderRadius: 12,
+    background: "rgba(22, 18, 16, 0.92)",
+    color: "#f8efe7",
+    padding: "10px 12px",
+    fontSize: 15,
+  },
+  freePlanLine: {
+    margin: "4px 0 0",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(210, 196, 186, 0.72)",
+  },
+  iosHint: {
+    margin: 0,
+    fontSize: 11,
+    lineHeight: 1.45,
+    color: "rgba(200, 188, 178, 0.65)",
+  },
+  fixedFooter: {
+    position: "fixed",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
+    padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
     display: "grid",
     gap: 10,
-    background: "linear-gradient(135deg, rgba(70, 45, 32, 0.9), #1b1512 62%)",
+    maxWidth: 720,
+    margin: "0 auto",
+    width: "100%",
+    boxSizing: "border-box",
+    borderTop: "1px solid rgba(55, 44, 38, 0.9)",
+    background: "linear-gradient(180deg, rgba(22, 18, 16, 0.72), rgba(14, 12, 11, 0.96))",
+    backdropFilter: "blur(10px)",
+  },
+  sealPromptCompact: {
+    display: "grid",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(217, 166, 122, 0.35)",
+    background: "rgba(40, 30, 24, 0.55)",
   },
   sealPromptTitle: {
     margin: 0,
-    color: "#f8efe7",
-    fontSize: 16,
+    color: "#faf6f1",
+    fontSize: 14,
     fontWeight: 600,
   },
   sealPromptBody: {
     margin: 0,
-    color: "#d9c3b3",
-    lineHeight: 1.6,
-  },
-  noticeBox: {
-    border: "1px solid #5a3b30",
-    borderRadius: 10,
-    padding: 10,
-    display: "grid",
-    gap: 8,
-    background: "rgba(26, 21, 18, 0.45)",
+    color: "#d9c9bf",
+    lineHeight: 1.45,
+    fontSize: 13,
   },
   statusBanner: {
-    border: "1px solid rgba(217, 166, 122, 0.42)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    display: "grid",
-    gap: 6,
-    background: "rgba(217, 166, 122, 0.1)",
+    border: "1px solid rgba(217, 166, 122, 0.28)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    background: "rgba(217, 166, 122, 0.08)",
   },
-  noticeTitle: {
+  hint: {
     margin: 0,
-    color: "#f0c29e",
-    fontSize: 13,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase",
+    color: "rgba(210, 196, 186, 0.75)",
+    fontSize: 12,
   },
   error: {
     margin: 0,
     color: "#ffb8a3",
-    fontSize: 13,
+    fontSize: 12,
   },
-  successToast: {
-    border: "1px solid rgba(125, 158, 133, 0.45)",
-    borderRadius: 12,
-    background: "rgba(28, 45, 34, 0.52)",
-    padding: "10px 12px",
+  footerPrimary: {
+    border: "1px solid #c99a6e",
+    background: "linear-gradient(180deg, #e2b189, #c7976a)",
+    color: "#1a1411",
+    borderRadius: 16,
+    padding: "16px 18px",
+    fontWeight: 750,
+    fontSize: 16,
+    lineHeight: 1.25,
+    cursor: "pointer",
+    boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
   },
-  successToastText: {
-    margin: 0,
-    color: "#d4f0dc",
-    fontSize: 13,
-    lineHeight: 1.45,
+  footerPrimaryMuted: {
+    opacity: 0.55,
   },
-  primaryButton: {
-    border: "1px solid #d9a67a",
-    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
-    color: "#1b1411",
-    borderRadius: 999,
+  footerSecondary: {
+    border: "1px solid rgba(90, 72, 62, 0.95)",
+    background: "rgba(26, 22, 20, 0.9)",
+    color: "#e8d8ce",
+    borderRadius: 14,
     padding: "12px 16px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  floatingPrimaryButton: {
-    border: "1px solid #d9a67a",
-    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
-    color: "#1b1411",
-    borderRadius: 24,
-    padding: "18px 20px",
-    fontWeight: 800,
-    cursor: "pointer",
-    display: "grid",
-    gap: 6,
-    textAlign: "left",
-    boxShadow: "0 18px 46px rgba(0,0,0,0.35), 0 0 0 0 rgba(217, 166, 122, 0.35)",
-    animation: "havenPulse 2.2s ease-in-out infinite",
-  },
-  floatingPrimaryButtonLocked: {
-    background: "linear-gradient(180deg, #b89578, #8f735e)",
-  },
-  floatingPrimaryMain: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  ringIcon: {
-    display: "inline-block",
-    width: 18,
-    height: 18,
-    lineHeight: "16px",
-    textAlign: "center",
-    borderRadius: 999,
-    border: "1px solid rgba(27, 20, 17, 0.55)",
-    fontSize: 11,
-  },
-  floatingPrimaryHint: {
-    color: "rgba(27, 20, 17, 0.8)",
     fontWeight: 600,
-    fontSize: 12,
-    lineHeight: 1.3,
-  },
-  feedback: {
-    margin: 0,
-    minHeight: 18,
-    color: "#f2d8c5",
-  },
-  feedbackInline: {
-    margin: 0,
-    minHeight: 18,
-    color: "#f2d8c5",
-    fontSize: 12,
-    lineHeight: 1.45,
-  },
-  feedbackToggles: {
-    display: "flex",
-    gap: 14,
-    flexWrap: "wrap",
-  },
-  toggleLabel: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    color: "#d9c3b3",
-    fontSize: 12,
+    fontSize: 14,
+    cursor: "pointer",
   },
 };
