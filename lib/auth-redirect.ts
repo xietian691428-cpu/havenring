@@ -5,7 +5,9 @@ import { SITE_ORIGIN } from "@/lib/site";
  *
  * On the production hostnames we normalize to `NEXT_PUBLIC_SITE_URL` (defaults
  * to apex `https://havenring.me`) so OAuth does not rely on edge `www`→apex
- * HTTP redirects that drop `#access_token=…`.
+ * HTTP redirects that drop `#access_token=…`. Android Chrome, Samsung
+ * Internet, and in-app browsers use the same `window.location.origin` rules as
+ * desktop once TLS and hostname match.
  *
  * Use the **live** `window.location.origin` when the page is clearly not public
  * TLS on :443 (e.g. `http://havenring.me:3000` with hosts-file mapping, or

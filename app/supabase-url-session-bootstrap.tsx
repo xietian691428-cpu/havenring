@@ -49,18 +49,14 @@ function tryOAuthReturnRedirect(session: Session | null): void {
 }
 
 /**
- * Ensures Supabase Auth runs `initialize()` on every route (including the
- * marketing home at `/`). Otherwise `getSupabaseBrowserClient()` is never
- * imported on `/`, so implicit OAuth `#access_token=...` is never parsed into
- * storage and the user stays “signed out”.
+ * Ensures Supabase Auth runs on every route. When the URL carries an OAuth
+ * callback (implicit hash or PKCE `code`), we **await** `initialize()` so
+ * tokens are parsed before any child reads session; then we optionally send
+ * `/` or plain `/start` into `/app` with `location.replace` (reliable on iOS
+ * PWA and Android Chrome).
  *
- * After OAuth, Supabase often returns to `/start#access_token=...` (FTUX).
- * We send users into `/app` with a **full document navigation** — on iOS
- * Safari / Home Screen PWA, `next/navigation` client transitions are less
- * reliable than `location.replace` right after auth.
- *
- * If `getSession()` is still empty once (race with `SIGNED_IN`), we listen
- * briefly for `SIGNED_IN` then redirect.
+ * On all other navigations we only **kick** `initialize()` without blocking the
+ * first paint so marketing and in-app routes stay snappy.
  */
 export function SupabaseUrlSessionBootstrap() {
   useEffect(() => {
@@ -76,14 +72,17 @@ export function SupabaseUrlSessionBootstrap() {
 
     const supabase = getSupabaseBrowserClient();
 
+    if (!expectedAuthReturn) {
+      void supabase.auth.initialize();
+      return;
+    }
+
     let authUnsubscribe: (() => void) | undefined;
     let fallbackTimer: number | undefined;
 
     void (async () => {
       try {
         await supabase.auth.initialize();
-
-        if (!expectedAuthReturn) return;
 
         const { data } = await supabase.auth.getSession();
         tryOAuthReturnRedirect(data.session ?? null);

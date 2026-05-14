@@ -17,12 +17,48 @@ function isPermanentSession(session: Session | null): session is Session {
   );
 }
 
+function appUrlLooksLikeAuthCallback(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash || "";
+  if (
+    hash.includes("access_token=") ||
+    hash.includes("error=") ||
+    hash.includes("error_description=")
+  ) {
+    return true;
+  }
+  return new URLSearchParams(window.location.search).has("code");
+}
+
 export default function AppHomePage() {
   const [canRenderApp, setCanRenderApp] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    const onboardingDone = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+    const firstMemoryDone = isFirstMemoryCompleted();
+    const startedFromStart = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
+
+    const mightNeedStartRedirect =
+      !startedFromStart && (!onboardingDone || !firstMemoryDone);
+    const needsSessionProbe = mightNeedStartRedirect || appUrlLooksLikeAuthCallback();
+
+    if (!needsSessionProbe) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        if (startedFromStart) {
+          window.localStorage.removeItem(FTUX_STARTED_KEY);
+        }
+        setCanRenderApp(true);
+        void getSupabaseBrowserClient().auth.initialize();
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const supabase = getSupabaseBrowserClient();
 
     void (async () => {
@@ -31,26 +67,24 @@ export default function AppHomePage() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
 
-      const onboardingDone = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
-      const firstMemoryDone = isFirstMemoryCompleted();
-      const startedFromStart = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
+      const started = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
+      const onboarding = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+      const firstMemory = isFirstMemoryCompleted();
 
-      // Apple/Google return may hop www→apex before React; FTUX flag can stay on www while
-      // session lands on apex — do not bounce a signed-in user back to /start.
       if (isPermanentSession(data.session ?? null)) {
-        if (startedFromStart) {
+        if (started) {
           window.localStorage.removeItem(FTUX_STARTED_KEY);
         }
         setCanRenderApp(true);
         return;
       }
 
-      if (!startedFromStart && (!onboardingDone || !firstMemoryDone)) {
+      if (!started && (!onboarding || !firstMemory)) {
         setRedirecting(true);
         window.location.replace("/start");
         return;
       }
-      if (startedFromStart) {
+      if (started) {
         window.localStorage.removeItem(FTUX_STARTED_KEY);
       }
       setCanRenderApp(true);
