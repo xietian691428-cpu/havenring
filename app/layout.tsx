@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
+import { Cormorant_Garamond, Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { RegisterServiceWorker } from "./register-sw";
 import { ContrastToggle } from "./contrast-toggle";
@@ -20,6 +20,12 @@ const landingSerif = Cormorant_Garamond({
   variable: "--font-landing-serif",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -43,7 +49,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  themeColor: "#0A0A0A",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -59,7 +65,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${landingSerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${landingSerif.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-black text-white selection:bg-white selection:text-black high-contrast">
         <SupabaseUrlSessionBootstrap />

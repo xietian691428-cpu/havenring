@@ -1,48 +1,26 @@
-import dynamic from "next/dynamic";
 import { LandingNav } from "./LandingNav";
-import { LandingHero } from "./LandingHero";
-
-const LandingShowcase = dynamic(() =>
-  import("./LandingShowcase").then((m) => ({ default: m.LandingShowcase }))
-);
-
-const LandingHowItWorks = dynamic(() =>
-  import("./LandingHowItWorks").then((m) => ({ default: m.LandingHowItWorks }))
-);
-
-const LandingRitual = dynamic(() =>
-  import("./LandingRitual").then((m) => ({ default: m.LandingRitual }))
-);
-
-const LandingPrivacy = dynamic(() =>
-  import("./LandingPrivacy").then((m) => ({ default: m.LandingPrivacy }))
-);
-
-const LandingPricing = dynamic(() =>
-  import("./LandingPricing").then((m) => ({ default: m.LandingPricing }))
-);
-
-const LandingTestimonials = dynamic(() =>
-  import("./LandingTestimonials").then((m) => ({ default: m.LandingTestimonials }))
-);
-
-const LandingFooter = dynamic(() =>
-  import("./LandingFooter").then((m) => ({ default: m.LandingFooter }))
-);
+import { HeroSection } from "./HeroSection";
+import { LandingStorySection } from "./LandingStorySection";
+import { LandingPromisesPoster } from "./LandingPromisesPoster";
+import { LandingHowItWorksLux } from "./LandingHowItWorksLux";
+import { LandingRealMoments } from "./LandingRealMoments";
+import { LandingTheRing } from "./LandingTheRing";
+import { LandingTrustPrivacy } from "./LandingTrustPrivacy";
+import { LandingFinalCtaFooter } from "./LandingFinalCtaFooter";
 
 export function LandingPage() {
   return (
     <>
       <LandingNav />
-      <main className="landing-marketing min-h-screen scroll-smooth bg-black text-white">
-        <LandingHero />
-        <LandingShowcase />
-        <LandingHowItWorks />
-        <LandingRitual />
-        <LandingPrivacy />
-        <LandingPricing />
-        <LandingTestimonials />
-        <LandingFooter />
+      <main className="landing-marketing min-h-screen scroll-smooth bg-[#0A0A0A] text-[#F5F5F5]">
+        <HeroSection />
+        <LandingStorySection />
+        <LandingPromisesPoster />
+        <LandingHowItWorksLux />
+        <LandingRealMoments />
+        <LandingTheRing />
+        <LandingTrustPrivacy />
+        <LandingFinalCtaFooter />
       </main>
     </>
   );
