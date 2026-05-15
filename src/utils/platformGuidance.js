@@ -1,3 +1,5 @@
+import { getStartIdleHeroCopy } from "../content/havenCopy";
+
 export function detectPlatformFromNavigator() {
   if (typeof navigator === "undefined") return "other";
   const ua = String(navigator.userAgent || "").toLowerCase();
@@ -10,16 +12,14 @@ export function getPlatformGuidance(platformInput) {
   const platform = platformInput || detectPlatformFromNavigator();
   const isIos = platform === "ios";
   const isAndroid = platform === "android";
+  const havenPlat = isAndroid ? "android" : isIos ? "ios" : "other";
+  const hero = getStartIdleHeroCopy(havenPlat);
   return {
     platform,
     isIos,
     isAndroid,
-    startTitle: isIos
-      ? "Welcome to Your Private Memory Sanctuary"
-      : "Welcome to Your Private Memory Sanctuary",
-    startSubtitle: isIos
-      ? "Simple. Private. Forever. Add Haven to Home Screen for the best iPhone flow."
-      : "Simple. Private. Forever. Your ring can open Haven quickly on supported devices.",
+    startTitle: hero.title,
+    startSubtitle: hero.subtitle,
     ringClaimLine: isIos
       ? "Your ring has been pre-configured to open this sanctuary. We will now connect it to your account."
       : "Let's connect and configure your ring.",

@@ -25,7 +25,7 @@ export function LandingHero() {
             Preserve what matters.
           </h1>
           <p className="landing-pull-quote mt-2 text-[clamp(1.45rem,3.4vw,2.2rem)] italic text-amber-100/82">
-            Privately. Permanently.
+            Privately. On your terms.
           </p>
           <p className="mt-6 text-[15px] leading-[1.78] text-white/56">
             HavenRing is a physical key to your private digital haven. Capture meaningful moments,
@@ -34,7 +34,7 @@ export function LandingHero() {
 
           <ul className="mt-7 space-y-4 border-t border-white/[0.08] pt-6 text-[13px] leading-relaxed text-white/60">
             <li><span className="text-amber-200/85">Physical key:</span> Your ring unlocks your personal sanctuary.</li>
-            <li><span className="text-amber-200/85">Private by design:</span> End-to-end encrypted. You are always in control.</li>
+            <li><span className="text-amber-200/85">Private by design:</span> Strong encryption on supported flows. You stay in control.</li>
             <li><span className="text-amber-200/85">Sealed with meaning:</span> Touch your ring to seal what matters most.</li>
             <li><span className="text-amber-200/85">Only for you and yours:</span> Share by choice. Not by default.</li>
           </ul>

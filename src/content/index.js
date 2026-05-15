@@ -1,5 +1,5 @@
 export { APP_CHROME_CONTENT } from "./appChromeContent";
-export { FIRST_TIME_ONBOARDING_CONTENT } from "./firstTimeOnboardingContent";
+export { FIRST_TIME_ONBOARDING_CONTENT, getFirstTimeOnboardingBundle } from "./firstTimeOnboardingContent";
 export { HELP_FAQ } from "./helpFaq";
 export { HELP_CENTER_CONTENT, getHelpCenterContent } from "./helpCenterContent";
 export { HOME_PAGE_CONTENT } from "./homePageContent";

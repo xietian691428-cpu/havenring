@@ -1,4 +1,59 @@
 const EN = {
+  navComposerTitle: "New memory",
+  topBarSealing: "Sealing…",
+  heroSealTitle: "Seal this moment",
+  heroSealSubtitleIos:
+    "Mark this moment with a ring ritual — a lasting, intentional way to keep this memory.",
+  heroSealSubtitleAndroid: "Seal this memory fast with your ring — one touch completes it.",
+  heroSealSubtitleOther: "Confirm this memory with your Haven ring when you're ready.",
+  sealPrimaryHintIos: "Touch your Haven ring to the top of your iPhone when you're ready.",
+  sealPrimaryHintAndroid: "Touch your Haven ring to the NFC area on the back of your phone.",
+  sealPrimaryHintOther: "Use your phone's NFC with your Haven ring to confirm.",
+  saveSecureLinkIos: "Or save securely with Face ID",
+  saveSecureLinkAndroid: "Or save securely with fingerprint / screen lock",
+  saveSecureLinkOther: "Or save securely to this device",
+  sealPrimaryShort: "Seal with Ring",
+  editorSectionTitle: "Your story & media",
+  storyCharCount: "{n} characters",
+  storyCharSoftMaxWarn: "Very long text may slow saving on older phones.",
+  footerNeedDraft: "Save a draft first — then you can seal with your ring.",
+  footerSealInvite: "Tap Seal with Ring above to save and prepare — then touch your ring.",
+  footerReadySealIos: "Lift your ring and hold it near your iPhone to complete the ritual.",
+  footerReadySealAndroid: "Ring is ready — one light touch finishes it.",
+  footerReadySeal: "Ready — touch your ring to seal when your phone prompts you.",
+  footerSaving: "Saving…",
+  footerWaitingRingIos: "Waiting for your ring — hold it to the top of your iPhone.",
+  footerWaitingRingAndroid: "Waiting for your ring — keep it steady near the NFC spot.",
+  footerWaitingRing: "Waiting for your ring — follow the on-screen NFC steps.",
+  footerOfflineSeal:
+    "You need an internet connection to finish sealing after the ring touch. Stay online or try again when you're back.",
+  sealPrimaryCtaReady: "Touch ring to seal",
+  sealPrimaryCtaWaiting: "Waiting for ring touch…",
+  sealWaitingBannerTitle: "Waiting for your ring",
+  sealWaitingBannerBodyIos:
+    "Bring your Haven ring close to your iPhone. Add Haven to your Home Screen first for the most reliable NFC handoff.",
+  sealWaitingBannerBodyAndroid:
+    "Hold your Haven ring near the back of your phone. You should feel a quick system prompt when NFC reads the ring.",
+  sealWaitingBannerBodyOther: "Hold your Haven ring near your device's NFC reader until this step completes.",
+  cancelSealFlow: "Cancel this seal",
+  sealCountdownPrefix: "Time left to touch:",
+  sealArmExpired: "Seal wait timed out. Tap Seal with Ring again when you're ready.",
+  secureSaveToast:
+    "Saved securely on this device. You can come back any time and seal this memory with your ring.",
+  sealAfterSecureSaveCta: "Seal this memory now",
+  securityDeleteNoteIos:
+    "Sealed memories need Face ID plus an extra confirmation before they can be removed.",
+  securityDeleteNoteAndroid:
+    "Sealed memories need your screen lock plus an extra confirmation before they can be removed.",
+  securityDeleteNoteOther:
+    "Sealed memories need your device lock plus an extra confirmation before they can be removed.",
+  storyRequiredHint: "Add a few words about this moment — it's required to seal.",
+  upgradeModalTitle: "Unlock the Ritual Experience",
+  upgradeModalBody:
+    "Haven Plus unlocks Seal with Ring and optional cloud backup where we offer it — about 50 GB for Plus where available. Link your first ring to start a 30-day trial where available.",
+  upgradeModalDismiss: "Maybe later",
+  upgradeSealShort: "Haven Plus unlocks Seal with Ring.",
+  upgradeSealCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   title: "Capture this moment",
   freePlanOneLiner:
     "Free plan: 2 GB local storage. Seal with Ring requires Haven Plus.",
@@ -93,7 +148,7 @@ const EN = {
   feedbackAttachmentError: "Could not process selected files. Please try again.",
   feedbackMaxAttachmentsPrefix: "Max ",
   feedbackMaxAttachmentsSuffix: " files allowed.",
-  feedbackNeedContent: "Add some memory content before saving.",
+  feedbackNeedContent: "Add your story or media, then save — sealing needs something to hold onto.",
   feedbackSavingLocal: "Saving draft locally...",
   feedbackSavingTimeline: "Encrypting and saving to your timeline...",
   feedbackSaved: "Draft saved. Touch your ring to seal.",
@@ -105,7 +160,7 @@ const EN = {
   feedbackSaveFailed: "Save failed.",
   feedbackReadyNext: "Ready for your next memory.",
   feedbackSealPrepNeedDraftSave:
-    "Save this memory securely first — then tap “Touch ring to seal” on the card.",
+    "Save this memory as a draft first — then use Seal with Ring from this screen.",
   untitled: "Untitled memory",
   canvasUnavailable: "Canvas not available.",
   compressionFailed: "Compression failed.",

@@ -201,7 +201,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
     const activeSession = session;
     if (!isPermanentSession(activeSession)) {
       setAuthState("signed_out");
-      setMessage("Sign in with a permanent account before linking this ring.");
+        setMessage("Sign in with your Haven account before linking this ring.");
       return;
     }
 
@@ -328,7 +328,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         ) : signedOut ? (
           <div style={styles.stack}>
             <p style={styles.notice}>
-              A permanent account is required before this ring can be linked.
+              Sign in with your Haven account before this ring can be linked.
             </p>
             <button
               type="button"

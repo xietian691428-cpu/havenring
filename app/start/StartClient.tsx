@@ -8,31 +8,29 @@ import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolvePlatformTarget } from "@/src/hooks/usePlatformTarget";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
-import { getPlatformGuidance } from "@/src/utils/platformGuidance";
+import {
+  START_PAGE_EN,
+  getStartIdleHeroCopy,
+  getStartSdmCardCopy,
+  type HavenPlatform,
+  type StartSdmScene,
+  type StartSdmStateForCopy,
+} from "@/src/content/havenCopy";
 import {
   abandonInProgressSealOnStartPage,
   finalizeSealChainFromSdmResponse,
+  getSealArmedRemainingMs,
   getSealSdmContextPayload,
+  isSealFlowArmed,
 } from "@/src/features/seal";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
+import {
+  consumeDeferredAppEntry,
+  FTUX_STARTED_KEY,
+  isPermanentSupabaseSession,
+} from "@/lib/appAuthGate";
 
-const FTUX_STARTED_KEY = "haven.ftux.started.v1";
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
-
-type SdmScene = "new_ring_binding" | "daily_access" | "seal_confirmation";
-
-type SdmResolveState =
-  | { kind: "idle" }
-  | { kind: "resolving" }
-  | {
-      kind: "ready";
-      scene: SdmScene;
-      ringId: string | null;
-      ownerId: string | null;
-      /** Signed-in user id (any session), or null if signed out — used for binding copy only. */
-      viewerUserId: string | null;
-    }
-  | { kind: "failed"; message: string };
 
 function isSealNfcLaunchSearch(search: string): boolean {
   const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
@@ -92,85 +90,7 @@ function normalizeClaimValue(input: string): string {
   }
 }
 
-function getSdmSceneTitle(state: SdmResolveState) {
-  if (state.kind === "resolving") return "Reading Ring — Verifying touch";
-  if (state.kind === "failed") return "Ring Verification Failed";
-  if (state.kind !== "ready") return "";
-  if (state.scene === "new_ring_binding") {
-    return "Not linked yet — this ring has no Haven account";
-  }
-  if (state.scene === "seal_confirmation") {
-    return "Ring Confirmed — Ready to seal your memory";
-  }
-  const self = state.viewerUserId || "";
-  const owner = state.ownerId || "";
-  if (self && owner && self === owner) {
-    return "Already linked — this ring is on your Haven account";
-  }
-  if (self && owner && self !== owner) {
-    return "Already linked — this ring belongs to another Haven account";
-  }
-  return "Already linked — this ring is on a Haven account";
-}
-
-function getSdmSceneLabel(state: SdmResolveState) {
-  if (state.kind === "resolving") return "Dynamic NFC touch received";
-  if (state.kind === "failed") return "Verification blocked";
-  if (state.kind !== "ready") return "";
-  if (state.scene === "new_ring_binding") return "Status: not linked";
-  if (state.scene === "seal_confirmation") return "Scene: seal confirmation";
-  if (state.scene === "daily_access") return "Status: linked";
-  return "Scene: ring tap";
-}
-
-function getSdmSceneBody(state: SdmResolveState) {
-  if (state.kind === "resolving") {
-    return "Haven is verifying the dynamic NFC signature from this physical tap.";
-  }
-  if (state.kind === "failed") {
-    return "This tap could not be trusted yet. Please touch the ring again.";
-  }
-  if (state.kind !== "ready") return "";
-  if (state.scene === "new_ring_binding") {
-    return "Each ring can link to only one Haven account at a time. Sign in below, then link this ring — or continue without a ring if you are only browsing.";
-  }
-  if (state.scene === "seal_confirmation") {
-    return "This verified ring belongs to you and is confirming the pending seal.";
-  }
-  const self = state.viewerUserId || "";
-  const owner = state.ownerId || "";
-  if (self && owner && self === owner) {
-    return "You can open the app and use this ring as usual. To move it to another account, unlink it first in My Rings.";
-  }
-  if (self && owner && self !== owner) {
-    return "To use this ring here, its current owner must unlink it in Haven (My Rings). One active link per ring.";
-  }
-  return "Sign in if this ring is yours. If it is already on another account, that owner must unlink it before you can link it here.";
-}
-
-function getSdmNextStep(state: SdmResolveState) {
-  if (state.kind === "resolving") {
-    return "Next step: keep this page open while verification finishes.";
-  }
-  if (state.kind === "failed") {
-    return state.message || "Next step: tap the ring again and keep it near the phone.";
-  }
-  if (state.kind !== "ready") return "";
-  if (state.scene === "new_ring_binding") {
-    return "Next step: sign in, then connect this ring to your account (or skip if you are not ready).";
-  }
-  if (state.scene === "seal_confirmation") {
-    return "Next step: stay on this screen while Haven completes the seal.";
-  }
-  const self = state.viewerUserId || "";
-  const owner = state.ownerId || "";
-  if (self && owner && self !== owner) {
-    return "Next step: sign in with the account that owns this ring, or use a different ring.";
-  }
-  return "Next step: sign in or continue to open the app with this ring.";
-}
-
-function getSdmCardStyle(state: SdmResolveState): CSSProperties {
+function getSdmCardStyle(state: StartSdmStateForCopy): CSSProperties {
   if (state.kind === "failed") return styles.sdmCardFailed;
   if (state.kind === "ready" && state.scene === "seal_confirmation") {
     return styles.sdmCardSeal;
@@ -186,11 +106,87 @@ function getSdmCardStyle(state: SdmResolveState): CSSProperties {
   return styles.sdmCardNew;
 }
 
-function isSdmScene(scene: unknown): scene is SdmScene {
+function isSdmScene(scene: unknown): scene is StartSdmScene {
   return (
     scene === "new_ring_binding" ||
     scene === "daily_access" ||
     scene === "seal_confirmation"
+  );
+}
+
+function readInitialSdmState(): StartSdmStateForCopy {
+  if (typeof window === "undefined") return { kind: "idle" };
+  const raw = window.location.search || "";
+  return isSealNfcLaunchSearch(raw) ? { kind: "resolving" } : { kind: "idle" };
+}
+
+function formatSealCountdown(ms: number): string {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function NfcPhoneHint({ platform }: { platform: HavenPlatform }) {
+  const stroke = "rgba(240,194,158,0.85)";
+  const dim = "rgba(200,180,170,0.35)";
+  if (platform === "ios") {
+    return (
+      <div style={styles.nfcDiagramWrap} aria-hidden>
+        <svg width="200" height="128" viewBox="0 0 200 128" style={styles.nfcSvg}>
+          <rect x="56" y="12" width="88" height="104" rx="14" fill="none" stroke={dim} strokeWidth="2" />
+          <rect x="76" y="20" width="48" height="8" rx="3" fill={dim} />
+          <path
+            d="M100 20 L100 8 L130 8 L130 20"
+            fill="none"
+            stroke={stroke}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <circle cx="115" cy="14" r="5" fill="rgba(217,166,122,0.35)" stroke={stroke} strokeWidth="2" />
+          <text x="100" y="118" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
+            Top — Dynamic Island / earpiece area
+          </text>
+        </svg>
+      </div>
+    );
+  }
+  if (platform === "android") {
+    return (
+      <div style={styles.nfcDiagramWrap} aria-hidden>
+        <svg width="200" height="128" viewBox="0 0 200 128" style={styles.nfcSvg}>
+          <rect x="56" y="12" width="88" height="104" rx="14" fill="none" stroke={dim} strokeWidth="2" />
+          <rect x="72" y="22" width="56" height="36" rx="6" fill="none" stroke={dim} strokeWidth="1.5" />
+          <circle cx="128" cy="40" r="10" fill="rgba(217,166,122,0.28)" stroke={stroke} strokeWidth="2" />
+          <text x="100" y="118" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
+            Back — NFC often near camera
+          </text>
+        </svg>
+      </div>
+    );
+  }
+  return (
+    <div style={styles.nfcDiagramWrap} aria-hidden>
+      <svg width="200" height="96" viewBox="0 0 200 96" style={styles.nfcSvg}>
+        <rect x="48" y="8" width="104" height="80" rx="12" fill="none" stroke={dim} strokeWidth="2" />
+        <circle cx="100" cy="48" r="14" fill="rgba(217,166,122,0.22)" stroke={stroke} strokeWidth="2" />
+        <text x="100" y="88" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
+          Hold near your device NFC reader
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function StartRingGlyphPulse() {
+  return (
+    <div style={styles.ringMarkWrap} aria-hidden>
+      <span style={styles.ringHalo} />
+      <svg width="76" height="76" viewBox="0 0 76 76" style={styles.ringSvg}>
+        <circle cx="38" cy="38" r="24" fill="none" stroke="#e6b48d" strokeWidth="5.5" />
+        <circle cx="38" cy="38" r="14" fill="none" stroke="#f0c29e" strokeWidth="2.5" opacity="0.55" />
+      </svg>
+    </div>
   );
 }
 
@@ -202,25 +198,100 @@ export default function StartClient() {
   const [claimState, setClaimState] = useState<
     "idle" | "waiting_signin" | "claiming" | "claimed" | "failed" | "skipped"
   >("idle");
-  const [sdmState, setSdmState] = useState<SdmResolveState>({ kind: "idle" });
-  const platform = useMemo(() => resolvePlatformTarget(), []);
-  const guidance = useMemo(() => getPlatformGuidance(platform), [platform]);
+  const [sdmState, setSdmState] = useState<StartSdmStateForCopy>(() => readInitialSdmState());
+  const platform = useMemo(() => resolvePlatformTarget() as HavenPlatform, []);
+  const idleHero = useMemo(() => getStartIdleHeroCopy(platform), [platform]);
+  const sdmCopy = useMemo(() => {
+    if (sdmState.kind === "idle") return null;
+    return getStartSdmCardCopy(platform, sdmState);
+  }, [platform, sdmState]);
+  const [sealLeaveGuard, setSealLeaveGuard] = useState(false);
+  const [sealLeaveAck, setSealLeaveAck] = useState(false);
   const hero = START_PAGE_CONTENT.hero;
   const hasVideoHero = Boolean(hero.video);
   const claimAttemptedRef = useRef(false);
   const pendingSealTapRef = useRef(false);
   const bindRingRedirectDoneRef = useRef(false);
+  const nfcSdmResolveGenerationRef = useRef(0);
 
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
+    setSealLeaveAck(false);
     window.location.reload();
   }
 
-  function continueWithoutRing() {
+  const needsSealLeaveDouble =
+    sealLeaveGuard &&
+    (sdmState.kind === "resolving" ||
+      sdmState.kind === "failed" ||
+      (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
+
+  const nfcFlow = sdmState.kind !== "idle";
+  const sealTopBarMuted = nfcFlow && sealLeaveGuard;
+
+  const showSealCountdown =
+    sealLeaveGuard &&
+    isSealFlowArmed() &&
+    (sdmState.kind === "resolving" ||
+      sdmState.kind === "failed" ||
+      (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
+
+  const [sealClockTick, setSealClockTick] = useState(0);
+  useEffect(() => {
+    if (!showSealCountdown) return;
+    const id = window.setInterval(() => setSealClockTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [showSealCountdown]);
+
+  const sealRemainingMs = useMemo(() => {
+    void sealClockTick;
+    return getSealArmedRemainingMs();
+  }, [sealClockTick, showSealCountdown]);
+
+  const isDailySelfOwner =
+    sdmState.kind === "ready" &&
+    sdmState.scene === "daily_access" &&
+    Boolean(sdmState.viewerUserId && sdmState.ownerId && sdmState.viewerUserId === sdmState.ownerId);
+
+  useEffect(() => {
+    if (!isDailySelfOwner) return;
+    const t = window.setTimeout(() => {
+      window.location.assign("/app");
+    }, 2000);
+    return () => window.clearTimeout(t);
+  }, [isDailySelfOwner]);
+
+  const hideFtuxOAuthDuringSealTouch =
+    nfcFlow &&
+    (sdmState.kind === "resolving" ||
+      (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
+
+  function confirmLeaveWithoutRing() {
     if (typeof window === "undefined") return;
+    setSealLeaveAck(false);
     abandonInProgressSealOnStartPage();
     window.location.assign("/app");
   }
+
+  function onFooterContinueWithoutRing() {
+    if (typeof window === "undefined") return;
+    if (needsSealLeaveDouble && !sealLeaveAck) {
+      setSealLeaveAck(true);
+      return;
+    }
+    if (!needsSealLeaveDouble) {
+      confirmLeaveWithoutRing();
+    }
+  }
+
+  useEffect(() => {
+    const id = "haven-start-ring-pulse-keyframes";
+    if (typeof document === "undefined" || document.getElementById(id)) return;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `@keyframes havenStartRingGlow{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(240,194,158,0))}50%{transform:scale(1.05);filter:drop-shadow(0 0 12px rgba(240,194,158,0.5))}}@keyframes havenStartRingHalo{0%{transform:scale(0.92);opacity:0.5}70%{transform:scale(1.4);opacity:0}100%{transform:scale(1.4);opacity:0}}`;
+    document.head.appendChild(el);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -230,13 +301,14 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
+    const myGen = ++nfcSdmResolveGenerationRef.current;
     const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
     pendingSealTapRef.current =
       Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
+    setSealLeaveGuard(pendingSealTapRef.current);
 
     const initialStateTimer = window.setTimeout(() => {
-      setSdmState({ kind: "resolving" });
-      setNotice("Reading ring status...");
+      setNotice(START_PAGE_EN.readingRingStatus);
     }, 0);
 
     const controller = new AbortController();
@@ -244,6 +316,7 @@ export default function StartClient() {
     void supabase.auth
       .getSession()
       .then(async ({ data: sessionData }) => {
+        if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const accessToken = sessionData.session?.access_token || "";
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -267,7 +340,9 @@ export default function StartClient() {
             "Could not reach Haven to verify this tap. Check your connection and try again — your draft stays on this device."
           );
         }
+        if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
+        if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (!res.ok || data?.valid !== true) {
           throw new Error(
             typeof data?.error === "string" && data.error
@@ -275,7 +350,7 @@ export default function StartClient() {
               : "This ring could not be verified."
           );
         }
-        const scene: SdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
+        const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         const viewerUserId = sessionData.session?.user?.id ?? null;
         setSdmState({
           kind: "ready",
@@ -302,6 +377,7 @@ export default function StartClient() {
           if (!data.sealTicket) {
             throw new Error("Ring confirmed. Return to your memory and tap Seal with Ring again.");
           }
+          if (myGen !== nfcSdmResolveGenerationRef.current) return;
           setNotice("Ring confirmed. Completing the seal...");
           await finalizeSealChainFromSdmResponse({
             sealTicket: String(data.sealTicket),
@@ -311,6 +387,7 @@ export default function StartClient() {
         }
       })
       .catch((error) => {
+        if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (controller.signal.aborted) return;
         const baseMsg =
           error instanceof Error ? error.message : "This ring could not be verified.";
@@ -321,12 +398,63 @@ export default function StartClient() {
           kind: "failed",
           message: `${baseMsg}${sealHint}`,
         });
-        setNotice("Ring verification failed. Please try touching again.");
+        setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       });
 
     return () => {
       window.clearTimeout(initialStateTimer);
       controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash || "";
+    if (hash.includes("error=")) {
+      try {
+        const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+        const hp = new URLSearchParams(raw);
+        const desc = hp.get("error_description") || hp.get("error") || "";
+        const readable = desc
+          ? decodeURIComponent(desc.replace(/\+/g, " "))
+          : "Sign-in did not complete. Please try again.";
+        setNotice(readable);
+        const u = new URL(window.location.href);
+        u.hash = "";
+        window.history.replaceState({}, "", `${u.pathname}${u.search}`);
+      } catch {
+        setNotice("Sign-in did not complete. Please try again.");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const rawSearch = window.location.search || "";
+    if (isSealNfcLaunchSearch(rawSearch)) return;
+    const claimProbe = new URLSearchParams(
+      rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch
+    ).get("claim") || "";
+    if (normalizeClaimValue(claimProbe)) return;
+
+    const supabase = getSupabaseBrowserClient();
+    let cancelled = false;
+    void (async () => {
+      try {
+        await supabase.auth.initialize();
+      } catch {
+        /* continue */
+      }
+      if (cancelled) return;
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (!isPermanentSupabaseSession(data.session ?? null)) return;
+      const nextPath = consumeDeferredAppEntry();
+      if (!nextPath) return;
+      window.location.assign(`${window.location.origin}${nextPath}`);
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -351,7 +479,7 @@ export default function StartClient() {
     const timer = window.setTimeout(() => {
       setClaimToken("");
       setNotice("30-Day Haven Plus activated! You can now try Seal with Ring.");
-      window.history.replaceState({}, "", "/app");
+      window.location.assign("/app");
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [claimState]);
@@ -518,6 +646,11 @@ export default function StartClient() {
           return;
         }
         setNotice(getFriendlyAuthError(error.message, provider));
+        try {
+          window.localStorage.removeItem(FTUX_STARTED_KEY);
+        } catch {
+          /* ignore */
+        }
       }
     } finally {
       setBusyProvider("");
@@ -547,44 +680,81 @@ export default function StartClient() {
           </video>
         ) : null}
         <div style={styles.content}>
-          <p style={styles.kicker}>Haven Ring</p>
-          <h1 style={styles.title}>{guidance.startTitle}</h1>
-          <p style={styles.subtitle}>{guidance.startSubtitle}</p>
-          {sdmState.kind !== "idle" ? (
+          <header
+            style={{
+              ...styles.topBar,
+              opacity: sealTopBarMuted ? 0.48 : 1,
+            }}
+          >
+            <Link href="/app" style={styles.topBarLink} aria-label={START_PAGE_EN.backToHaven}>
+              ← {START_PAGE_EN.backToHaven}
+            </Link>
+          </header>
+
+          <StartRingGlyphPulse />
+
+          {!nfcFlow ? (
+            <>
+              <p style={styles.kicker}>Haven Ring</p>
+              <h1 style={styles.title}>{idleHero.title}</h1>
+              <p style={{ ...styles.subtitle, whiteSpace: "pre-line" }}>{idleHero.subtitle}</p>
+            </>
+          ) : sdmCopy ? (
+            <>
+              <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>{sdmCopy.title}</h1>
+              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
+                {sdmCopy.placementHint || START_PAGE_EN.heroSubtitleFallback}
+              </p>
+            </>
+          ) : null}
+
+          {showSealCountdown && sealRemainingMs > 0 ? (
+            <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
+              {START_PAGE_EN.sealCountdownPrefix}{" "}
+              <strong>{formatSealCountdown(sealRemainingMs)}</strong>
+            </p>
+          ) : null}
+
+          {nfcFlow && sdmCopy ? (
             <section
               style={{ ...styles.sdmCard, ...getSdmCardStyle(sdmState) }}
               role={sdmState.kind === "failed" ? "alert" : "status"}
               aria-live="polite"
             >
-              <p style={styles.sdmEyebrow}>{getSdmSceneLabel(sdmState)}</p>
-              <p style={styles.sdmTitle}>{getSdmSceneTitle(sdmState)}</p>
-              <p style={styles.sdmBody}>{getSdmSceneBody(sdmState)}</p>
+              {isDailySelfOwner ? (
+                <p style={styles.sdmSuccessMark} aria-hidden>
+                  ✓
+                </p>
+              ) : null}
+              <p style={styles.sdmEyebrow}>{sdmCopy.eyebrow}</p>
+              <p style={styles.sdmBody}>{sdmCopy.body}</p>
+              {nfcFlow &&
+              sdmCopy &&
+              (sdmState.kind === "resolving" ||
+                sdmState.kind === "failed" ||
+                (sdmState.kind === "ready" &&
+                  (sdmState.scene === "seal_confirmation" ||
+                    sdmState.scene === "new_ring_binding" ||
+                    isDailySelfOwner))) ? (
+                <NfcPhoneHint platform={platform} />
+              ) : null}
+              {sdmCopy.placementHint && nfcFlow ? (
+                <p style={styles.sdmHint}>{sdmCopy.placementHint}</p>
+              ) : null}
               <div style={styles.sdmNextStep}>
                 <span style={styles.sdmNextLabel}>Next</span>
-                <span>{getSdmNextStep(sdmState)}</span>
+                <span>{sdmCopy.nextLine}</span>
               </div>
-              {sdmState.kind === "resolving" || sdmState.kind === "failed" ? (
+              {sdmState.kind === "failed" ? (
                 <div style={styles.sdmActions}>
-                  {sdmState.kind === "failed" ? (
-                    <button
-                      type="button"
-                      onClick={retrySdmTouch}
-                      style={styles.sdmPrimaryAction}
-                    >
-                      Retry
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={continueWithoutRing}
-                    style={styles.sdmSecondaryAction}
-                  >
-                    Continue without ring
+                  <button type="button" onClick={retrySdmTouch} style={styles.sdmPrimaryAction}>
+                    {START_PAGE_EN.retryRingTap}
                   </button>
                 </div>
               ) : null}
             </section>
           ) : null}
+
           {claimToken ? (
             <section style={styles.claimCard}>
               <p style={styles.claimTitle}>Ring setup in progress</p>
@@ -625,9 +795,7 @@ export default function StartClient() {
                     setClaimState("skipped");
                     setClaimToken("");
                     setNotice("You can continue now and connect a ring later in My Rings.");
-                    if (typeof window !== "undefined") {
-                      window.history.replaceState({}, "", "/app");
-                    }
+                    window.location.assign("/app");
                   }}
                   style={styles.secondaryButton}
                 >
@@ -637,43 +805,79 @@ export default function StartClient() {
             </section>
           ) : null}
 
-          <button
-            type="button"
-            onClick={() => void signInWith("apple")}
-            disabled={Boolean(busyProvider) || !appleProviderReady}
-            style={styles.primaryButton}
-          >
-            {busyProvider === "apple"
-              ? "Opening Apple Sign In..."
-              : appleProviderReady
-                ? "Continue with Apple"
-                : "Apple Sign In coming soon"}
-          </button>
+          {nfcFlow && !claimToken ? (
+            <footer style={styles.sealFooter}>
+              <p style={styles.sealFooterSecurity}>{START_PAGE_EN.footerSecurityReminder}</p>
+              {needsSealLeaveDouble && sealLeaveAck ? (
+                <>
+                  <p style={styles.sdmLeaveWarn}>{START_PAGE_EN.leaveSealWarning}</p>
+                  <div style={styles.sealFooterActions}>
+                    <button type="button" onClick={() => setSealLeaveAck(false)} style={styles.sdmPrimaryAction}>
+                      {START_PAGE_EN.keepSealing}
+                    </button>
+                    <button type="button" onClick={confirmLeaveWithoutRing} style={styles.sealFooterDanger}>
+                      {START_PAGE_EN.leaveSealConfirmCta}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onFooterContinueWithoutRing}
+                  style={{
+                    ...styles.sdmSecondaryAction,
+                    ...styles.sealFooterSingleCta,
+                    ...(needsSealLeaveDouble && !sealLeaveAck ? styles.sdmSecondaryActionQuiet : {}),
+                  }}
+                >
+                  {START_PAGE_EN.continueWithoutRing}
+                </button>
+              )}
+            </footer>
+          ) : null}
 
-          <button
-            type="button"
-            onClick={() => void signInWith("google")}
-            disabled={Boolean(busyProvider)}
-            style={styles.secondaryButton}
-          >
-            {busyProvider === "google"
-              ? "Opening Google Sign In..."
-              : "Continue with Google"}
-          </button>
-          <p style={styles.linkLine}>
-            Already have an account?{" "}
-            <Link href="/app" style={styles.link}>
-              Sign in
-            </Link>
-          </p>
-          <p style={styles.complianceLine}>
-            By continuing, you agree to our{" "}
-            <a href="/privacy-policy" style={styles.link}>
-              Privacy Policy
-            </a>
-            .
-          </p>
-          {guidance.isIos ? (
+          {!hideFtuxOAuthDuringSealTouch ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void signInWith("apple")}
+                disabled={Boolean(busyProvider) || !appleProviderReady}
+                style={styles.primaryButton}
+              >
+                {busyProvider === "apple"
+                  ? "Opening Apple Sign In..."
+                  : appleProviderReady
+                    ? "Continue with Apple"
+                    : "Apple Sign In coming soon"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void signInWith("google")}
+                disabled={Boolean(busyProvider)}
+                style={styles.secondaryButton}
+              >
+                {busyProvider === "google"
+                  ? "Opening Google Sign In..."
+                  : "Continue with Google"}
+              </button>
+              <p style={styles.linkLine}>
+                Already have an account?{" "}
+                <Link href="/app" style={styles.link}>
+                  Sign in
+                </Link>
+              </p>
+              <p style={styles.complianceLine}>
+                By continuing, you agree to our{" "}
+                <a href="/privacy-policy" style={styles.link}>
+                  Privacy Policy
+                </a>
+                .
+              </p>
+            </>
+          ) : null}
+
+          {!nfcFlow && platform === "ios" ? (
             <section style={{ ...styles.tipCard, ...styles.tipCardIosStrong }}>
               <p style={styles.tipTitle}>iPhone tip</p>
               <p style={styles.tipBody}>
@@ -750,6 +954,96 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     fontSize: 18,
     color: "#e7d2c3",
+  },
+  ringMarkWrap: {
+    position: "relative",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 88,
+    margin: "2px 0 8px",
+  },
+  ringHalo: {
+    position: "absolute",
+    width: 92,
+    height: 92,
+    borderRadius: 999,
+    border: "2px solid rgba(240,194,158,0.28)",
+    animation: "havenStartRingHalo 2.4s ease-out infinite",
+    pointerEvents: "none",
+  },
+  ringSvg: {
+    position: "relative",
+    animation: "havenStartRingGlow 2.2s ease-in-out infinite",
+  },
+  topBar: {
+    display: "flex",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    marginBottom: 4,
+    minHeight: 28,
+  },
+  topBarLink: {
+    color: "#e7d2c3",
+    fontSize: 14,
+    fontWeight: 600,
+    textDecoration: "none",
+    letterSpacing: "0.02em",
+  },
+  sealCountdownLine: {
+    margin: "4px 0 0",
+    textAlign: "center",
+    fontSize: 14,
+    color: "#f0c29e",
+    letterSpacing: "0.04em",
+  },
+  sealFooter: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTop: "1px solid rgba(255,255,255,0.12)",
+    display: "grid",
+    gap: 10,
+  },
+  sealFooterSecurity: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: "#cbb09f",
+  },
+  sealFooterActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  sealFooterSingleCta: {
+    justifySelf: "start",
+    maxWidth: "100%",
+  },
+  sealFooterDanger: {
+    border: "1px solid rgba(255,157,137,0.55)",
+    background: "rgba(72, 29, 25, 0.45)",
+    color: "#ffded8",
+    borderRadius: 999,
+    padding: "10px 14px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  sdmSuccessMark: {
+    margin: 0,
+    fontSize: 36,
+    lineHeight: 1,
+    color: "#9fd7bd",
+    textAlign: "center",
+  },
+  nfcDiagramWrap: {
+    display: "flex",
+    justifyContent: "center",
+    margin: "4px 0 2px",
+  },
+  nfcSvg: {
+    maxWidth: "100%",
+    height: "auto",
   },
   privacyLead: {
     margin: 0,
@@ -933,6 +1227,18 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.55,
     fontSize: 15,
   },
+  sdmHint: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#cbb09f",
+  },
+  sdmLeaveWarn: {
+    margin: "8px 0 0",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "#ffcab5",
+  },
   sdmNextStep: {
     border: "1px solid rgba(255,255,255,0.16)",
     borderRadius: 12,
@@ -974,5 +1280,10 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 14px",
     fontWeight: 700,
     cursor: "pointer",
+  },
+  sdmSecondaryActionQuiet: {
+    opacity: 0.72,
+    fontWeight: 600,
+    fontSize: 14,
   },
 };

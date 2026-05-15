@@ -1,3 +1,10 @@
+import { getMemoryDetailPageCopy } from "./havenCopy";
+
+/**
+ * Locale bundles: non-EN overrides for legacy keys only.
+ * English memory-detail copy is fully defined in `havenCopy` (`HAVEN_MEMORY_DETAIL_EN` + `getMemoryDetailPageCopy`).
+ */
+
 const EN = {
   brand: "Memory",
   defaultTitle: "Memory details",
@@ -26,3 +33,51 @@ export const MEMORY_DETAIL_PAGE_CONTENT = {
   de: { ...EN, brand: "Erinnerung", defaultTitle: "Erinnerungsdetails", back: "Zuruck zur Timeline", loading: "Erinnerung wird geladen...", noMemory: "Erinnerung nicht gefunden.", previous: "Zuruck", next: "Weiter", noPhotos: "Keine Fotos in dieser Erinnerung.", storyTitle: "Geschichte", noStory: "Keine geschriebene Geschichte." },
   it: { ...EN, brand: "Ricordo", defaultTitle: "Dettagli del ricordo", back: "Torna alla timeline", loading: "Caricamento ricordo...", noMemory: "Ricordo non trovato.", previous: "Precedente", next: "Successivo", noPhotos: "Nessuna foto in questo ricordo.", storyTitle: "Storia", noStory: "Nessuna storia scritta." },
 };
+
+/**
+ * @param {string} locale
+ * @param {"ios"|"android"|"other"} platform
+ */
+export function getMemoryDetailUiCopy(locale, platform) {
+  const base = getMemoryDetailPageCopy(platform);
+  if (!locale || locale === "en") return { ...base, back: base.topBackLabel };
+  const loc = MEMORY_DETAIL_PAGE_CONTENT[locale] || MEMORY_DETAIL_PAGE_CONTENT.en;
+  return {
+    ...base,
+    ...loc,
+    topBackLabel: loc.back || base.topBackLabel,
+    defaultTitle: loc.defaultTitle || base.defaultTitle,
+    loading: loc.loading || base.loading,
+    noMemory: loc.noMemory || base.noMemory,
+    previous: loc.previous || base.previous,
+    next: loc.next || base.next,
+    noPhotos: loc.noPhotos || base.noPhotos,
+    storyHeading: loc.storyTitle || base.storyHeading,
+    noStory: loc.noStory || base.noStory,
+    attachmentsTitle: loc.attachmentsTitle || base.attachmentsTitle,
+    noAttachments: loc.noAttachments || base.noAttachments,
+    downloadAttachment: loc.downloadAttachment || base.downloadAttachment,
+    untitledAttachment: loc.untitledAttachment || base.untitledAttachment,
+    capsuleLockedTitle: loc.capsuleLockedTitle || base.capsuleLockedTitle,
+    capsuleLockedBody: loc.capsuleLockedBody || base.capsuleLockedBody,
+    capsuleTypeTime: loc.capsuleTypeTime || base.capsuleTypeTime,
+    metaSealed: loc.metaSealed || base.metaSealed,
+    metaSealedViaRing: loc.metaSealedViaRing || base.metaSealedViaRing,
+    metaSealedOther: loc.metaSealedOther || base.metaSealedOther,
+    deleteConfirmTitle: loc.deleteConfirmTitle || base.deleteConfirmTitle,
+    deleteConfirmBody: loc.deleteConfirmBody || base.deleteConfirmBody,
+    deleteConfirmConfirm: loc.deleteConfirmConfirm || base.deleteConfirmConfirm,
+    deleteConfirmCancel: loc.deleteConfirmCancel || base.deleteConfirmCancel,
+    exportChooseFormatTitle: loc.exportChooseFormatTitle || base.exportChooseFormatTitle,
+    exportFormatJsonFull: loc.exportFormatJsonFull || base.exportFormatJsonFull,
+    exportFormatJsonLite: loc.exportFormatJsonLite || base.exportFormatJsonLite,
+    exportContinueToVerify: loc.exportContinueToVerify || base.exportContinueToVerify,
+    exportPreparing: loc.exportPreparing || base.exportPreparing,
+    exportSuccess: loc.exportSuccess || base.exportSuccess,
+    e2eeFooter: loc.e2eeFooter || base.e2eeFooter,
+    footerDeleteHint: loc.footerDeleteHint || base.footerDeleteHint,
+    sealedOn: loc.sealedOn || base.sealedOn,
+    capsuleTypeNormal: loc.capsuleTypeNormal || base.capsuleTypeNormal,
+  };
+}
+

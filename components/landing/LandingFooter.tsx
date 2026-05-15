@@ -59,6 +59,9 @@ export function LandingFooter() {
         <Link href="/privacy-policy" className="hover:text-white/55">
           Privacy Policy
         </Link>
+        <Link href="/login" className="hover:text-white/55">
+          Sign in
+        </Link>
         <Link href="/app" className="hover:text-white/55">
           Open App
         </Link>

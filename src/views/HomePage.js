@@ -11,10 +11,10 @@ import {
 } from "../services/deviceTrustService";
 import {
   isFirstMemoryCompleted,
+  ONBOARDING_DONE_KEY,
+  ONBOARDING_OUTCOME_KEY,
   trackFirstRunEvent,
 } from "../services/firstRunTelemetryService";
-
-const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
 /**
  * Haven Home Page
  * Warm, simple entry point focused on emotional clarity.
@@ -56,6 +56,17 @@ export function HomePage({
   const [securityBusy, setSecurityBusy] = useState(false);
   const [securityError, setSecurityError] = useState("");
   const [installedStandalone, setInstalledStandalone] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      setOnboardingDone(window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1");
+    } catch {
+      setOnboardingDone(false);
+    }
+  }, [hasSession, onboardingOpen]);
+
   useEffect(() => {
     if (ringHandledRef.current) return;
     if (typeof window === "undefined") return;
@@ -139,13 +150,27 @@ export function HomePage({
     if (!done) setOnboardingOpen(true);
   }, [hasSession]);
 
-  function markOnboardingDone() {
+  function markOnboardingDone(detail = {}) {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
+      try {
+        window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
+        if (detail.outcome === "skipped") {
+          window.localStorage.setItem(ONBOARDING_OUTCOME_KEY, "skipped");
+        } else if (detail.choice === "bind_ring") {
+          window.localStorage.setItem(ONBOARDING_OUTCOME_KEY, "bind_ring");
+        } else if (detail.choice === "face_only") {
+          window.localStorage.setItem(ONBOARDING_OUTCOME_KEY, "face_only");
+        } else {
+          window.localStorage.setItem(ONBOARDING_OUTCOME_KEY, "completed");
+        }
+      } catch {
+        /* ignore */
+      }
     }
     setOnboardingOpen(false);
+    setOnboardingDone(true);
     setIsFirstRun(!isFirstMemoryCompleted());
-    onAfterOnboarding?.();
+    onAfterOnboarding?.(detail);
   }
 
   async function continueAfterSecurity() {
@@ -192,6 +217,9 @@ export function HomePage({
     }
   }
 
+  const showCalmHome =
+    hasSession && onboardingDone && !onboardingOpen && !flowPrimaryUi?.enforceSingle;
+
   return (
     <>
       <main style={styles.page}>
@@ -202,18 +230,48 @@ export function HomePage({
         </header>
 
         <div style={styles.hero}>
-          <h1 style={styles.title}>{t.title}</h1>
+          <h1 style={styles.title}>{showCalmHome ? t.calmHomeTitle : t.title}</h1>
           <p style={styles.subtitle}>
-            {t.subtitle}
+            {showCalmHome ? t.calmHomeSubtitle : t.subtitle}
           </p>
         </div>
 
+        {showCalmHome ? (
+          <section style={styles.calmCard}>
+            <p style={styles.calmLead}>{t.calmHomeLead}</p>
+            <div style={styles.actions}>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  void trackFirstRunEvent("calm_home_seal_cta", { locale });
+                  onCreateMemory?.();
+                }}
+                style={styles.primaryButton}
+              >
+                {t.calmHomeSealCta}
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void onOpenTimeline?.()}
+                style={styles.secondaryButton}
+              >
+                {t.calmHomeTimelineCta}
+              </button>
+            </div>
+            <p style={styles.privacyTrust}>{t.calmHomePrivacyLine}</p>
+          </section>
+        ) : null}
+
+        {!showCalmHome ? (
         <section style={styles.howItWorksCard}>
           <p style={styles.howItWorksTitle}>{t.howTitle}</p>
           <p style={styles.howItWorksBody}>
             {t.howBody}
           </p>
         </section>
+        ) : null}
         {flowPrimaryUi ? (
           <section style={styles.howItWorksCard}>
             <p style={styles.howItWorksTitle}>{flowPrimaryUi.title}</p>
@@ -377,7 +435,7 @@ export function HomePage({
           </section>
         ) : null}
 
-          {!flowPrimaryUi?.enforceSingle ? <div style={styles.actions}>
+          {!showCalmHome && !flowPrimaryUi?.enforceSingle ? <div style={styles.actions}>
           <button
             type="button"
             disabled={loading}
@@ -454,7 +512,7 @@ export function HomePage({
         open={onboardingOpen}
         locale={locale}
         onComplete={markOnboardingDone}
-        onSkip={markOnboardingDone}
+        onQuickSignIn={(provider) => onQuickSignIn?.(provider, "")}
       />
     </>
   );
@@ -508,6 +566,27 @@ const styles = {
     color: "#d9c3b3",
     lineHeight: 1.7,
     maxWidth: 560,
+  },
+  calmCard: {
+    border: "1px solid rgba(196, 149, 106, 0.35)",
+    borderRadius: 16,
+    background: "rgba(26, 21, 18, 0.55)",
+    padding: 18,
+    display: "grid",
+    gap: 14,
+  },
+  calmLead: {
+    margin: 0,
+    fontSize: 17,
+    color: "#f8efe7",
+    lineHeight: 1.55,
+    fontWeight: 600,
+  },
+  privacyTrust: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(217, 194, 180, 0.65)",
   },
   howItWorksCard: {
     border: "1px solid #3a2d28",

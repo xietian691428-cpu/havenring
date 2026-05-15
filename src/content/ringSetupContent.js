@@ -2,7 +2,7 @@ const EN = {
   kicker: "One-time setup",
   title: "Set up your magic keys",
   introBody:
-    "Add NFC rings for faster sign-in. You can link 1 to 5 rings, and every ring works the same way. No master ring. Your memories always stay with your account.",
+    "Add NFC rings for faster sign-in. You can link 1 to 5 rings, and every ring works the same way. No master ring. Your memories stay with your account on the devices where you use Haven.",
   ctaAddRing: "Add NFC ring",
   ctaSkip: "Skip for now",
   scanTitle: "Hold your ring to the phone",
@@ -126,7 +126,7 @@ const EN = {
   cloudSignInRequired:
     "Sign in to your account (e.g. enable cloud backup in Settings) before linking this ring to the server.",
   cloudAccountRequired:
-    "Link a permanent sign-in (not a guest session) in Settings, then add your ring again.",
+    "Link a full Haven account (not a guest session) in Settings, then add your ring again.",
   cloudBindFailed: "Could not link the ring to your account. Please try again.",
   privacyBindNotice:
     "By registering a ring, you agree we store a secure fingerprint of the tag (not the raw UID) for login and limits — see our Privacy Policy.",

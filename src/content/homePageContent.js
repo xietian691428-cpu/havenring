@@ -49,6 +49,13 @@ const EN = {
     "Create your first memory now. You can set up your ring right after.",
   firstMissionPrimary: "Create my first memory",
   firstMissionSecondary: "Set up ring (recommended)",
+  calmHomeTitle: "Welcome back",
+  calmHomeSubtitle: "Your private memory space is ready when you are.",
+  calmHomeLead: "Ready to seal your first memory?",
+  calmHomeSealCta: "Seal New",
+  calmHomeTimelineCta: "Open Memories",
+  calmHomePrivacyLine:
+    "We can’t read your memories — they stay on your device by default.",
 };
 
 export const HOME_PAGE_CONTENT = {

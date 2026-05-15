@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
  * Tracks Supabase auth session in the PWA shell (for silent NFC login UX).
+ * Calls `initialize()` first so `/app` OAuth callbacks and persisted sessions agree.
  */
 export function useSupabaseSession() {
   const [session, setSession] = useState(null);
@@ -14,12 +15,19 @@ export function useSupabaseSession() {
     const sb = getSupabaseBrowserClient();
     let cancelled = false;
 
-    sb.auth.getSession().then(({ data }) => {
+    void (async () => {
+      try {
+        await sb.auth.initialize();
+      } catch {
+        /* offline / blocked — still read any persisted session */
+      }
+      if (cancelled) return;
+      const { data } = await sb.auth.getSession();
       if (!cancelled) {
         setSession(data.session ?? null);
         setLoading(false);
       }
-    });
+    })();
 
     const {
       data: { subscription },

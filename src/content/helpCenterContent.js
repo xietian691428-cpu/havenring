@@ -1,10 +1,18 @@
+import {
+  HAVEN_EN_LAYERED_CORE_LINE,
+  HAVEN_EN_HOW_HAVEN_WORKS_ROWS,
+  HAVEN_EN_QUICK_GUIDE_ONE_LINE,
+  HAVEN_HELP_CENTER_EN,
+  mapHowHavenRowsToHelpRows,
+} from "./havenCopy";
+
 const EN = {
+  ...HAVEN_HELP_CENTER_EN,
   brand: "Help Center",
   title: "Help & Support",
   subtitle:
     "You are not alone here. This page walks you through everything step by step, like a friend beside you.",
-  layeredCoreLine:
-    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
+  layeredCoreLine: HAVEN_EN_LAYERED_CORE_LINE,
   back: "Back",
   quickTitle: "Quick Start Guide",
   quickBody: "New to Haven Ring? Start here for a calm, guided walkthrough.",
@@ -23,7 +31,7 @@ const EN = {
   troubleshootingBody: "If something feels off, start with these quick fixes.",
   riskOpsTitle: "High-risk actions",
   riskOpsBody:
-    "Ring management, sealed-memory deletion, and export or migration always require strong secondary verification.",
+    "Ring management, sealed-memory deletion, and export or migration usually require strong secondary verification.",
   troubleshootingBodyByPlatform: {
     ios: "iPhone-focused quick fixes are shown first.",
     android: "Android-focused quick fixes are shown first.",
@@ -32,62 +40,23 @@ const EN = {
   faqTitle: "Common Questions",
   contactTitle: "Contact Support",
   contactBody: "Still stuck? Reach out and we will help you personally.",
-  supportEmail: "support@havenring.me",
   showDetails: "Show details",
   hideDetails: "Hide details",
   actionLabel: "What you want to do",
   ringRequiredLabel: "Ring Required:",
   recommendedLabel: "Recommended:",
   howHavenWorksTitle: "How Haven Works",
-  howHavenWorksIntro:
-    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
-  howHavenWorksRows: [
-    {
-      operation: "Open the app daily",
-      ringRequired: "No (Strongly recommended)",
-      recommended: "Touch your ring (fastest) or Face ID",
-    },
-    {
-      operation: "Quick notes & drafts",
-      ringRequired: "No",
-      recommended: "Just start writing",
-    },
-    {
-      operation: "Seal an important memory",
-      ringRequired: "Yes",
-      recommended: "Seal with Ring (required)",
-    },
-    {
-      operation: "Add or remove a ring",
-      ringRequired: "Yes",
-      recommended: "Face ID confirmation",
-    },
-    {
-      operation: "Export data",
-      ringRequired: "Yes",
-      recommended: "Face ID confirmation",
-    },
-    {
-      operation: "Delete sealed memories",
-      ringRequired: "Yes",
-      recommended: "Face ID + extra confirmation",
-    },
-    {
-      operation: "Handle a lost ring",
-      ringRequired: "No",
-      recommended: "Revoke from any signed-in device",
-    },
-  ],
+  howHavenWorksIntro: HAVEN_EN_LAYERED_CORE_LINE,
+  howHavenWorksRows: mapHowHavenRowsToHelpRows(HAVEN_EN_HOW_HAVEN_WORKS_ROWS),
   howHavenWorksKeyPointsTitle: "Five Key Points",
   howHavenWorksKeyPoints: [
     "1. Your ring is a fast key and a ritual tool for precious memories (not the only credential).",
-    "2. For daily use, touching your ring is recommended — Face ID is always a fallback.",
+    "2. For daily use, touching your ring is recommended — Face ID is still available as a fallback.",
     "3. Important memories can only be sealed with a trusted ring.",
-    "4. High-risk actions (add rings, export, delete sealed content) always require secondary verification.",
-    "5. Your memories are protected by end-to-end encryption and stored permanently (sealed by default, not editable).",
+    "4. High-risk actions (add rings, export, delete sealed content) require secondary verification in normal conditions.",
+    "5. Your memories are protected with strong encryption on supported flows and stored as sealed records on your devices (not casually editable).",
   ],
-  howHavenWorksOneLine:
-    "The ring is your magical key for speed and ceremony. Face ID keeps everything secure.",
+  howHavenWorksOneLine: HAVEN_EN_QUICK_GUIDE_ONE_LINE,
 };
 
 export const HELP_CENTER_CONTENT = {
@@ -168,10 +137,10 @@ export const HELP_CENTER_CONTENT = {
     howHavenWorksKeyPointsTitle: "5 points clés",
     howHavenWorksKeyPoints: [
       "1. La bague est une clé rapide et un outil de rituel (pas l'unique preuve d'identité).",
-      "2. Au quotidien, le toucher de la bague est recommandé — Face ID reste une solution de secours.",
+      "2. Au quotidien, le toucher de la bague est recommandé — Face ID reste disponible en secours.",
       "3. Les souvenirs importants ne peuvent être scellés qu'avec une bague de confiance.",
-      "4. Les actions à risque (ajouter des bagues, exporter, supprimer du contenu scellé) exigent toujours une vérification secondaire.",
-      "5. Vos souvenirs sont chiffrés de bout en bout et conservés durablement (scellés par défaut, non modifiables).",
+      "4. Les actions à risque (ajouter des bagues, exporter, supprimer du contenu scellé) demandent en principe une vérification secondaire.",
+      "5. Vos souvenirs sont chiffrés sur les parcours pris en charge et conservés comme enregistrements scellés sur vos appareils (non modifiables à la volée).",
     ],
     howHavenWorksOneLine:
       "La bague est votre clé magique pour la vitesse et le rituel. Face ID protège tout.",
@@ -252,10 +221,10 @@ export const HELP_CENTER_CONTENT = {
     howHavenWorksKeyPointsTitle: "5 puntos clave",
     howHavenWorksKeyPoints: [
       "1. El anillo es una llave rápida y una herramienta de ritual (no es la única credencial).",
-      "2. Para el uso diario, se recomienda tocar el anillo — Face ID siempre es alternativa.",
+      "2. Para el uso diario, se recomienda tocar el anillo — Face ID sigue disponible como alternativa.",
       "3. Los recuerdos importantes solo se pueden sellar con un anillo de confianza.",
-      "4. Las acciones de alto riesgo (añadir anillos, exportar, borrar contenido sellado) siempre requieren verificación secundaria.",
-      "5. Tus recuerdos están protegidos con cifrado de extremo a extremo y se guardan de forma permanente (sellados por defecto, no editables).",
+      "4. Las acciones de alto riesgo (añadir anillos, exportar, borrar contenido sellado) suelen requerir verificación secundaria.",
+      "5. Tus recuerdos están protegidos con cifrado fuerte en flujos compatibles y se guardan como registros sellados en tus dispositivos (no editables de forma casual).",
     ],
     howHavenWorksOneLine:
       "El anillo es tu llave mágica para velocidad y ceremonia. Face ID lo mantiene seguro.",
@@ -336,10 +305,10 @@ export const HELP_CENTER_CONTENT = {
     howHavenWorksKeyPointsTitle: "5 Kernpunkte",
     howHavenWorksKeyPoints: [
       "1. Der Ring ist ein schneller Schlüssel und ein Ritual-Tool (nicht der einzige Nachweis).",
-      "2. Für den Alltag wird Ring-Berührung empfohlen — Face ID ist immer eine Alternative.",
+      "2. Für den Alltag wird Ring-Berührung empfohlen — Face ID bleibt als Alternative verfügbar.",
       "3. Wichtige Erinnerungen können nur mit einem vertrauenswürdigen Ring versiegelt werden.",
-      "4. Risikoaktionen (Ringe hinzufügen, Export, versiegelte Inhalte löschen) erfordern immer eine zweite Verifikation.",
-      "5. Deine Erinnerungen sind Ende-zu-Ende verschlüsselt und dauerhaft gespeichert (standardmäßig versiegelt, nicht editierbar).",
+      "4. Risikoaktionen (Ringe hinzufügen, Export, versiegelte Inhalte löschen) erfordern in der Regel eine zweite Verifikation.",
+      "5. Deine Erinnerungen sind auf unterstützten Wegen stark verschlüsselt und werden als versiegelte Datensätze auf deinen Geräten gespeichert (nicht beliebig editierbar).",
     ],
     howHavenWorksOneLine:
       "Der Ring ist dein magischer Schlüssel für Tempo und Zeremonie. Face ID hält alles sicher.",
@@ -420,10 +389,10 @@ export const HELP_CENTER_CONTENT = {
     howHavenWorksKeyPointsTitle: "5 punti chiave",
     howHavenWorksKeyPoints: [
       "1. L'anello è una chiave veloce e uno strumento di rituale (non è l'unica credenziale).",
-      "2. Per l'uso quotidiano è consigliato toccare l'anello — Face ID è sempre un'alternativa.",
+      "2. Per l'uso quotidiano è consigliato toccare l'anello — Face ID resta disponibile come alternativa.",
       "3. I ricordi importanti possono essere sigillati solo con un anello fidato.",
-      "4. Le azioni ad alto rischio (aggiungere anelli, esportare, eliminare contenuti sigillati) richiedono sempre una verifica secondaria.",
-      "5. I tuoi ricordi sono protetti da cifratura end-to-end e conservati in modo permanente (sigillati di default, non modificabili).",
+      "4. Le azioni ad alto rischio (aggiungere anelli, esportare, eliminare contenuti sigillati) richiedono di solito una verifica secondaria.",
+      "5. I tuoi ricordi sono protetti con cifratura robusta nei flussi supportati e conservati come record sigillati sui tuoi dispositivi (non modificabili in modo occasionale).",
     ],
     howHavenWorksOneLine:
       "L'anello è la tua chiave magica per velocità e cerimonia. Face ID mantiene tutto al sicuro.",

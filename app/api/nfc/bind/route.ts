@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser(req);
     if (isAnonymousUser(user)) {
       return NextResponse.json(
-        { error: "Permanent account required for NFC bind." },
+        { error: "A full Haven account is required for NFC bind." },
         { status: 403 }
       );
     }

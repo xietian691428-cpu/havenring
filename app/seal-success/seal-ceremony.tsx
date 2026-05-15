@@ -23,7 +23,7 @@ export function SealCeremony() {
         transition={{ delay: 0.8, duration: 1.6, ease: "easeOut" }}
         className="text-3xl font-light tracking-[0.3em] uppercase"
       >
-        Sealed forever
+        Sealed with intention
       </motion.h1>
       <motion.div
         initial={{ opacity: 0 }}

@@ -33,3 +33,22 @@ export function isSealFlowArmed() {
     return false;
   }
 }
+
+/** Milliseconds until the armed seal window ends (0 if not armed or expired). Sync with NewMemoryPage arm window. */
+export function getSealArmedRemainingMs(): number {
+  if (typeof window === "undefined") return 0;
+  const raw = window.sessionStorage.getItem(SEAL_ARMED_KEY);
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw) as { expiresAt?: number };
+    if (!parsed?.expiresAt) return 0;
+    const left = parsed.expiresAt - Date.now();
+    if (left <= 0) {
+      window.sessionStorage.removeItem(SEAL_ARMED_KEY);
+      return 0;
+    }
+    return left;
+  } catch {
+    return 0;
+  }
+}

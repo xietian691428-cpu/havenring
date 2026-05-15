@@ -1,93 +1,57 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
 import AppShell from "@/src/app-shell/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isFirstMemoryCompleted } from "@/src/services/firstRunTelemetryService";
+import {
+  appUrlLooksLikeSupabaseAuthCallback,
+  captureAppDeepLinkForPostLogin,
+  FTUX_STARTED_KEY,
+  isPermanentSupabaseSession,
+  scrubSupabaseAuthArtifactsFromAppUrl,
+} from "@/lib/appAuthGate";
 
-const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
-const FTUX_STARTED_KEY = "haven.ftux.started.v1";
-
-function isPermanentSession(session: Session | null): session is Session {
-  if (!session) return false;
-  return (
-    session.user.is_anonymous !== true &&
-    session.user.app_metadata?.provider !== "anonymous"
-  );
-}
-
-function appUrlLooksLikeAuthCallback(): boolean {
-  if (typeof window === "undefined") return false;
-  const hash = window.location.hash || "";
-  if (
-    hash.includes("access_token=") ||
-    hash.includes("error=") ||
-    hash.includes("error_description=")
-  ) {
-    return true;
-  }
-  return new URLSearchParams(window.location.search).has("code");
-}
+const AUTH_CALLBACK_RETRY_MS = 220;
 
 export default function AppHomePage() {
-  const [canRenderApp, setCanRenderApp] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
+  const [gatePhase, setGatePhase] = useState<"checking" | "redirecting" | "ready">("checking");
 
   useEffect(() => {
     let cancelled = false;
-
-    const onboardingDone = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
-    const firstMemoryDone = isFirstMemoryCompleted();
-    const startedFromStart = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
-
-    const mightNeedStartRedirect =
-      !startedFromStart && (!onboardingDone || !firstMemoryDone);
-    const needsSessionProbe = mightNeedStartRedirect || appUrlLooksLikeAuthCallback();
-
-    if (!needsSessionProbe) {
-      queueMicrotask(() => {
-        if (cancelled) return;
-        if (startedFromStart) {
-          window.localStorage.removeItem(FTUX_STARTED_KEY);
-        }
-        setCanRenderApp(true);
-        void getSupabaseBrowserClient().auth.initialize();
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
     const supabase = getSupabaseBrowserClient();
 
     void (async () => {
-      await supabase.auth.initialize();
-      if (cancelled) return;
-      const { data } = await supabase.auth.getSession();
+      try {
+        await supabase.auth.initialize();
+      } catch {
+        /* network / ad blockers — still try persisted session */
+      }
       if (cancelled) return;
 
-      const started = window.localStorage.getItem(FTUX_STARTED_KEY) === "1";
-      const onboarding = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
-      const firstMemory = isFirstMemoryCompleted();
+      let session = (await supabase.auth.getSession()).data.session ?? null;
 
-      if (isPermanentSession(data.session ?? null)) {
-        if (started) {
+      if (!isPermanentSupabaseSession(session) && appUrlLooksLikeSupabaseAuthCallback()) {
+        await new Promise((r) => setTimeout(r, AUTH_CALLBACK_RETRY_MS));
+        if (cancelled) return;
+        session = (await supabase.auth.getSession()).data.session ?? null;
+      }
+
+      if (cancelled) return;
+
+      if (isPermanentSupabaseSession(session)) {
+        try {
           window.localStorage.removeItem(FTUX_STARTED_KEY);
+        } catch {
+          /* ignore */
         }
-        setCanRenderApp(true);
+        scrubSupabaseAuthArtifactsFromAppUrl();
+        setGatePhase("ready");
         return;
       }
 
-      if (!started && (!onboarding || !firstMemory)) {
-        setRedirecting(true);
-        window.location.replace("/start");
-        return;
-      }
-      if (started) {
-        window.localStorage.removeItem(FTUX_STARTED_KEY);
-      }
-      setCanRenderApp(true);
+      captureAppDeepLinkForPostLogin();
+      setGatePhase("redirecting");
+      window.location.replace("/start");
     })();
 
     return () => {
@@ -95,8 +59,8 @@ export default function AppHomePage() {
     };
   }, []);
 
-  if (!canRenderApp) {
-    return redirecting ? (
+  if (gatePhase !== "ready") {
+    return (
       <main
         style={{
           minHeight: "100vh",
@@ -105,11 +69,31 @@ export default function AppHomePage() {
           background: "#120f0e",
           color: "#d9c3b3",
           fontFamily: "Inter, system-ui, sans-serif",
+          padding: 24,
+          textAlign: "center",
+          maxWidth: 420,
+          margin: "0 auto",
+          lineHeight: 1.5,
         }}
       >
-        Preparing your memory sanctuary...
+        <div>
+          <p style={{ margin: "0 0 10px", fontSize: 13, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            {gatePhase === "redirecting" ? "Sign-in required" : "Private sanctuary"}
+          </p>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f8efe7" }}>
+            {gatePhase === "redirecting"
+              ? "Taking you to a secure sign-in…"
+              : "Verifying your session…"}
+          </p>
+          <p style={{ margin: "12px 0 0", fontSize: 14, color: "#cbb09f" }}>
+            {gatePhase === "redirecting"
+              ? "Haven only opens after account sign-in. Ring links and invites are restored after you authenticate."
+              : "Your memories stay off-limits until we confirm who you are. One moment."}
+          </p>
+        </div>
       </main>
-    ) : null;
+    );
   }
+
   return <AppShell />;
 }

@@ -1,6 +1,10 @@
 const EN = {
   brand: "Settings",
   title: "Privacy-first controls",
+  upgradeSectionTitle: "Haven Plus",
+  upgradeSectionBody:
+    "Unlock Seal with Ring and optional cloud backup where we offer it — upgrade when you are ready.",
+  upgradeSectionCta: "View plans & pricing",
   back: "Back",
   localSectionTitle: "Local data",
   localDefault:
@@ -34,16 +38,8 @@ const EN = {
   privacySectionTitle: "Privacy",
   riskOpsTitle: "High-risk actions need extra verification",
   riskOpsBody:
-    "For your protection, these actions always require secondary verification before execution.",
+    "For your protection, these actions typically require secondary verification before execution.",
   requiresVerificationBadge: "Requires verification",
-  verifyModalTitle: "Confirm with device verification",
-  verifyModalBody:
-    "Use your device password or recovery code to continue this protected action.",
-  verifyPasswordPlaceholder: "Device password",
-  verifyRecoveryPlaceholder: "Recovery code (optional)",
-  verifyActionConfirm: "Verify and continue",
-  verifyActionCancel: "Cancel",
-  verifyActionFailed: "Verification failed. Please check and try again.",
   verifyModalTitle: "Confirm with device verification",
   verifyModalBody:
     "Use your device password or recovery code to continue this protected action.",
@@ -84,7 +80,7 @@ const EN = {
   signingIn: "Linking Apple sign-in...",
   signInDone: "Apple backup account linked.",
   signInFailed: "Could not complete Apple sign-in.",
-  confirmBackup: "Run cloud backup now? This uploads your encrypted local snapshot.",
+  confirmBackup: "Run cloud backup now? This may upload a snapshot of your local data where that feature is available.",
   backingUp: "Running cloud backup...",
   backupDone: "Cloud backup completed.",
   backupFailed: "Cloud backup failed.",
@@ -118,6 +114,21 @@ const EN = {
     "End this temporary session now? This will sign out and wipe local memories, cache, and tokens from this phone.",
   temporaryExitDone: "Temporary session ended. Local data has been wiped.",
   temporaryExitFailed: "Could not complete secure wipe. Please retry.",
+  accountSectionTitle: "Account",
+  accountLocalLine: "Memories stay on this device unless you enable optional cloud backup.",
+  accountCloudSignedIn: "Signed in for optional cloud backup.",
+  accountCloudOff: "Not signed in for cloud backup.",
+  subscriptionSectionTitle: "Subscription",
+  subscriptionBody:
+    "Manage Haven Plus or your trial from your device’s subscription settings when billing is available.",
+  subscriptionManageCta: "Manage subscription",
+  ringsSectionTitle: "Rings",
+  ringsBody: "See linked rings, bind a new one, or revoke access if a ring is lost.",
+  ringsManageCta: "Manage rings",
+  dataPrivacySectionTitle: "Data & privacy",
+  legalSectionTitle: "Legal",
+  termsLink: "Terms of Service",
+  privacyContactLabel: "Privacy contact",
 };
 
 export const SETTINGS_CONTENT = {

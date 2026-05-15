@@ -15,7 +15,7 @@ type PrivacyPolicyContent = {
 
 const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
   title: "Privacy Policy",
-  lastUpdated: "Last updated: May 7, 2026",
+  lastUpdated: "Last updated: May 14, 2026",
   intro:
     "At Haven, we believe your memories are deeply personal and should remain under your control. We are committed to maximum transparency and minimal data collection.",
   sections: [
@@ -31,15 +31,18 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
       heading: "2. Data Storage",
       bullets: [
         "Default: All your memories are stored locally on your device (PWA IndexedDB).",
-        "Cloud Storage (optional, Plus users only): You may choose to enable encrypted cloud sync for backup and multi-device access. All cloud data is end-to-end encrypted — we cannot access the content.",
-        "Free users have limited local storage (2 GB). Plus users receive 50 GB cloud storage.",
+        "Cloud Storage (Haven Plus only): Optional end-to-end encrypted cloud backup and sync (when available).",
+        "Currently, all memories are stored locally on your device by default.",
+        "We are working on full E2EE cloud sync. Until then, cloud features are limited or in beta.",
+        "We cannot access your memory content where encryption is applied.",
+        "Free users have limited local storage (2 GB). Plus users receive 50 GB cloud storage where that tier is offered.",
       ],
     },
     {
       heading: "3. Data Retention",
       bullets: [
-        "Sealed memories are kept as long as you want them.",
-        "When you delete your account, all data (local and cloud) will be permanently deleted within 30 days.",
+        "Sealed memories are kept as long as you want them on your devices.",
+        "When you delete your account, local and cloud data are typically removed within 30 days.",
       ],
     },
     {
@@ -54,7 +57,7 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
     {
       heading: "5. Important Disclaimer",
       body:
-        "We make best efforts to protect your data, but we cannot guarantee 100% availability due to technical, legal, or unforeseen circumstances. We strongly recommend maintaining your own local backups. We are not liable for data loss caused by device failure, user error, or other factors outside our direct control.",
+        "We make best efforts to protect your data, but no cloud or device service can promise perfect availability. We strongly recommend maintaining your own local backups. We are not liable for data loss caused by device failure, user error, or other factors outside our direct control.",
     },
     {
       heading: "6. Children",

@@ -17,7 +17,7 @@ const keyPoints = [
   "1. The dynamic NFC ring is the ceremony key for memories that matter.",
   "2. Face ID protects the account and remains the secure fallback.",
   "3. Sealing a sacred memory requires a trusted physical ring touch.",
-  "4. High-risk actions always require secondary verification.",
+  "4. High-risk actions typically require secondary verification.",
   "5. Sealed memories are encrypted, final, and intentionally quiet.",
 ];
 

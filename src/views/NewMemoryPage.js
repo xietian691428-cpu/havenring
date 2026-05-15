@@ -16,6 +16,8 @@ import {
 } from "../features/seal";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
+import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
+import { getNewMemoryPageCopy } from "../content/havenCopy";
 
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
@@ -23,6 +25,8 @@ const MAX_FILE_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
+const STORY_SOFT_MAX = 8000;
+const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
 
 function isVideoMime(mime) {
   return String(mime || "")
@@ -40,6 +44,85 @@ function clearDraftSnapshot() {
 }
 
 /**
+ * Locale-aware copy for New Memory; English strings come from `havenCopy`.
+ * @param {string} locale
+ * @param {"ios"|"android"|"other"} platform
+ * @param {Record<string, string>} t
+ */
+function buildNewMemoryPageCopy(locale, platform, t) {
+  const en = getNewMemoryPageCopy(platform);
+  if (locale === "en") return en;
+  return {
+    ...en,
+    topBarTitle: t.navComposerTitle,
+    topBarSealing: t.topBarSealing,
+    heroTitle: t.heroSealTitle,
+    heroSubtitle:
+      platform === "ios"
+        ? t.heroSealSubtitleIos
+        : platform === "android"
+          ? t.heroSealSubtitleAndroid
+          : t.heroSealSubtitleOther,
+    sealPrimaryCta: t.sealPrimaryShort,
+    sealPrimaryCtaReady: t.sealPrimaryCtaReady,
+    sealPrimaryCtaWaiting: t.sealPrimaryCtaWaiting,
+    sealPrimaryHint:
+      platform === "ios"
+        ? t.sealPrimaryHintIos
+        : platform === "android"
+          ? t.sealPrimaryHintAndroid
+          : t.sealPrimaryHintOther,
+    saveSecureLink:
+      platform === "ios"
+        ? t.saveSecureLinkIos
+        : platform === "android"
+          ? t.saveSecureLinkAndroid
+          : t.saveSecureLinkOther,
+    footerNeedDraft: t.footerNeedDraft,
+    footerSealInvite: t.footerSealInvite,
+    footerReadySeal:
+      platform === "ios"
+        ? t.footerReadySealIos
+        : platform === "android"
+          ? t.footerReadySealAndroid
+          : t.footerReadySeal,
+    footerWaitingRing:
+      platform === "ios"
+        ? t.footerWaitingRingIos
+        : platform === "android"
+          ? t.footerWaitingRingAndroid
+          : t.footerWaitingRing,
+    footerOfflineSeal: t.footerOfflineSeal,
+    cancelSealFlow: t.cancelSealFlow,
+    sealWaitingBannerTitle: t.sealWaitingBannerTitle,
+    sealWaitingBannerBody:
+      platform === "ios"
+        ? t.sealWaitingBannerBodyIos
+        : platform === "android"
+          ? t.sealWaitingBannerBodyAndroid
+          : t.sealWaitingBannerBodyOther,
+    secureSaveMessage: t.secureSaveToast,
+    sealAfterSecureSaveCta: t.sealAfterSecureSaveCta,
+    securityDeleteNote:
+      platform === "ios"
+        ? t.securityDeleteNoteIos
+        : platform === "android"
+          ? t.securityDeleteNoteAndroid
+          : t.securityDeleteNoteOther,
+    storyRequiredHint: t.storyRequiredHint,
+    sealCountdownPrefix: t.sealCountdownPrefix,
+    upgradeShort: en.upgradeShort,
+    upgradeCta: en.upgradeCta,
+    upgradeModalTitle: en.upgradeModalTitle,
+    upgradeModalBody: en.upgradeModalBody,
+    upgradeModalCloudDisclaimer: en.upgradeModalCloudDisclaimer,
+    upgradeModalDismiss: en.upgradeModalDismiss,
+    upgradeModalSubscribe: en.upgradeModalSubscribe,
+    upgradeModalPricingHint: en.upgradeModalPricingHint,
+  };
+}
+
+/**
  * New Memory Page
  * - Title
  * - Multi-photo upload with compression
@@ -52,11 +135,17 @@ export function NewMemoryPage({
   onSaved,
   onSaveMemory,
   onOpenHelp,
+  onOpenSettings,
   locale = "en",
   userEntitlements = getFreeEntitlements(),
+  initialEditMemory = null,
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
   const platform = useMemo(() => resolvePlatformTarget(), []);
+  const pageCopy = useMemo(
+    () => buildNewMemoryPageCopy(locale, platform, t),
+    [locale, platform, t]
+  );
   const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
@@ -87,11 +176,17 @@ export function NewMemoryPage({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState("");
   const [ringTapError, setRingTapError] = useState("");
+  const [secureSaveToast, setSecureSaveToast] = useState(false);
   const [isFirstMemoryMode, setIsFirstMemoryMode] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(
     () => typeof navigator !== "undefined" && navigator.onLine
   );
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const sealArmHadTimeRef = useRef(false);
+  const { remainingMs: sealRemainingMs, remainingLabel: sealRemainingLabel } =
+    useSealArmCountdown(sealPromptOpen);
 
+  const storyTextareaRef = useRef(null);
   const photoInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -102,6 +197,24 @@ export function NewMemoryPage({
   }, [attachments]);
 
   useEffect(() => {
+    // Hydrate composer once per memory id.
+    const m = initialEditMemory;
+    if (!m?.id) return undefined;
+    queueMicrotask(() => {
+      setTitle(String(m.title || ""));
+      setStory(String(m.story || ""));
+      const ra = Number(m.releaseAt || 0) || 0;
+      setReleaseAtInput(ra ? new Date(ra).toISOString().slice(0, 16) : "");
+      const ph = Array.isArray(m.photo) ? m.photo : m.photo ? [m.photo] : [];
+      setPhotos(ph);
+      setAttachments(Array.isArray(m.attachments) ? m.attachments : []);
+      setEditingDraftId(String(m.id));
+      setFeedback("");
+    });
+    return undefined;
+  }, [initialEditMemory, initialEditMemory?.id]);
+
+  useEffect(() => {
     return () => {
       attachmentsRef.current.forEach((item) => {
         if (item?.previewUrl) {
@@ -109,6 +222,13 @@ export function NewMemoryPage({
         }
       });
     };
+  }, []);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      storyTextareaRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
   }, []);
 
   const hasDraftContent = Boolean(
@@ -137,6 +257,47 @@ export function NewMemoryPage({
   }, [sealPromptOpen]);
 
   useEffect(() => {
+    if (!secureSaveToast) return undefined;
+    const timer = window.setTimeout(() => setSecureSaveToast(false), 7000);
+    return () => window.clearTimeout(timer);
+  }, [secureSaveToast]);
+
+  useEffect(() => {
+    if (sealPromptOpen && sealRemainingMs > 0) {
+      sealArmHadTimeRef.current = true;
+    }
+    if (!sealPromptOpen) {
+      sealArmHadTimeRef.current = false;
+      return undefined;
+    }
+    if (sealRemainingMs > 0) return undefined;
+    if (!sealArmHadTimeRef.current) return undefined;
+    sealArmHadTimeRef.current = false;
+    clearSealPrepState();
+    setSealPromptOpen(false);
+    setFeedbackNotice(t.sealArmExpired);
+    return undefined;
+  }, [sealPromptOpen, sealRemainingMs, t.sealArmExpired]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const id = "haven-nfc-pulse-keyframes";
+    if (document.getElementById(id)) return undefined;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `
+@keyframes havenNfcPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 166, 122, 0.45), 0 10px 28px rgba(0,0,0,0.35); }
+  50% { box-shadow: 0 0 0 10px rgba(217, 166, 122, 0), 0 12px 32px rgba(0,0,0,0.4); }
+}
+@keyframes havenSealBtnSpin {
+  to { transform: rotate(360deg); }
+}`;
+    document.head.appendChild(el);
+    return undefined;
+  }, []);
+
+  useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
     const timer = window.setTimeout(() => {
       setIsFirstMemoryMode(!firstDone);
@@ -145,6 +306,7 @@ export function NewMemoryPage({
   }, []);
 
   useEffect(() => {
+    if (initialEditMemory?.id) return;
     try {
       const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!raw) return;
@@ -165,7 +327,7 @@ export function NewMemoryPage({
     } catch {
       // Ignore malformed draft snapshots.
     }
-  }, [t.feedbackDraftRestored]);
+  }, [t.feedbackDraftRestored, initialEditMemory?.id]);
 
   useEffect(() => {
     if (!hasDraftContent) {
@@ -331,7 +493,7 @@ export function NewMemoryPage({
   }
 
   async function handleSave(options = {}) {
-    const { openSealPromptOnSuccess = false, showDialogOnSuccess = true } = options;
+    const { openSealPromptOnSuccess = false } = options;
     if (
       !title.trim() &&
       !story.trim() &&
@@ -344,7 +506,8 @@ export function NewMemoryPage({
 
     setSaving(true);
     setFeedback(t.feedbackSavingLocal);
-    setSaveDialog({ open: true, status: "saving", errorMessage: "" });
+    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSecureSaveToast(false);
     try {
       const draftAttachments = await prepareAttachmentsForSave(attachments, t);
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
@@ -371,22 +534,23 @@ export function NewMemoryPage({
       }
       if (openSealPromptOnSuccess) {
         primeSealPrepAfterDraftPersisted(savedDraft.id);
-      }
-      setFeedback(
-        openSealPromptOnSuccess
-          ? t.feedbackSaved
-          : typeof onSaveMemory === "function"
-            ? t.feedbackSavedTimeline
-            : t.feedbackSaved
-      );
-      setSaveDialog(
-        showDialogOnSuccess
-          ? { open: true, status: "success", errorMessage: "" }
-          : { open: false, status: "saving", errorMessage: "" }
-      );
-      if (openSealPromptOnSuccess) {
         setSealPromptOpen(true);
         setFeedbackNotice(t.feedbackReadyToSeal);
+      } else if (typeof onSaveMemory === "function") {
+        setFeedback("");
+        setSecureSaveToast(true);
+        if (!canSealWithRing && typeof window !== "undefined") {
+          try {
+            if (!window.localStorage.getItem(SECURE_SAVE_UPSELL_KEY)) {
+              window.localStorage.setItem(SECURE_SAVE_UPSELL_KEY, "1");
+              window.setTimeout(() => setUpgradeModalOpen(true), 900);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      } else {
+        setFeedback(t.feedbackSaved);
       }
       // Keep the compose snapshot only for explicit draft saves.
       // Seal flow now requires a verified ring event before formal persistence.
@@ -422,6 +586,8 @@ export function NewMemoryPage({
   function handleCreateAnother() {
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSealPromptOpen(false);
+    setSecureSaveToast(false);
+    setUpgradeModalOpen(false);
     setTitle("");
     setStory("");
     setReleaseAtInput("");
@@ -436,7 +602,7 @@ export function NewMemoryPage({
 
   function handleOpenSealPrompt() {
     if (!canSealWithRing) {
-      setFeedbackNotice(t.upgradeSealWithRing);
+      setUpgradeModalOpen(true);
       return;
     }
     const draftId = String(editingDraftId || "").trim();
@@ -445,23 +611,45 @@ export function NewMemoryPage({
       return;
     }
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
-    setSealPromptOpen(true);
     setRingTapError("");
     primeSealPrepAfterDraftPersisted(draftId);
+    setSealPromptOpen(true);
     setFeedbackNotice(t.feedbackReadyToSeal);
   }
 
   async function handleSealNow() {
     if (!canSealWithRing) {
       setSealPromptOpen(false);
-      setFeedbackNotice(t.upgradeSealWithRing);
+      setUpgradeModalOpen(true);
       return;
     }
-    await handleSave({ openSealPromptOnSuccess: true, showDialogOnSuccess: false });
+    await handleSave({ openSealPromptOnSuccess: true });
   }
 
   async function handleSaveSecurelyFallback() {
     await handleSave({ openSealPromptOnSuccess: false });
+  }
+
+  function handleCancelSeal() {
+    clearSealPrepState();
+    setSealPromptOpen(false);
+    setRingTapError("");
+    setFeedback("");
+  }
+
+  function handleHeroPrimaryClick() {
+    if (saving || sealPromptOpen) return;
+    if (!canSealWithRing) {
+      setUpgradeModalOpen(true);
+      return;
+    }
+    void handleSealNow();
+  }
+
+  function sealPrimaryLabel() {
+    if (sealPromptOpen) return pageCopy.sealPrimaryCtaWaiting;
+    if (editingDraftId) return pageCopy.sealPrimaryCtaReady;
+    return pageCopy.sealPrimaryCta;
   }
 
   function removeAttachmentById(id) {
@@ -478,13 +666,34 @@ export function NewMemoryPage({
     setPhotos((prev) => prev.filter((p) => p.id !== id));
   }
 
+  function footerStatusLine() {
+    if (saving) return t.footerSaving;
+    if (sealPromptOpen) {
+      return networkOnline ? pageCopy.footerWaitingRing : pageCopy.footerOfflineSeal;
+    }
+    if (secureSaveToast) {
+      return canSealWithRing
+        ? pageCopy.footerReadySeal
+        : `${pageCopy.upgradeShort} ${pageCopy.upgradeCta}`;
+    }
+    if (!canSealWithRing) {
+      if (hasDraftContent) return `${pageCopy.upgradeShort} ${pageCopy.upgradeCta}`;
+      return "\u00a0";
+    }
+    if (editingDraftId) return pageCopy.footerReadySeal;
+    if (hasDraftContent) return pageCopy.footerSealInvite;
+    return "\u00a0";
+  }
+
   return (
     <main style={styles.page}>
       <header style={styles.topBar}>
         <button type="button" onClick={onBack} style={styles.topBarBtn}>
           ← {t.back}
         </button>
-        <h1 style={styles.topBarTitle}>{t.title}</h1>
+        <h1 style={styles.topBarTitle}>
+          {sealPromptOpen ? pageCopy.topBarSealing : pageCopy.topBarTitle}
+        </h1>
         <button
           type="button"
           onClick={() => onOpenHelp?.()}
@@ -496,230 +705,337 @@ export function NewMemoryPage({
       </header>
 
       <div style={styles.scrollBody}>
-        <label style={styles.srOnly} htmlFor="haven-memory-story">
-          {t.storyLabel}
-        </label>
-        <textarea
-          id="haven-memory-story"
-          value={story}
-          onChange={(e) => setStory(e.target.value)}
-          rows={10}
-          placeholder={t.storyPlaceholder}
-          style={styles.textareaHero}
-        />
-
-        <p style={styles.feedbackInline}>{feedback || "\u00A0"}</p>
-
-        <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
-          <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
-
-          <div style={styles.mediaRow}>
-            <button
-              type="button"
-              onClick={() => photoInputRef.current?.click()}
-              style={styles.mediaBtn}
-            >
-              📸 {t.addPhotosCta}
-            </button>
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              style={styles.mediaBtn}
-            >
-              🎥 {t.addVideoCta}
-            </button>
-            <button
-              type="button"
-              onClick={() => attachmentInputRef.current?.click()}
-              style={styles.mediaBtn}
-            >
-              📎 {t.addFilesCta}
-            </button>
-          </div>
-
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handlePhotosSelected}
-            style={styles.hiddenFileInput}
-          />
-          <input
-            ref={attachmentInputRef}
-            type="file"
-            accept="audio/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z,application/pdf"
-            multiple
-            onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: false })}
-            style={styles.hiddenFileInput}
-          />
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/*"
-            multiple
-            onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: true })}
-            style={styles.hiddenFileInput}
-          />
-
-          {photos.length > 0 ? (
-            <>
-              <p style={styles.mediaSubLabel}>
-                {t.photosSectionHeading} · {photos.length}/{MAX_PHOTOS}
-              </p>
-              <div style={styles.photoGrid}>
-                {photos.map((photo) => (
-                  <div key={photo.id} style={styles.mediaThumbWrap}>
-                    <img src={photo.dataUrl} alt="" style={styles.photoThumb} />
-                    <button
-                      type="button"
-                      onClick={() => removePhotoById(photo.id)}
-                      style={styles.mediaRemoveOverlay}
-                      aria-label={t.removePhotoAria}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
+        <section style={styles.heroSeal} aria-labelledby="haven-hero-seal-title">
+          <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
+            {pageCopy.heroTitle}
+          </h2>
+          <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
+          {sealPromptOpen ? (
+            <div style={styles.sealInlineBanner} role="status" aria-live="polite">
+              <p style={styles.sealInlineTitle}>{pageCopy.sealWaitingBannerTitle}</p>
+              <p style={styles.sealInlineBody}>{pageCopy.sealWaitingBannerBody}</p>
+              {sealPromptOpen && sealRemainingMs > 0 ? (
+                <p style={styles.sealInlineMeta}>
+                  {pageCopy.sealCountdownPrefix} <strong>{sealRemainingLabel}</strong>
+                </p>
+              ) : null}
+              {!networkOnline ? <p style={styles.hint}>{pageCopy.footerOfflineSeal}</p> : null}
+              {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
+              <button type="button" onClick={handleCancelSeal} style={styles.cancelSealBtn}>
+                {pageCopy.cancelSealFlow}
+              </button>
+            </div>
           ) : null}
+          {secureSaveToast ? (
+            <div style={styles.secureToastStack} role="status" aria-live="polite">
+              <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canSealWithRing) {
+                    setUpgradeModalOpen(true);
+                    return;
+                  }
+                  void handleSealNow();
+                }}
+                disabled={saving || sealPromptOpen}
+                style={styles.secureToastSealBtn}
+              >
+                {pageCopy.sealAfterSecureSaveCta}
+              </button>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleHeroPrimaryClick}
+            disabled={saving || sealPromptOpen}
+            aria-busy={saving || sealPromptOpen}
+            aria-label={`${sealPrimaryLabel()}. ${pageCopy.sealPrimaryHint}`}
+            style={{
+              ...styles.heroSealButton,
+              ...(sealPromptOpen
+                ? styles.heroSealButtonBusy
+                : canSealWithRing
+                  ? styles.heroSealButtonActive
+                  : {
+                      ...styles.heroSealButtonMuted,
+                      cursor: "pointer",
+                      opacity: 0.82,
+                    }),
+            }}
+          >
+            {sealPromptOpen ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
+            {sealPrimaryLabel()}
+          </button>
+          <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p>
+          {!canSealWithRing ? (
+            <p style={styles.heroUpgrade}>
+              {pageCopy.upgradeShort} {pageCopy.upgradeCta}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleSaveSecurelyFallback()}
+            disabled={saving}
+            style={styles.saveSecureLink}
+          >
+            {pageCopy.saveSecureLink}
+          </button>
+        </section>
 
-          {videoItems.length > 0 ? (
-            <>
-              <p style={styles.mediaSubLabel}>
-                {t.videosSectionHeading} · {videoItems.length}/{MAX_VIDEOS}
-              </p>
-              <div style={styles.photoGrid} role="group" aria-label={t.videoAttachmentsLabel}>
-                {videoItems.map((item) => {
-                  const src = item.previewUrl || item.dataUrl || "";
-                  return (
-                    <div key={item.id} style={styles.mediaThumbWrap}>
-                      {src ? (
-                        <video
-                          src={src}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          style={styles.mediaCellVideo}
-                        />
-                      ) : (
-                        <div style={styles.videoPlaceholderCompact}>{t.videoPreviewPending}</div>
-                      )}
+        <section style={styles.editorSection} aria-labelledby="haven-editor-heading">
+          <h3 id="haven-editor-heading" style={styles.editorHeading}>
+            {t.editorSectionTitle}
+          </h3>
+          <label style={styles.srOnly} htmlFor="haven-memory-story">
+            {t.storyLabel}
+          </label>
+          <p style={styles.storyRequiredNote}>{pageCopy.storyRequiredHint}</p>
+          <textarea
+            ref={storyTextareaRef}
+            id="haven-memory-story"
+            value={story}
+            onChange={(e) => setStory(e.target.value)}
+            rows={8}
+            placeholder={t.storyPlaceholder}
+            style={styles.textareaEditor}
+          />
+          <p style={styles.charCount}>
+            {t.storyCharCount.replace("{n}", String(story.length))}
+            {story.length > STORY_SOFT_MAX ? ` — ${t.storyCharSoftMaxWarn}` : ""}
+          </p>
+
+          <p style={styles.feedbackInline}>{feedback || "\u00a0"}</p>
+
+          <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
+            <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
+
+            <div style={styles.mediaRow}>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                style={styles.mediaBtn}
+              >
+                📸 {t.addPhotosCta}
+              </button>
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                style={styles.mediaBtn}
+              >
+                🎥 {t.addVideoCta}
+              </button>
+              <button
+                type="button"
+                onClick={() => attachmentInputRef.current?.click()}
+                style={styles.mediaBtn}
+              >
+                📎 {t.addFilesCta}
+              </button>
+            </div>
+
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotosSelected}
+              style={styles.hiddenFileInput}
+            />
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              accept="audio/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.rar,.7z,application/pdf"
+              multiple
+              onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: false })}
+              style={styles.hiddenFileInput}
+            />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={(e) => void handleAttachmentsSelected(e, { preferVideo: true })}
+              style={styles.hiddenFileInput}
+            />
+
+            {photos.length > 0 ? (
+              <>
+                <p style={styles.mediaSubLabel}>
+                  {t.photosSectionHeading} · {photos.length}/{MAX_PHOTOS}
+                </p>
+                <div style={styles.photoGrid}>
+                  {photos.map((photo) => (
+                    <div key={photo.id} style={styles.mediaThumbWrap}>
+                      <img src={photo.dataUrl} alt="" style={styles.photoThumb} />
                       <button
                         type="button"
-                        onClick={() => removeAttachmentById(item.id)}
+                        onClick={() => removePhotoById(photo.id)}
                         style={styles.mediaRemoveOverlay}
-                        aria-label={t.removeVideoAria}
+                        aria-label={t.removePhotoAria}
                       >
                         ×
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-            </>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            {videoItems.length > 0 ? (
+              <>
+                <p style={styles.mediaSubLabel}>
+                  {t.videosSectionHeading} · {videoItems.length}/{MAX_VIDEOS}
+                </p>
+                <div style={styles.photoGrid} role="group" aria-label={t.videoAttachmentsLabel}>
+                  {videoItems.map((item) => {
+                    const src = item.previewUrl || item.dataUrl || "";
+                    return (
+                      <div key={item.id} style={styles.mediaThumbWrap}>
+                        {src ? (
+                          <video
+                            src={src}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            style={styles.mediaCellVideo}
+                          />
+                        ) : (
+                          <div style={styles.videoPlaceholderCompact}>{t.videoPreviewPending}</div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeAttachmentById(item.id)}
+                          style={styles.mediaRemoveOverlay}
+                          aria-label={t.removeVideoAria}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+
+            {fileItems.length > 0 ? (
+              <>
+                <p style={styles.mediaSubLabel}>
+                  {t.filesSectionHeading} · {fileItems.length}/{MAX_FILE_ATTACHMENTS}
+                </p>
+                <ul style={styles.attachmentList}>
+                  {fileItems.map((item) => (
+                    <li key={item.id} style={styles.attachmentItem}>
+                      <span style={styles.attachmentName}>
+                        {item.name}
+                        <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachmentById(item.id)}
+                        style={styles.clearButton}
+                      >
+                        {t.removeAttachment}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </section>
+
+          <button type="button" onClick={() => setDetailsOpen((v) => !v)} style={styles.optionalToggle}>
+            {detailsOpen ? t.optionalDetailsHide : t.optionalDetailsToggle}
+          </button>
+          {detailsOpen ? (
+            <div style={styles.optionalBlock}>
+              <label style={styles.label}>
+                {t.titleLabel}
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={t.titlePlaceholder}
+                  style={styles.input}
+                />
+              </label>
+              <label style={styles.label}>
+                {t.timeCapsuleLabel}
+                <input
+                  type="datetime-local"
+                  value={releaseAtInput}
+                  onChange={(e) => setReleaseAtInput(e.target.value)}
+                  style={styles.input}
+                />
+              </label>
+            </div>
           ) : null}
 
-          {fileItems.length > 0 ? (
-            <>
-              <p style={styles.mediaSubLabel}>
-                {t.filesSectionHeading} · {fileItems.length}/{MAX_FILE_ATTACHMENTS}
-              </p>
-              <ul style={styles.attachmentList}>
-                {fileItems.map((item) => (
-                  <li key={item.id} style={styles.attachmentItem}>
-                    <span style={styles.attachmentName}>
-                      {item.name}
-                      <span style={styles.attachmentSize}> ({formatAttachmentSize(item.size)})</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachmentById(item.id)}
-                      style={styles.clearButton}
-                    >
-                      {t.removeAttachment}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
+          {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
+          {platform === "android" ? <p style={styles.iosHint}>{t.androidComposeHint}</p> : null}
         </section>
-
-        <button type="button" onClick={() => setDetailsOpen((v) => !v)} style={styles.optionalToggle}>
-          {detailsOpen ? t.optionalDetailsHide : t.optionalDetailsToggle}
-        </button>
-        {detailsOpen ? (
-          <div style={styles.optionalBlock}>
-            <label style={styles.label}>
-              {t.titleLabel}
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t.titlePlaceholder}
-                style={styles.input}
-              />
-            </label>
-            <label style={styles.label}>
-              {t.timeCapsuleLabel}
-              <input
-                type="datetime-local"
-                value={releaseAtInput}
-                onChange={(e) => setReleaseAtInput(e.target.value)}
-                style={styles.input}
-              />
-            </label>
-          </div>
-        ) : null}
-
-        <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
-        {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
-        {platform === "android" ? <p style={styles.iosHint}>{t.androidComposeHint}</p> : null}
       </div>
 
-      <footer style={styles.fixedFooter}>
-        {sealPromptOpen ? (
-          <section style={styles.sealPromptCompact}>
-            <p style={styles.sealPromptTitle}>{t.sealPromptTitle}</p>
-            <div style={styles.statusBanner} role="status" aria-live="polite">
-              <p style={styles.sealPromptBody}>{t.sealStatusWaiting}</p>
-            </div>
-            {!networkOnline ? <p style={styles.hint}>{t.sealNeedsNetworkHint}</p> : null}
-            {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-          </section>
+      <footer style={styles.statusFooter}>
+        <p style={styles.statusFooterText} role="status" aria-live="polite">
+          {footerStatusLine()}
+        </p>
+        {!sealPromptOpen && !saving ? (
+          <p style={styles.footerSecurityNote}>{pageCopy.securityDeleteNote}</p>
         ) : null}
-        <button
-          type="button"
-          onClick={() => void handleSealNow()}
-          disabled={saving}
-          style={{
-            ...styles.footerPrimary,
-            ...(canSealWithRing ? {} : styles.footerPrimaryMuted),
-          }}
-        >
-          {t.sealNow}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSaveSecurelyFallback()}
-          disabled={saving}
-          style={styles.footerSecondary}
-        >
-          {t.sealSecureQuickAction || t.sealFallbackAction}
-        </button>
       </footer>
 
-      <SaveToHavenDialog
-        locale={locale}
-        open={saveDialog.open}
-        status={saveDialog.status}
-        errorMessage={saveDialog.errorMessage}
-        onSealNow={
-          canSealWithRing ? handleOpenSealPrompt : () => setFeedbackNotice(t.upgradeSealWithRing)
-        }
-        onCreateAnother={handleCreateAnother}
-      />
+      {upgradeModalOpen ? (
+        <div
+          style={styles.upgradeModalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="haven-upgrade-seal-title"
+          onClick={() => setUpgradeModalOpen(false)}
+        >
+          <section
+            style={styles.upgradeModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="haven-upgrade-seal-title" style={styles.upgradeModalTitle}>
+              {pageCopy.upgradeModalTitle}
+            </h2>
+            <p style={styles.upgradeModalBody}>{pageCopy.upgradeModalBody}</p>
+            <p style={styles.upgradeModalCloud}>{pageCopy.upgradeModalCloudDisclaimer}</p>
+            <p style={styles.upgradeModalPricing}>{pageCopy.upgradeModalPricingHint}</p>
+            <div style={styles.upgradeModalActions}>
+              <button
+                type="button"
+                onClick={() => {
+                  setUpgradeModalOpen(false);
+                  onOpenSettings?.();
+                }}
+                style={styles.upgradeModalSubscribe}
+              >
+                {pageCopy.upgradeModalSubscribe}
+              </button>
+              <button
+                type="button"
+                onClick={() => setUpgradeModalOpen(false)}
+                style={styles.upgradeModalDismiss}
+              >
+                {pageCopy.upgradeModalDismiss}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {saveDialog.open && saveDialog.status === "error" ? (
+        <SaveToHavenDialog
+          locale={locale}
+          open
+          status="error"
+          errorMessage={saveDialog.errorMessage}
+          onSealNow={canSealWithRing ? handleOpenSealPrompt : () => setUpgradeModalOpen(true)}
+          onCreateAnother={handleCreateAnother}
+        />
+      ) : null}
     </main>
   );
 }
@@ -833,7 +1149,9 @@ const styles = {
     gridTemplateColumns: "minmax(0,1fr) minmax(0,2.4fr) minmax(0,1fr)",
     alignItems: "center",
     gap: 6,
-    padding: "10px 12px 12px",
+    minHeight: 44,
+    boxSizing: "border-box",
+    padding: "6px 12px 8px",
     borderBottom: "1px solid rgba(55, 44, 38, 0.85)",
     flexShrink: 0,
     background: "rgba(18, 14, 12, 0.92)",
@@ -857,10 +1175,209 @@ const styles = {
     textAlign: "center",
     color: "#faf6f1",
   },
+  heroSeal: {
+    display: "grid",
+    gap: 12,
+    padding: "18px 16px 20px",
+    borderRadius: 18,
+    border: "1px solid rgba(90, 72, 62, 0.55)",
+    background: "linear-gradient(165deg, rgba(48, 36, 30, 0.55), rgba(18, 14, 12, 0.92))",
+    textAlign: "center",
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: 26,
+    fontWeight: 700,
+    letterSpacing: "-0.03em",
+    lineHeight: 1.15,
+    color: "#faf6f1",
+  },
+  heroSubtitle: {
+    margin: 0,
+    fontSize: 14,
+    lineHeight: 1.5,
+    color: "rgba(232, 216, 206, 0.88)",
+    maxWidth: 420,
+    justifySelf: "center",
+  },
+  sealInlineBanner: {
+    display: "grid",
+    gap: 6,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(217, 166, 122, 0.4)",
+    background: "rgba(40, 30, 24, 0.65)",
+    textAlign: "left",
+  },
+  sealInlineTitle: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 650,
+    color: "#faf6f1",
+  },
+  sealInlineBody: {
+    margin: 0,
+    fontSize: 13,
+    color: "#d9c9bf",
+    lineHeight: 1.45,
+  },
+  sealInlineMeta: {
+    margin: 0,
+    fontSize: 12,
+    color: "rgba(210, 200, 192, 0.92)",
+  },
+  cancelSealBtn: {
+    marginTop: 4,
+    alignSelf: "start",
+    border: "1px solid rgba(120, 100, 90, 0.75)",
+    background: "rgba(28, 22, 18, 0.5)",
+    color: "#e8d8ce",
+    borderRadius: 10,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 600,
+    WebkitTapHighlightColor: "transparent",
+  },
+  secureToastBanner: {
+    margin: 0,
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "rgba(96, 140, 110, 0.22)",
+    border: "1px solid rgba(140, 190, 150, 0.35)",
+    color: "#d8eedc",
+    fontSize: 14,
+    lineHeight: 1.45,
+    textAlign: "center",
+  },
+  secureToastStack: {
+    display: "grid",
+    gap: 10,
+    justifyItems: "center",
+    width: "100%",
+  },
+  secureToastSealBtn: {
+    border: "1px solid rgba(140, 190, 150, 0.55)",
+    background: "rgba(40, 56, 44, 0.65)",
+    color: "#eaf6ec",
+    borderRadius: 12,
+    padding: "10px 18px",
+    fontSize: 14,
+    fontWeight: 650,
+    cursor: "pointer",
+    WebkitTapHighlightColor: "transparent",
+  },
+  heroSealButton: {
+    width: "100%",
+    maxWidth: 400,
+    justifySelf: "center",
+    borderRadius: 18,
+    minHeight: 56,
+    padding: "16px 20px",
+    fontWeight: 800,
+    fontSize: 18,
+    lineHeight: 1.2,
+    cursor: "pointer",
+    border: "1px solid rgba(90, 72, 62, 0.95)",
+    WebkitTapHighlightColor: "transparent",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroSealButtonActive: {
+    background: "linear-gradient(180deg, #e8b892, #c7976a)",
+    color: "#1a1411",
+    animation: "havenNfcPulse 2.2s ease-in-out infinite",
+  },
+  heroSealButtonMuted: {
+    background: "rgba(40, 34, 30, 0.95)",
+    color: "rgba(232, 216, 206, 0.55)",
+    cursor: "not-allowed",
+  },
+  heroSealButtonBusy: {
+    background: "rgba(52, 42, 36, 0.96)",
+    color: "rgba(248, 239, 231, 0.92)",
+    cursor: "wait",
+  },
+  heroSealSpinner: {
+    display: "inline-block",
+    width: 18,
+    height: 18,
+    marginRight: 10,
+    flexShrink: 0,
+    borderRadius: "50%",
+    border: "2px solid rgba(248, 239, 231, 0.25)",
+    borderTopColor: "rgba(248, 239, 231, 0.95)",
+    animation: "havenSealBtnSpin 650ms linear infinite",
+  },
+  heroSealHint: {
+    margin: 0,
+    fontSize: 13,
+    color: "rgba(210, 196, 186, 0.75)",
+  },
+  heroUpgrade: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(224, 206, 194, 0.78)",
+  },
+  saveSecureLink: {
+    margin: "4px auto 0",
+    border: "none",
+    background: "transparent",
+    color: "rgba(200, 188, 178, 0.82)",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    textDecoration: "underline",
+    textUnderlineOffset: 3,
+    WebkitTapHighlightColor: "transparent",
+  },
+  editorSection: {
+    display: "grid",
+    gap: 12,
+    paddingTop: 8,
+  },
+  editorHeading: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 650,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    color: "rgba(224, 206, 194, 0.65)",
+  },
+  storyRequiredNote: {
+    margin: "-2px 0 6px",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(200, 188, 178, 0.72)",
+    textAlign: "left",
+  },
+  textareaEditor: {
+    width: "100%",
+    minHeight: 160,
+    boxSizing: "border-box",
+    border: "1px solid rgba(72, 58, 50, 0.95)",
+    borderRadius: 16,
+    background: "rgba(22, 18, 16, 0.92)",
+    color: "#f8efe7",
+    padding: "14px 14px",
+    fontSize: 16,
+    lineHeight: 1.55,
+    resize: "vertical",
+    outline: "none",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+  },
+  charCount: {
+    margin: 0,
+    fontSize: 12,
+    color: "rgba(200, 188, 178, 0.65)",
+    textAlign: "right",
+  },
   scrollBody: {
     flex: 1,
     overflowY: "auto",
-    padding: "16px 16px 168px",
+    padding: "16px 16px 96px",
     display: "flex",
     flexDirection: "column",
     gap: 14,
@@ -879,21 +1396,6 @@ const styles = {
     clip: "rect(0,0,0,0)",
     whiteSpace: "nowrap",
     border: 0,
-  },
-  textareaHero: {
-    width: "100%",
-    minHeight: 200,
-    boxSizing: "border-box",
-    border: "1px solid rgba(72, 58, 50, 0.95)",
-    borderRadius: 16,
-    background: "rgba(22, 18, 16, 0.92)",
-    color: "#f8efe7",
-    padding: "16px 16px",
-    fontSize: 17,
-    lineHeight: 1.55,
-    resize: "vertical",
-    outline: "none",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   },
   feedbackInline: {
     margin: 0,
@@ -1075,49 +1577,6 @@ const styles = {
     lineHeight: 1.45,
     color: "rgba(200, 188, 178, 0.65)",
   },
-  fixedFooter: {
-    position: "fixed",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 30,
-    padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
-    display: "grid",
-    gap: 10,
-    maxWidth: 720,
-    margin: "0 auto",
-    width: "100%",
-    boxSizing: "border-box",
-    borderTop: "1px solid rgba(55, 44, 38, 0.9)",
-    background: "linear-gradient(180deg, rgba(22, 18, 16, 0.72), rgba(14, 12, 11, 0.96))",
-    backdropFilter: "blur(10px)",
-  },
-  sealPromptCompact: {
-    display: "grid",
-    gap: 8,
-    padding: "10px 12px",
-    borderRadius: 14,
-    border: "1px solid rgba(217, 166, 122, 0.35)",
-    background: "rgba(40, 30, 24, 0.55)",
-  },
-  sealPromptTitle: {
-    margin: 0,
-    color: "#faf6f1",
-    fontSize: 14,
-    fontWeight: 600,
-  },
-  sealPromptBody: {
-    margin: 0,
-    color: "#d9c9bf",
-    lineHeight: 1.45,
-    fontSize: 13,
-  },
-  statusBanner: {
-    border: "1px solid rgba(217, 166, 122, 0.28)",
-    borderRadius: 10,
-    padding: "8px 10px",
-    background: "rgba(217, 166, 122, 0.08)",
-  },
   hint: {
     margin: 0,
     color: "rgba(210, 196, 186, 0.75)",
@@ -1128,29 +1587,110 @@ const styles = {
     color: "#ffb8a3",
     fontSize: 12,
   },
-  footerPrimary: {
-    border: "1px solid #c99a6e",
-    background: "linear-gradient(180deg, #e2b189, #c7976a)",
-    color: "#1a1411",
-    borderRadius: 16,
-    padding: "16px 18px",
-    fontWeight: 750,
-    fontSize: 16,
-    lineHeight: 1.25,
-    cursor: "pointer",
-    boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
+  statusFooter: {
+    position: "fixed",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
+    display: "grid",
+    gap: 4,
+    padding: "10px 16px calc(10px + env(safe-area-inset-bottom, 0px))",
+    maxWidth: 720,
+    margin: "0 auto",
+    width: "100%",
+    boxSizing: "border-box",
+    borderTop: "1px solid rgba(55, 44, 38, 0.9)",
+    background: "linear-gradient(180deg, rgba(22, 18, 16, 0.88), rgba(14, 12, 11, 0.98))",
+    backdropFilter: "blur(10px)",
   },
-  footerPrimaryMuted: {
-    opacity: 0.55,
+  statusFooterText: {
+    margin: 0,
+    textAlign: "center",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "rgba(224, 206, 194, 0.88)",
   },
-  footerSecondary: {
-    border: "1px solid rgba(90, 72, 62, 0.95)",
-    background: "rgba(26, 22, 20, 0.9)",
-    color: "#e8d8ce",
-    borderRadius: 14,
-    padding: "12px 16px",
-    fontWeight: 600,
+  footerSecurityNote: {
+    margin: 0,
+    textAlign: "center",
+    fontSize: 11,
+    lineHeight: 1.4,
+    color: "rgba(190, 178, 168, 0.62)",
+  },
+  upgradeModalOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 45,
+    display: "grid",
+    placeItems: "center",
+    padding: 20,
+    background: "rgba(6, 5, 5, 0.55)",
+    backdropFilter: "blur(6px)",
+  },
+  upgradeModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 18,
+    border: "1px solid rgba(90, 72, 62, 0.85)",
+    background: "rgba(20, 16, 14, 0.98)",
+    padding: 20,
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 24px 60px rgba(0,0,0,0.4)",
+  },
+  upgradeModalTitle: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 650,
+    color: "#faf6f1",
+  },
+  upgradeModalBody: {
+    margin: "0 0 8px",
     fontSize: 14,
+    lineHeight: 1.55,
+    color: "rgba(224, 206, 194, 0.9)",
+  },
+  upgradeModalCloud: {
+    margin: "0 0 10px",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(190, 178, 168, 0.82)",
+  },
+  upgradeModalPricing: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(190, 178, 168, 0.75)",
+  },
+  upgradeModalActions: {
+    display: "grid",
+    gap: 10,
+    marginTop: 4,
+  },
+  upgradeModalSubscribe: {
+    borderRadius: 12,
+    border: "1px solid rgba(196, 149, 106, 0.85)",
+    background: "linear-gradient(180deg, #e8b892, #c7976a)",
+    color: "#1a1411",
+    padding: "12px 16px",
+    fontSize: 15,
+    fontWeight: 700,
     cursor: "pointer",
+    justifySelf: "stretch",
+    WebkitTapHighlightColor: "transparent",
+  },
+  upgradeModalDismiss: {
+    marginTop: 0,
+    borderRadius: 12,
+    border: "1px solid rgba(120, 100, 90, 0.75)",
+    background: "rgba(36, 28, 24, 0.85)",
+    color: "#f0e4dc",
+    padding: "10px 16px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    justifySelf: "stretch",
+    WebkitTapHighlightColor: "transparent",
   },
 };

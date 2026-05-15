@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const CONFIRM_PHRASE = "ERASE FOREVER";
+const CONFIRM_PHRASE = "WIPE THIS RING";
 
 interface Props {
   onCancel: () => void;
@@ -90,8 +90,8 @@ export function WipeDialog({ onCancel, onConfirm }: Props) {
               Wipe this ring
             </p>
             <p className="text-sm leading-relaxed text-white/50">
-              This permanently deletes every sealed moment on this ring and
-              unpairs the hardware. There is no undo and no backup.
+              This irreversibly removes every sealed moment tied to this ring and
+              unpairs the hardware. There is no undo and no backup from Haven for this wipe.
             </p>
             <p className="text-sm leading-relaxed text-white/50">
               Type{" "}

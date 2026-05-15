@@ -59,7 +59,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.cta.claiming": "Continuing...",
     "claim.error.auth_required": "Please sign in to continue.",
     "claim.error.auth_upgrade_required":
-      "This ring can only be claimed by a permanent account. Please sign in with your account and try again.",
+      "This ring can only be claimed with a full Haven account. Please sign in with your account and try again.",
     "claim.error.missing_token": "Missing ring token.",
     "claim.error.generic": "Could not continue right now. Please try again.",
     "claim.error.owned_by_another":

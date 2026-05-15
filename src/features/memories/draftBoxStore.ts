@@ -13,6 +13,20 @@ const DRAFT_PREFIX = "draft:";
 
 const store = createStore(DB_NAME, STORE_NAME);
 
+async function withDraftStoreRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let last: unknown;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      if (attempt === 2) break;
+      await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
+    }
+  }
+  throw last instanceof Error ? last : new Error(String(last));
+}
+
 export type DraftItem = {
   id: string;
   title: string;
@@ -41,7 +55,7 @@ export async function saveDraftItem(input: DraftUpsertInput = {}): Promise<Draft
     updatedAt: now,
     createdAt: Number(input?.createdAt || now),
   };
-  await set(`${DRAFT_PREFIX}${id}`, item, store);
+  await withDraftStoreRetry(() => set(`${DRAFT_PREFIX}${id}`, item, store));
   return item;
 }
 
@@ -60,7 +74,7 @@ export async function getDraftItem(id: string): Promise<DraftItem | null> {
 
 export async function removeDraftItem(id: string): Promise<void> {
   if (!id) return;
-  await del(`${DRAFT_PREFIX}${id}`, store);
+  await withDraftStoreRetry(() => del(`${DRAFT_PREFIX}${id}`, store));
 }
 
 /** Repository-style alias aligned with `memoryRepository`. */

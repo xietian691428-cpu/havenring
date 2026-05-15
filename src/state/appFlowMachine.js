@@ -1,3 +1,5 @@
+import { RING_SETUP_DISMISSED_KEY } from "../components/RingSetupWizard";
+
 const MAIN_STATES = {
   BOOTSTRAP: "BOOTSTRAP",
   AUTH_GATE: "AUTH_GATE",
@@ -8,6 +10,15 @@ const MAIN_STATES = {
   RECOVERY: "RECOVERY",
 };
 
+function isRingSetupDismissedInStorage() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function resolveMainState(ctx) {
   if (!ctx.bootstrapped) return MAIN_STATES.BOOTSTRAP;
   if (ctx.recoveryErrorType) return MAIN_STATES.RECOVERY;
@@ -15,6 +26,9 @@ function resolveMainState(ctx) {
   if (ctx.syncing) return MAIN_STATES.SYNC_GATE;
   if (ctx.platform === "ios" && !ctx.ftuxPwaDone && !ctx.pwaInstalled && !ctx.pwaDeferred) {
     return MAIN_STATES.PWA_INSTALL_GATE;
+  }
+  if (ctx.hasSession && !ctx.hasBoundRing && !isRingSetupDismissedInStorage()) {
+    return MAIN_STATES.RING_SETUP_GATE;
   }
   return MAIN_STATES.READY;
 }

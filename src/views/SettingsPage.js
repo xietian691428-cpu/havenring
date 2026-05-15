@@ -26,7 +26,9 @@ import {
 } from "../services/temporaryDeviceService";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
+import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { havenCopy } from "../content/havenCopy";
 
 /**
  * Settings Page
@@ -37,10 +39,13 @@ import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryThem
 export function SettingsPage({
   onBack,
   onOpenHelp,
+  onOpenPricing,
+  onOpenRings,
   onLocalDataCleared,
   locale = "en",
 }) {
   const localeCopy = SETTINGS_CONTENT[locale] || SETTINGS_CONTENT.en;
+  const ex = havenCopy.settingsExport;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -58,7 +63,9 @@ export function SettingsPage({
   const [verifyPassword, setVerifyPassword] = useState("");
   const [verifyRecoveryCode, setVerifyRecoveryCode] = useState("");
   const [verifyError, setVerifyError] = useState("");
-  const [pendingProtectedAction, setPendingProtectedAction] = useState("");
+  const [exportFormat, setExportFormat] = useState("full");
+  const [exportPickerOpen, setExportPickerOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -77,7 +84,7 @@ export function SettingsPage({
       setLocalCount(memories.length);
       const estimate = await estimateStorage(localeCopy.storageUnavailable);
       setStorageText(estimate);
-    } catch (error) {
+    } catch {
       setStatus(localeCopy.loadStatsFailed);
     } finally {
       setLoading(false);
@@ -93,21 +100,42 @@ export function SettingsPage({
   }
 
   async function handleExportBackup() {
-    const confirmed = window.confirm(localeCopy.confirmExport);
-    if (!confirmed) return;
+    setExportPickerOpen(true);
+  }
 
+  function confirmExportFormatAndVerify() {
+    setExportPickerOpen(false);
     openVerificationFor("export_backup");
   }
 
   async function runExportBackup() {
     setBusy(true);
-    setStatus(localeCopy.preparingExport);
+    setExportProgress(8);
+    setStatus(ex.preparingDetail);
+    const steps = [20, 45, 70, 90];
+    let i = 0;
+    const tick = window.setInterval(() => {
+      if (i < steps.length) {
+        setExportProgress(steps[i]);
+        i += 1;
+      }
+    }, 140);
     try {
       const memories = await getAllMemories();
+      let rows = memories;
+      if (exportFormat === "lite") {
+        rows = memories.map((m) => ({
+          ...m,
+          photo: null,
+          voice: null,
+          attachments: [],
+        }));
+      }
       const backup = {
         exportedAt: Date.now(),
         type: "haven-local-backup-v1",
-        memories,
+        format: exportFormat === "lite" ? "lite" : "full",
+        memories: rows,
       };
       const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
@@ -115,16 +143,20 @@ export function SettingsPage({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `haven-backup-${Date.now()}.json`;
+      link.download = `haven-backup-${exportFormat}-${Date.now()}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      setStatus(localeCopy.exportDone);
-    } catch (error) {
+      setExportProgress(100);
+      setStatus(`${ex.exportSuccessToast} ${ex.exportAftercare}`);
+      requestStoragePersistenceFromUserGesture();
+    } catch {
       setStatus(localeCopy.exportFailed);
     } finally {
+      window.clearInterval(tick);
       setBusy(false);
+      window.setTimeout(() => setExportProgress(0), 800);
     }
   }
 
@@ -143,7 +175,7 @@ export function SettingsPage({
       await refreshLocalStats();
       await onLocalDataCleared?.();
       setStatus(localeCopy.clearDone);
-    } catch (error) {
+    } catch {
       setStatus(localeCopy.clearFailed);
     } finally {
       setBusy(false);
@@ -184,7 +216,7 @@ export function SettingsPage({
       }
       // Redirect starts immediately on success.
       setStatus(localeCopy.signInDone);
-    } catch (error) {
+    } catch {
       setStatus(localeCopy.signInFailed);
     } finally {
       setBusy(false);
@@ -200,7 +232,7 @@ export function SettingsPage({
       const payload = await getAllMemories();
       await backupToCloud(payload);
       setStatus(localeCopy.backupDone);
-    } catch (error) {
+    } catch {
       setStatus(error instanceof Error ? error.message : localeCopy.backupFailed);
     } finally {
       setBusy(false);
@@ -215,7 +247,7 @@ export function SettingsPage({
     try {
       const result = await restoreFromCloud();
       setStatus(result.message || localeCopy.restoreDone);
-    } catch (error) {
+    } catch {
       setStatus(error instanceof Error ? error.message : localeCopy.restoreFailed);
     } finally {
       setBusy(false);
@@ -367,24 +399,71 @@ export function SettingsPage({
           {localeCopy.back}
         </button>
 
+        {onOpenPricing ? (
+          <section style={styles.upgradeCard}>
+            <h2 style={styles.sectionTitle}>{localeCopy.upgradeSectionTitle}</h2>
+            <p style={styles.copy}>{localeCopy.upgradeSectionBody}</p>
+            <button type="button" onClick={() => onOpenPricing()} style={styles.primaryButton}>
+              {localeCopy.upgradeSectionCta}
+            </button>
+          </section>
+        ) : null}
+
         <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>{localeCopy.localSectionTitle}</h2>
+          <h2 style={styles.sectionTitle}>{localeCopy.accountSectionTitle}</h2>
+          <p style={styles.copy}>{localeCopy.accountLocalLine}</p>
           <p style={styles.copy}>
-            {localeCopy.localDefault}
+            {cloud.user ? localeCopy.accountCloudSignedIn : localeCopy.accountCloudOff}
           </p>
+        </section>
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.subscriptionSectionTitle}</h2>
+          <p style={styles.copy}>{localeCopy.subscriptionBody}</p>
+          {onOpenPricing ? (
+            <button type="button" onClick={() => onOpenPricing()} style={styles.secondaryButton}>
+              {localeCopy.subscriptionManageCta}
+            </button>
+          ) : null}
+        </section>
+
+        {onOpenRings ? (
+          <section style={styles.card}>
+            <h2 style={styles.sectionTitle}>{localeCopy.ringsSectionTitle}</h2>
+            <p style={styles.copy}>{localeCopy.ringsBody}</p>
+            <button type="button" onClick={() => onOpenRings()} style={styles.primaryButton}>
+              {localeCopy.ringsManageCta}
+            </button>
+          </section>
+        ) : null}
+
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.dataPrivacySectionTitle}</h2>
+          <p style={styles.copy}>{ex.exportSectionLead}</p>
+          <p style={styles.copy}>{localeCopy.localDefault}</p>
           <p style={styles.copy}>
             {loading
               ? localeCopy.loadingStats
               : `${localeCopy.storedStatsLabel}: ${localCount}. ${localeCopy.estimatedStorageLabel}: ${storageText}.`}
           </p>
+          {exportProgress > 0 && exportProgress < 100 ? (
+            <div style={styles.progressWrap}>
+              <p style={styles.status}>
+                {ex.progressLabel}: {exportProgress}%
+              </p>
+              <div style={styles.progressTrack}>
+                <div style={{ ...styles.progressFill, width: `${exportProgress}%` }} />
+              </div>
+            </div>
+          ) : null}
           <div style={styles.actions}>
             <button
               type="button"
               onClick={handleExportBackup}
               disabled={busy || loading}
-              style={styles.secondaryButton}
+              style={styles.primaryButton}
             >
-              {buttonLabelWithBadge(localeCopy.exportBackup)}
+              {buttonLabelWithBadge(ex.exportSectionTitle)}
             </button>
             <button
               type="button"
@@ -395,6 +474,7 @@ export function SettingsPage({
               {buttonLabelWithBadge(localeCopy.clearAll)}
             </button>
           </div>
+          <p style={styles.finePrint}>{ex.formatZipHint}</p>
         </section>
 
         <section style={styles.card}>
@@ -473,6 +553,7 @@ export function SettingsPage({
               {localeCopy.unlink}
             </button>
           </div>
+          <p style={styles.complianceNote}>{havenCopy.cloudStorageDisclaimer}</p>
         </section>
 
         <section style={styles.card}>
@@ -541,39 +622,70 @@ export function SettingsPage({
 
         <section style={styles.card}>
           <h2 style={styles.sectionTitle}>{localeCopy.privacySectionTitle}</h2>
+          <h3 style={styles.subheading}>{localeCopy.legalSectionTitle}</h3>
           <p style={styles.copy}>
-            {localeCopy.privacyLine1}
+            <a href="/privacy-policy" target="_blank" rel="noreferrer" style={styles.link}>
+              {localeCopy.privacyPolicy}
+            </a>
+            {" · "}
+            <a href="/terms" target="_blank" rel="noreferrer" style={styles.link}>
+              {localeCopy.termsLink}
+            </a>
           </p>
           <p style={styles.copy}>
-            {localeCopy.privacyLine2}
+            {localeCopy.privacyContactLabel}:{" "}
+            <a href="mailto:privacy@havenring.me" style={styles.link}>
+              privacy@havenring.me
+            </a>
           </p>
-          <p style={styles.copy}>
-            {localeCopy.privacyNfcLine}
-          </p>
-          <p style={styles.copy}>
-            {localeCopy.privacyUnbindLine}
-          </p>
-          <p style={styles.copy}>
-            {localeCopy.privacyE2eLine}
-          </p>
-          <a
-            href="/privacy-policy"
-            target="_blank"
-            rel="noreferrer"
-            style={styles.link}
-          >
-            {localeCopy.privacyPolicy}
-          </a>
-          <button
-            type="button"
-            onClick={onOpenHelp}
-            style={styles.secondaryButton}
-          >
+          <p style={styles.copy}>{localeCopy.privacyLine1}</p>
+          <p style={styles.copy}>{localeCopy.privacyLine2}</p>
+          <p style={styles.copy}>{localeCopy.privacyNfcLine}</p>
+          <p style={styles.copy}>{localeCopy.privacyUnbindLine}</p>
+          <p style={styles.copy}>{localeCopy.privacyE2eLine}</p>
+          <button type="button" onClick={onOpenHelp} style={styles.secondaryButton}>
             {localeCopy.openHelp}
           </button>
         </section>
 
         <p style={styles.status}>{status || "\u00A0"}</p>
+
+        {exportPickerOpen ? (
+          <section style={styles.verifyBox}>
+            <p style={styles.sectionTitle}>{ex.chooseFormatTitle}</p>
+            <label style={styles.radioRow}>
+              <input
+                type="radio"
+                name="exportFmt"
+                checked={exportFormat === "full"}
+                onChange={() => setExportFormat("full")}
+              />
+              <span style={styles.copy}>{ex.formatJsonFull}</span>
+            </label>
+            <label style={styles.radioRow}>
+              <input
+                type="radio"
+                name="exportFmt"
+                checked={exportFormat === "lite"}
+                onChange={() => setExportFormat("lite")}
+              />
+              <span style={styles.copy}>{ex.formatJsonLite}</span>
+            </label>
+            <div style={styles.actions}>
+              <button type="button" onClick={confirmExportFormatAndVerify} style={styles.primaryButton}>
+                {ex.continueToVerify}
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportPickerOpen(false)}
+                style={styles.ghostButton}
+              >
+                {localeCopy.verifyActionCancel}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {verifyOpen ? (
           <section style={styles.verifyBox}>
             <p style={styles.sectionTitle}>{localeCopy.verifyModalTitle}</p>
@@ -696,6 +808,25 @@ const styles = {
     display: "grid",
     gap: 10,
   },
+  upgradeCard: {
+    border: "1px solid rgba(196, 149, 106, 0.45)",
+    borderRadius: 14,
+    background: "rgba(44, 36, 31, 0.55)",
+    padding: 14,
+    display: "grid",
+    gap: 10,
+  },
+  primaryButton: {
+    justifySelf: "start",
+    border: `1px solid ${sanctuaryTheme.accent}`,
+    background: `linear-gradient(180deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
+    color: sanctuaryTheme.ink,
+    borderRadius: 999,
+    padding: "10px 18px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 15,
+  },
   sectionTitle: {
     margin: 0,
     fontSize: 18,
@@ -709,6 +840,12 @@ const styles = {
     margin: 0,
     color: "#d9c3b3",
     lineHeight: 1.6,
+  },
+  complianceNote: {
+    margin: "4px 0 0",
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(217, 195, 179, 0.75)",
   },
   actions: {
     display: "flex",
@@ -801,5 +938,33 @@ const styles = {
     cursor: "pointer",
     fontSize: 14,
     padding: "10px 8px",
+  },
+  progressWrap: {
+    display: "grid",
+    gap: 6,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    background: "rgba(0,0,0,0.25)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    background: `linear-gradient(90deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
+    transition: "width 0.2s ease-out",
+  },
+  finePrint: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "rgba(248, 239, 231, 0.55)",
+  },
+  radioRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    cursor: "pointer",
   },
 };

@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Haven Ring",
     short_name: "Haven",
     description:
-      "Seal a private moment with a touch of the ring. Sealed forever.",
+      "Seal a private moment with a touch of the ring — intentional, encrypted on supported flows, yours on your devices.",
     id: `${origin}/app`,
     start_url: `${origin}/app`,
     scope: `${origin}/`,

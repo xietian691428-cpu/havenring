@@ -27,6 +27,7 @@ import { HomePage } from "../views/HomePage";
 import { MemoryDetailPage } from "../views/MemoryDetailPage";
 import { NewMemoryPage } from "../views/NewMemoryPage";
 import { RingsPage } from "../views/RingsPage";
+import { PricingPage } from "../views/PricingPage";
 import { SettingsPage } from "../views/SettingsPage";
 import { TimelinePage } from "../views/TimelinePage";
 import { usePwaLocale } from "../i18n/pwaLocale";
@@ -37,6 +38,7 @@ import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelec
 import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
+import { syncSealPrepWithSessionArm } from "../features/seal";
 import {
   isTemporaryDeviceModeEnabled,
   TEMP_DEVICE_MODE_EVENT,
@@ -49,8 +51,9 @@ type Route =
   | { name: "timeline"; memoryId: null }
   | { name: "explore"; memoryId: null }
   | { name: "rings"; memoryId: null }
-  | { name: "new"; memoryId: null }
+  | { name: "new"; memoryId: string | null }
   | { name: "settings"; memoryId: null }
+  | { name: "pricing"; memoryId: null }
   | { name: "help"; memoryId: null }
   | { name: "detail"; memoryId: string };
 
@@ -87,6 +90,7 @@ export function AppRouter() {
     syncNow,
     syncActiveRingNow,
     persistComposerMemory,
+    deleteMemory,
   } = useMemories();
   const { session: supabaseSession, sessionLoading } = useSessionContext();
   const { entitlements } = useSubscriptionContext();
@@ -177,12 +181,24 @@ export function AppRouter() {
     ]
   );
 
-  function handleAfterOnboarding() {
+  function handleAfterOnboarding(detail = {}) {
     if (typeof window === "undefined") return;
     const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
+    if (detail.choice === "bind_ring" && !dismissed) {
+      openRingSetup();
+      return;
+    }
+    if (detail.choice === "face_only" || detail.outcome === "skipped") {
+      void refresh();
+      navigateTo({ name: "timeline", memoryId: null }, "forward");
+      return;
+    }
     if (!dismissed && boundRingCount === 0) {
       openRingSetup();
+      return;
     }
+    void refresh();
+    navigateTo({ name: "timeline", memoryId: null }, "forward");
   }
 
   function handleRingSetupFinished(payload: { nickname?: string } | undefined) {
@@ -201,7 +217,7 @@ export function AppRouter() {
     return "timeline";
   }, [route.name]);
 
-  const showBottomNav = !["new", "detail", "help"].includes(route.name);
+  const showBottomNav = !["new", "detail", "help", "pricing"].includes(route.name);
 
   const shellProps = useMemo(
     (): ComponentProps<typeof AppChrome> => ({
@@ -326,6 +342,20 @@ export function AppRouter() {
     if (!memoryId) return;
     void openMemoryFromRingParams(memoryId);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot deep link hydration
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => {
+      syncSealPrepWithSessionArm();
+    };
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("pagehide", sync);
+    sync();
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("pagehide", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -474,6 +504,10 @@ export function AppRouter() {
   }, [temporaryModeBanner]);
 
   function goBackByRoute() {
+    if (route.name === "pricing") {
+      navigateTo({ name: "settings", memoryId: null }, "back");
+      return;
+    }
     if (route.name === "detail" || route.name === "new") {
       navigateTo({ name: "timeline", memoryId: null }, "back");
       return;
@@ -484,7 +518,7 @@ export function AppRouter() {
   }
 
   function handleTouchStart(event: TouchEvent) {
-    if (!["detail", "new", "help"].includes(route.name)) return;
+    if (!["detail", "new", "help", "pricing"].includes(route.name)) return;
     const touch = event.changedTouches[0];
     if (!touch) return;
     if (touch.clientX > 32) {
@@ -600,25 +634,31 @@ export function AppRouter() {
           onOpenSettings={() =>
             navigateTo({ name: "settings", memoryId: null }, "forward")
           }
+          onOpenHelp={() => navigateTo({ name: "help", memoryId: null }, "forward")}
         />
       </FadePage>
     );
   } else if (route.name === "new") {
     mainContent = (
-      <FadePage pageKey="new" direction={transitionDirection}>
+      <FadePage pageKey={`new-${route.memoryId ?? "create"}`} direction={transitionDirection}>
         <NewMemoryPage
           locale={locale}
           userEntitlements={entitlements}
+          initialEditMemory={
+            route.memoryId
+              ? ((memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ?? null)
+              : null
+          }
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onSaveMemory={persistComposerMemory}
           onSaved={async () => {
             await refresh();
           }}
-          onViewTimeline={() =>
-            navigateTo({ name: "timeline", memoryId: null }, "back")
-          }
           onOpenHelp={() =>
             navigateTo({ name: "help", memoryId: null }, "forward")
+          }
+          onOpenSettings={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
           }
         />
       </FadePage>
@@ -632,6 +672,20 @@ export function AppRouter() {
           loading={loading && !selectedMemory}
           error=""
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+          onEdit={() => {
+            const id = selectedMemory?.id;
+            if (!id) return;
+            navigateTo({ name: "new", memoryId: id }, "forward");
+          }}
+          onDeleteMemory={async (id: string) => {
+            try {
+              await deleteMemory(id);
+              await refresh().catch(() => null);
+              navigateTo({ name: "timeline", memoryId: null }, "back");
+            } catch {
+              /* useMemories surfaces delete errors via `error` if needed */
+            }
+          }}
         />
       </FadePage>
     );
@@ -644,9 +698,29 @@ export function AppRouter() {
           onOpenHelp={() =>
             navigateTo({ name: "help", memoryId: null }, "forward")
           }
+          onOpenPricing={() =>
+            navigateTo({ name: "pricing", memoryId: null }, "forward")
+          }
+          onOpenRings={() =>
+            navigateTo({ name: "rings", memoryId: null }, "forward")
+          }
           onLocalDataCleared={async () => {
             await refresh().catch(() => null);
           }}
+        />
+      </FadePage>
+    );
+  } else if (route.name === "pricing") {
+    mainContent = (
+      <FadePage pageKey="pricing" direction={transitionDirection}>
+        <PricingPage
+          onBack={() => navigateTo({ name: "settings", memoryId: null }, "back")}
+          onStartTrial={() => {
+            openRingSetup();
+          }}
+          onSubscribe={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
+          }
         />
       </FadePage>
     );
@@ -656,6 +730,15 @@ export function AppRouter() {
         <HelpCenterPage
           locale={locale}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+          onOpenRings={() =>
+            navigateTo({ name: "rings", memoryId: null }, "forward")
+          }
+          onOpenSettings={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
+          }
+          onOpenPricing={() =>
+            navigateTo({ name: "pricing", memoryId: null }, "forward")
+          }
         />
       </FadePage>
     );

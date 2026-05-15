@@ -26,6 +26,12 @@ export function LandingNav() {
             Help
           </Link>
           <Link
+            href="/login"
+            className="rounded-full border border-white/14 bg-white/[0.04] px-3 py-1.5 text-[10px] font-medium tracking-[0.16em] text-white/80 transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+          >
+            Sign in
+          </Link>
+          <Link
             href="/app"
             className="rounded-full border border-amber-400/35 bg-amber-400/[0.06] px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-amber-100/95 transition-colors hover:border-amber-300/50 hover:bg-amber-400/10"
           >

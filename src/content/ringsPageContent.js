@@ -1,13 +1,27 @@
+import {
+  HAVEN_EN_LAYERED_CORE_LINE,
+  HAVEN_EN_HOW_HAVEN_WORKS_ROWS,
+  HAVEN_EN_QUICK_GUIDE_ONE_LINE,
+  HAVEN_EN_QUICK_GUIDE_SUMMARY_LINES,
+  havenCopy,
+  mapHowHavenRowsToRingsQuickGuide,
+} from "./havenCopy";
+
 const EN = {
   brand: "Haven",
-  title: "My rings",
+  title: "My Rings",
   subtitle:
-    "Quick access keys to your memory space. Any trusted ring can open Haven and seal sacred memories.",
-  layeredCoreLine:
-    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
-  emptyTitle: "No rings registered yet",
+    "Manage your rings and how they work with Face ID. Your ring is a fast ritual key — not the only way to keep your account safe.",
+  layeredCoreLine: HAVEN_EN_LAYERED_CORE_LINE,
+  emptyTitle: "No rings yet",
   emptyBody:
-    "Add your NFC rings and give them names. We recommend at least two: one for daily use and one backup in case of loss.",
+    "Link a Haven NFC ring to unlock the seal ritual on Haven Plus, or keep using Save Securely without a ring.",
+  emptyTrialHint:
+    "Link your first ring to start a 30-day Haven Plus trial where offered — Seal with Ring is included during the trial.",
+  bindFirstRingCta: "Bind your first ring",
+  addAnotherRingSecondary: "Add another ring",
+  howHavenToggleShow: "How your ring works with Face ID",
+  howHavenToggleHide: "Hide guide",
   addRing: "Add a ring",
   maxRings: "Up to five rings per device registry.",
   limitReachedHint:
@@ -16,6 +30,7 @@ const EN = {
   boundAt: "Bound at",
   lastUsedAt: "Last used",
   linkedMemories: "Linked memories",
+  ringStatusActive: "Active",
   neverUsed: "Never used yet",
   revoke: "Revoke ring",
   rename: "Rename",
@@ -26,21 +41,31 @@ const EN = {
   retrySync: "Retry",
   verifyTitle: "Secondary verification required",
   verifyHint:
-    "Before unbinding, confirm with device password or recovery code.",
+    "Before revoking, confirm with your device password or a recovery code. This matches how Haven protects other high-risk actions.",
   verifyPassword: "Device password",
   verifyRecovery: "Recovery code",
   verifyConfirm: "Verify and revoke",
   verifyCancel: "Cancel",
   verifyError: "Verification failed. Check password/code and retry.",
+  revokePrepTitle: "Revoke this ring?",
+  revokePrepBody:
+    "This ring will stop working for login and sealing right away. Your memories stay encrypted in your account; sealed items remain available as securely saved memories without this ring.",
+  revokePrepContinue: "Continue to verification",
+  revokePrepCancel: "Cancel",
   revokeWarning:
-    "After unbinding, this ring will immediately stop working for login and sealing. All sealed content remains permanently and safely stored in the cloud.",
+    "You are about to complete revoke after verification. This ring will no longer unlock Haven or finish new seals.",
   revokeDone: "Ring revoked successfully.",
   revokeFailed: "Could not revoke this ring.",
   cloudSignInRequired: "Sign in first to manage cloud-linked rings.",
   cloudSignInAction: "Open Settings to sign in",
   unknownDate: "—",
-  openSetup: "+ Add New Ring",
+  addRingHeaderCta: "+ Add Ring",
+  openSetup: "+ Add Ring",
   settingsLink: "Privacy & backup",
+  ringsFooterTitle: "Lost a ring?",
+  ringsFooterBody:
+    "From any signed-in device, open My Rings and revoke the ring after Face ID or your device lock. Your memories stay encrypted in your account.",
+  ringsFooterHelpCta: "Open full Help guide",
   privacyNote:
     "Every trusted ring is equal: any one can be used for quick login and sealing. Your account stays the owner of all memories.",
   iosUsageHint:
@@ -50,55 +75,13 @@ const EN = {
   ringRequiredLabel: "Ring Required:",
   recommendedLabel: "Recommended:",
   actionLabel: "What you want to do",
-  quickGuideTitle: "How Haven Works",
-  quickGuideIntro:
-    "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.",
-  quickGuideSummaryLines: [
-    "Open daily: touch your ring for the fastest path, or use Face ID.",
-    "Quick notes and drafts: just start writing.",
-    "Seal memories: only a trusted ring can complete the ritual.",
-  ],
+  quickGuideTitle: havenCopy.rings.howHavenWorksTitle,
+  quickGuideIntro: HAVEN_EN_LAYERED_CORE_LINE,
+  quickGuideSummaryLines: [...HAVEN_EN_QUICK_GUIDE_SUMMARY_LINES],
   quickGuideLearnMore: "Learn more",
   quickGuideShowLess: "Show less",
-  quickGuideOneLine:
-    "The ring is your magical key for speed and ceremony. Face ID keeps everything secure.",
-  quickGuideRows: [
-    {
-      action: "Open the app daily",
-      required: "No (Strongly recommended)",
-      way: "Touch your ring (fastest) or Face ID",
-    },
-    {
-      action: "Quick notes & drafts",
-      required: "No",
-      way: "Just start writing",
-    },
-    {
-      action: "Seal an important memory",
-      required: "Yes",
-      way: "Seal with Ring (required)",
-    },
-    {
-      action: "Add or remove a ring",
-      required: "Yes",
-      way: "Face ID confirmation",
-    },
-    {
-      action: "Export data",
-      required: "Yes",
-      way: "Face ID confirmation",
-    },
-    {
-      action: "Delete sealed memories",
-      required: "Yes",
-      way: "Face ID + extra confirmation",
-    },
-    {
-      action: "Handle a lost ring",
-      required: "No",
-      way: "Revoke from any signed-in device",
-    },
-  ],
+  quickGuideOneLine: HAVEN_EN_QUICK_GUIDE_ONE_LINE,
+  quickGuideRows: mapHowHavenRowsToRingsQuickGuide(HAVEN_EN_HOW_HAVEN_WORKS_ROWS),
 };
 
 export const RINGS_PAGE_CONTENT = {

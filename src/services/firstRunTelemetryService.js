@@ -1,5 +1,14 @@
 export const FIRST_MEMORY_DONE_KEY = "haven.first_memory.completed.v1";
 
+/** Set when the first-run carousel is dismissed (any path). */
+export const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
+
+/** `bind_ring` | `face_only` | `skipped` | `completed` — used for post-FTUX routing. */
+export const ONBOARDING_OUTCOME_KEY = "haven.onboarding.outcome.v1";
+
+/** User dismissed the gentle “try sealing” strip on Timeline. */
+export const TIMELINE_TRY_SEAL_HINT_DISMISSED_KEY = "haven.timeline.trySealHintDismissed.v1";
+
 function detectPlatform() {
   if (typeof navigator === "undefined") return "other";
   const ua = String(navigator.userAgent || "").toLowerCase();

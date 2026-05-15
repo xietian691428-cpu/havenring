@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
+import { havenCopy } from "../content/havenCopy";
+import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import {
   getBoundRings,
   RING_COLOR_OPTIONS,
@@ -21,8 +23,17 @@ export function RingsPage({
   locale = "en",
   userEntitlements = getFreeEntitlements(),
   onOpenRingSetup,
+  onOpenSettings,
+  onOpenHelp,
 }) {
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
+  const platform = useMemo(() => resolvePlatformTarget(), []);
+  const securityRevokeNote = useMemo(() => {
+    const notes = havenCopy.common.securityDeleteNote;
+    if (platform === "ios") return notes.ios;
+    if (platform === "android") return notes.android;
+    return notes.general;
+  }, [platform]);
   const [localRings, setLocalRings] = useState(() => getBoundRings());
   const [cloudRings, setCloudRings] = useState([]);
   const [memoryCountByRingId, setMemoryCountByRingId] = useState({});
@@ -33,6 +44,9 @@ export function RingsPage({
   const [verifyRecovery, setVerifyRecovery] = useState("");
   const [verifyError, setVerifyError] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState(null);
+  const [revokePrepOpen, setRevokePrepOpen] = useState(false);
+  /** When user has rings: `null` = collapsed by default; `true` = expanded. Ignored when `rings.length === 0`. */
+  const [howExplicit, setHowExplicit] = useState(null);
 
   const rings = useMemo(() => {
     const local = localRings || [];
@@ -145,12 +159,21 @@ export function RingsPage({
 
   function askRevoke(ring) {
     if (!ring?.cloudRingId) return;
-    const confirmed = window.confirm(t.revokeWarning);
-    if (!confirmed) return;
     setPendingRevoke(ring);
     setVerifyPassword("");
     setVerifyRecovery("");
     setVerifyError("");
+    setRevokePrepOpen(true);
+  }
+
+  function handleCancelRevokePrep() {
+    setRevokePrepOpen(false);
+    setPendingRevoke(null);
+  }
+
+  function handleContinueRevokePrep() {
+    if (!pendingRevoke?.cloudRingId) return;
+    setRevokePrepOpen(false);
     setVerifyOpen(true);
   }
 
@@ -217,14 +240,33 @@ export function RingsPage({
     currentRingCount: rings.length,
   });
 
+  const showHowDetail = rings.length === 0 || (!loading && howExplicit === true);
+
+  function toggleHowGuide() {
+    setHowExplicit((was) => {
+      const showing = rings.length === 0 || (!loading && was === true);
+      return !showing;
+    });
+  }
+
   return (
     <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
       <section style={styles.shell}>
         <header style={styles.header}>
-          <div>
+          <div style={styles.headerTitleBlock}>
             <h1 style={styles.title}>{t.title}</h1>
+            {t.subtitle ? <p style={styles.subtitle}>{t.subtitle}</p> : null}
           </div>
+          <button
+            type="button"
+            onClick={onOpenRingSetup}
+            style={ringLimitReached ? styles.secondaryBtn : styles.headerAddBtn}
+            disabled={ringLimitReached}
+          >
+            {t.addRingHeaderCta || t.openSetup}
+          </button>
         </header>
+
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{getPlanBadgeLabel(userEntitlements)}</p>
           <p style={styles.guideBody}>{getSubscriptionSummary(userEntitlements)}</p>
@@ -233,37 +275,61 @@ export function RingsPage({
           </p>
         </section>
 
-        <section style={styles.guideCard}>
-          <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
-          <p style={styles.guideBody}>{t.quickGuideIntro}</p>
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>{t.actionLabel}</th>
-                  <th style={styles.th}>{t.ringRequiredLabel}</th>
-                  <th style={styles.th}>{t.recommendedLabel}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(t.quickGuideRows || []).map((row) => (
-                  <tr key={row.action}>
-                    <td style={styles.td}>{row.action}</td>
-                    <td style={styles.td}>{row.required}</td>
-                    <td style={styles.td}>{row.way}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {!loading && rings.length > 0 ? (
+          <div style={styles.howToggleRow}>
+            <button type="button" style={styles.ghostBtn} onClick={() => toggleHowGuide()}>
+              {showHowDetail ? t.howHavenToggleHide : t.howHavenToggleShow}
+            </button>
           </div>
-          <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
-        </section>
+        ) : null}
+
+        {!loading && rings.length > 0 && !showHowDetail ? (
+          <p style={styles.coreLineStandalone}>{havenCopy.rings.ringVsFaceIdSummary}</p>
+        ) : null}
+
+        {showHowDetail ? (
+          <section style={styles.guideCard}>
+            <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
+            <p style={styles.guideBody}>{t.quickGuideIntro}</p>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>{t.actionLabel}</th>
+                    <th style={styles.th}>{t.ringRequiredLabel}</th>
+                    <th style={styles.th}>{t.recommendedLabel}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(t.quickGuideRows || []).map((row) => (
+                    <tr key={row.action}>
+                      <td style={styles.td}>{row.action}</td>
+                      <td style={styles.td}>{row.required}</td>
+                      <td style={styles.td}>{row.way}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
+          </section>
+        ) : null}
+
         {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
 
         {rings.length === 0 ? (
           <article style={styles.emptyCard}>
             <p style={styles.emptyTitle}>{t.emptyTitle}</p>
             <p style={styles.emptyBody}>{t.emptyBody}</p>
+            {t.emptyTrialHint ? <p style={styles.emptyTrial}>{t.emptyTrialHint}</p> : null}
+            <button
+              type="button"
+              onClick={onOpenRingSetup}
+              style={ringLimitReached ? styles.secondaryBtn : styles.primaryBtn}
+              disabled={ringLimitReached}
+            >
+              {t.bindFirstRingCta}
+            </button>
           </article>
         ) : (
           <ul style={styles.grid}>
@@ -286,11 +352,17 @@ export function RingsPage({
                 </div>
                 <div style={styles.ringText}>
                   <p style={styles.ringName}>{ring.nickname || ring.label}</p>
+                  {ring.cloudRingId ? (
+                    <p style={styles.ringStatusLine}>
+                      <span style={styles.ringStatusPill}>{t.ringStatusActive}</span>
+                    </p>
+                  ) : null}
                   <p style={styles.ringMeta}>
                     {t.boundAt}: {fmtDate(ring.cloudBoundAt || ring.createdAt)}
                   </p>
                   <p style={styles.ringMeta}>
-                    {t.lastUsedAt}: {ring.cloudLastUsedAt ? fmtDate(ring.cloudLastUsedAt) : t.neverUsed}
+                    {t.lastUsedAt}:{" "}
+                    {ring.cloudLastUsedAt ? fmtDate(ring.cloudLastUsedAt) : t.neverUsed}
                   </p>
                   <p style={styles.ringMeta}>
                     {t.linkedMemories}: {memoryCountByRingId[ring.cloudRingId] || 0}
@@ -320,19 +392,54 @@ export function RingsPage({
           </ul>
         )}
 
-        <div style={styles.actions}>
-          <button
-            type="button"
-            onClick={onOpenRingSetup}
-            style={ringLimitReached ? styles.secondaryBtn : styles.primaryBtn}
-            disabled={ringLimitReached}
-          >
-            {t.openSetup}
-          </button>
-          {ringLimitReached ? (
-            <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
-          ) : null}
-        </div>
+        {rings.length > 0 ? (
+          <div style={styles.actions}>
+            <button
+              type="button"
+              onClick={onOpenRingSetup}
+              style={styles.secondaryBtn}
+              disabled={ringLimitReached}
+            >
+              {t.addAnotherRingSecondary || t.openSetup}
+            </button>
+            {ringLimitReached ? (
+              <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
+            ) : null}
+            {ringLimitReached && onOpenSettings ? (
+              <button type="button" onClick={() => onOpenSettings()} style={styles.ghostBtn}>
+                {t.settingsLink}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <section style={styles.footerEdu}>
+          <p style={styles.footerEduTitle}>{t.ringsFooterTitle}</p>
+          <p style={styles.footerEduBody}>{t.ringsFooterBody}</p>
+          <div style={styles.footerLinkRow}>
+            {onOpenHelp ? (
+              <button type="button" onClick={() => onOpenHelp?.()} style={styles.ghostBtn}>
+                {t.ringsFooterHelpCta}
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {revokePrepOpen && pendingRevoke ? (
+          <section style={styles.verifyBox}>
+            <p style={styles.verifyTitle}>{t.revokePrepTitle}</p>
+            <p style={styles.verifyHint}>{t.revokePrepBody}</p>
+            <p style={styles.verifyWarn}>{securityRevokeNote}</p>
+            <div style={styles.actions}>
+              <button type="button" onClick={() => handleContinueRevokePrep()} style={styles.primaryBtn}>
+                {t.revokePrepContinue}
+              </button>
+              <button type="button" onClick={() => handleCancelRevokePrep()} style={styles.secondaryBtn}>
+                {t.revokePrepCancel}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         {verifyOpen ? (
           <section style={styles.verifyBox}>
@@ -402,6 +509,22 @@ const styles = {
     alignItems: "flex-start",
     gap: 12,
   },
+  headerTitleBlock: {
+    minWidth: 0,
+    flex: 1,
+  },
+  headerAddBtn: {
+    border: `1px solid ${sanctuaryTheme.accent}`,
+    background: `linear-gradient(180deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
+    color: sanctuaryTheme.ink,
+    borderRadius: sanctuaryTheme.radiusPill,
+    padding: "10px 16px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+    flexShrink: 0,
+    WebkitTapHighlightColor: "transparent",
+  },
   brand: {
     margin: 0,
     fontSize: 11,
@@ -440,9 +563,6 @@ const styles = {
     color: sanctuaryTheme.inkSoft,
   },
   guideCard: {
-    position: "sticky",
-    top: 8,
-    zIndex: 2,
     border: "1px solid rgba(232, 220, 208, 0.16)",
     borderRadius: 14,
     background: "rgba(26, 21, 18, 0.44)",
@@ -497,10 +617,62 @@ const styles = {
     lineHeight: 1.4,
     verticalAlign: "top",
   },
-  success: {
+  howToggleRow: {
+    display: "flex",
+    justifyContent: "flex-start",
+  },
+  coreLineStandalone: {
     margin: 0,
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 1.55,
+    color: "rgba(232, 220, 208, 0.78)",
+  },
+  footerEdu: {
+    marginTop: 4,
+    border: "1px solid rgba(232, 220, 208, 0.12)",
+    borderRadius: 14,
+    background: "rgba(26, 21, 18, 0.35)",
+    padding: 14,
+    display: "grid",
+    gap: 8,
+  },
+  footerEduTitle: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 650,
+    color: sanctuaryTheme.cream,
+  },
+  footerEduBody: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.55,
+    color: sanctuaryTheme.inkSoft,
+  },
+  footerLinkRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+  },
+  emptyTrial: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "rgba(196, 149, 106, 0.95)",
+  },
+  ringStatusLine: {
+    margin: "6px 0 0",
+  },
+  ringStatusPill: {
+    display: "inline-block",
+    fontSize: 11,
+    fontWeight: 650,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
     color: "#c7e9ce",
+    border: "1px solid rgba(140, 200, 160, 0.45)",
+    borderRadius: 999,
+    padding: "3px 10px",
   },
   errorRow: {
     display: "flex",
@@ -580,6 +752,7 @@ const styles = {
     display: "grid",
     gap: 12,
     background: "rgba(26, 21, 18, 0.4)",
+    justifyItems: "center",
   },
   emptyTitle: {
     margin: 0,

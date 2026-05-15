@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { APP_ENTRY_PATH } from "@/lib/site";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { urlLooksLikeSupabaseAuthReturn } from "@/lib/supabaseAuthUrlSignal";
 
 /** `/start` must stay mounted when claim or SDM params need StartClient logic. */
 function startPageNeedsClientHandling(search: string): boolean {
@@ -34,7 +35,7 @@ function replaceWithAppShell() {
 }
 
 function shouldRedirectToAppAfterAuth(path: string, search: string): boolean {
-  if (path === "/" || path === "") return true;
+  if (path === "/" || path === "" || path === "/login") return false;
   if (path === "/start" && !startPageNeedsClientHandling(search)) return true;
   return false;
 }
@@ -49,11 +50,11 @@ function tryOAuthReturnRedirect(session: Session | null): void {
 }
 
 /**
- * Ensures Supabase Auth runs on every route. When the URL carries an OAuth
- * callback (implicit hash or PKCE `code`), we **await** `initialize()` so
- * tokens are parsed before any child reads session; then we optionally send
- * `/` or plain `/start` into `/app` with `location.replace` (reliable on iOS
- * PWA and Android Chrome).
+ * Ensures Supabase Auth runs on every route. When the URL clearly carries a
+ * Supabase auth return, we **await** `initialize()` so tokens are parsed before
+ * any child reads session; then we optionally send `/` or plain `/start` into
+ * `/app` with `location.replace` (reliable on iOS PWA and Android Chrome).
+ * The marketing site (`/`, `/login`) never auto-enters the app shell after OAuth.
  *
  * On all other navigations we only **kick** `initialize()` without blocking the
  * first paint so marketing and in-app routes stay snappy.
@@ -62,13 +63,7 @@ export function SupabaseUrlSessionBootstrap() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const hash = window.location.hash || "";
-    const hadImplicitAuthFragment =
-      hash.includes("access_token=") ||
-      hash.includes("error=") ||
-      hash.includes("error_description=");
-    const hadPkceCode = new URLSearchParams(window.location.search).has("code");
-    const expectedAuthReturn = hadImplicitAuthFragment || hadPkceCode;
+    const expectedAuthReturn = urlLooksLikeSupabaseAuthReturn();
 
     const supabase = getSupabaseBrowserClient();
 

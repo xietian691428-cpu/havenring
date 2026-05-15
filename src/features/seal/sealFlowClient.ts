@@ -24,8 +24,14 @@ import {
   type SealFinalizeResponseBody,
   sealFinalizeFetchFailedMessage,
 } from "./sealFinalizeMessaging";
+import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestStoragePersistence";
 
-export { armSealFlow, clearSealFlowArm, isSealFlowArmed };
+export {
+  armSealFlow,
+  clearSealFlowArm,
+  isSealFlowArmed,
+  getSealArmedRemainingMs,
+} from "../../../lib/seal-flow";
 
 export function readPendingSealDraftIds(): string[] {
   if (typeof window === "undefined") return [];
@@ -63,6 +69,17 @@ export function writePendingSealDraftIds(ids: string[] = []) {
 export function clearPendingSealDraftIds() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
+}
+
+/**
+ * Clears orphan pending draft ids when the seal arm window is missing or expired
+ * (sessionStorage is the source of truth — see `lib/seal-flow`).
+ */
+export function syncSealPrepWithSessionArm() {
+  if (typeof window === "undefined") return;
+  if (isSealFlowArmed()) return;
+  const pending = readPendingSealDraftIds();
+  if (pending.length) clearPendingSealDraftIds();
 }
 
 /** Drops session arm + pending draft id list /used when abandoning composer prep. */
@@ -174,12 +191,14 @@ export function primeSealPrepAfterDraftPersisted(draftId: string) {
   armSealFlow();
 }
 
-/** SDM resolver body fields on `/start` when Seal prep is armed or pending drafts exist. */
+/** SDM resolver body fields on `/start` only when the seal arm window is active. */
 export function getSealSdmContextPayload(): SealSdmContextPayload {
+  if (!isSealFlowArmed()) {
+    syncSealPrepWithSessionArm();
+    return { context: "", draft_ids: [] };
+  }
   const pending = readPendingSealDraftIds();
-  const armed = isSealFlowArmed();
-  const context: SealSdmContextPayload["context"] =
-    armed || pending.length ? SEAL_SDM_CONTEXT : "";
+  const context = pending.length ? SEAL_SDM_CONTEXT : "";
   return { context, draft_ids: pending };
 }
 
@@ -194,6 +213,7 @@ export async function finalizeSealChainFromSdmResponse(
   opts: FinalizeSealWithTicketOptions
 ): Promise<void> {
   await finalizeSealWithTicket(opts);
+  requestStoragePersistenceFromUserGesture();
   clearSealPrepState();
   if (typeof window !== "undefined") {
     window.location.assign(SEAL_SUCCESS_PATH);

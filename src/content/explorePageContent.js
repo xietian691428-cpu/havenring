@@ -7,7 +7,7 @@ const EN = {
   onThisDayEmpty: "Nothing sealed on this calendar day yet. Your timeline will fill gently over time.",
   aiTitle: "Insights",
   aiBody:
-    "Optional reflections based on your sealed moments may appear here in a future update — always private and under your control.",
+    "Optional reflections based on your sealed moments may appear here in a future update — private and under your control when we ship them.",
   aiHint: "No cloud processing without your explicit choice.",
 };
 

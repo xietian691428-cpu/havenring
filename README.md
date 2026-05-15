@@ -33,30 +33,29 @@ Use a **single** deployment for the marketing site and the PWA shell (`/app`). P
 | Setting | Value |
 |--------|--------|
 | Site URL | `https://havenring.me` |
-| Redirect URLs | `https://havenring.me/**` and `https://www.havenring.me/**` (www allowed only so misconfigured links still work; OAuth `redirectTo` in app code uses **apex** so tokens land on `havenring.me` and URL fragments are preserved) |
+| Redirect URLs | Include every host and path you use, e.g. `https://www.havenring.me/**`, `https://havenring.me/**`, plus explicit `/login`, `/start`, `/app` if you prefer lists over wildcards. |
 
-**`www` → apex:** The app ships a **`beforeInteractive`** inline script that runs before React and moves `www.havenring.me` → `https://havenring.me` **while copying `pathname`, `query`, and `hash`** (so `#access_token=…` survives). A **CDN/host HTTP 301** from `www` → apex runs **before** any HTML or script: the browser follows the redirect **without** sending the fragment to the server, so **the hash is dropped** and OAuth cannot complete — avoid edge 301 for document navigations to `www`, or ensure Supabase only redirects to **`https://havenring.me/...`** (this repo’s OAuth `redirectTo` already uses the apex origin).
+**Hosts (`www` vs apex):** This app **does not** inject a client-side `www` → apex redirect (that fought Vercel “primary domain” 307s and caused redirect loops on `/`). OAuth `redirectTo` uses **`canonicalAuthOriginFromLocation()`** — the **same hostname the user is already on** (`www` or apex) on production HTTPS — so add **both** origins in Supabase Redirect URLs.
 
-Root layout also mounts **`SupabaseUrlSessionBootstrap`**, which calls `supabase.auth.initialize()` on every page so the marketing home **`/`** still parses Supabase auth fragments into storage (the landing page previously never imported the browser client).
+Root layout mounts **`SupabaseUrlSessionBootstrap`**, which calls `supabase.auth.initialize()` on every page so auth callbacks are parsed; marketing `/` is **not** auto-redirected into `/app` after OAuth.
 
 **Hosting check (Vercel / Cloudflare)** — align with OAuth fragments:
 
-1. **Prefer apex as the only “real” host for OAuth**  
-   Supabase **Site URL** and in-app `redirectTo` should stay `https://havenring.me/...` (already true in this repo).
+1. **If both `www` and apex serve the app**, list **both** in Supabase Redirect URLs and avoid chaining HTTP redirects between them for the same document (infinite loop).
 
-2. **Avoid edge / DNS HTTP redirects from `www` → apex for HTML**  
-   Browsers do not send `#...` to the server; a **301/302/307** response with `Location: https://havenring.me/...` drops the fragment, so `#access_token=...` never reaches your app. That breaks login even if the app script would have fixed `www` later.
+2. **Edge redirects and hash fragments**  
+   A **301/302/307** to another host/path runs before your JS; the fragment is not sent to the server. Keep OAuth return URLs on a host you control and that Supabase allows.
 
 3. **Vercel (Domains)**  
-   - Add **`havenring.me`** and set it as the **primary** production domain.  
-   - If you add **`www.havenring.me`**: either **do not** turn on Vercel’s automatic “redirect to primary domain” for `www` while debugging OAuth, **or** ensure users never open OAuth return URLs on `www` (point 1). Safer pattern: **`www` CNAME → same deployment as apex** and rely on the shipped **`beforeInteractive`** script to move users to apex **in the browser** (hash preserved).  
+   - Add **`havenring.me`** and **`www.havenring.me`** as needed.  
+   - If one hostname redirects to the other at the edge, ensure Supabase allows callbacks on the hostname users actually land on.  
    - There is **no** `vercel.json` redirect in this repo; any www redirect you see comes from the Vercel/Cloudflare UI or DNS provider.
 
 4. **Cloudflare**  
-   - If you use **Bulk Redirects** or **Redirect Rules** (`www` → `https://havenring.me/$1`), treat them like point 2: they run at the edge and **strip hash** on the first hop. Prefer **no** such rule for `www`, or only use rules that do not apply to your app’s HTML responses until OAuth is verified on apex-only links.
+   - If you use **Bulk Redirects** or **Redirect Rules** for `www` ↔ apex, ensure you do not create an infinite redirect chain with the origin your users open.
 
 5. **Smoke test**  
-   From an incognito window, start Google sign-in and confirm the address bar after IdP is **`https://havenring.me/...`** (optionally with `#access_token=`), not `www`.
+   From an incognito window, sign in from **`https://www.havenring.me/login`** (and apex if used) and confirm you land back on the same host without the tab spinner looping.
 
 OAuth and email magic links return to URLs under `havenring.me`; the app shell lives at **`/app`**, so ensure redirects include paths under your domain (the wildcard covers this).
 

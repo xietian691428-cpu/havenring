@@ -23,6 +23,7 @@ export {
   armSealFlow,
   clearSealFlowArm,
   isSealFlowArmed,
+  getSealArmedRemainingMs,
   readPendingSealDraftIds,
   writePendingSealDraftIds,
   clearPendingSealDraftIds,
@@ -31,6 +32,7 @@ export {
   collectDraftPayloadsForSeal,
   finalizeSealWithTicket,
   getSealSdmContextPayload,
+  syncSealPrepWithSessionArm,
   abandonInProgressSealOnStartPage,
   finalizeSealChainFromSdmResponse,
 } from "./sealFlowClient";
