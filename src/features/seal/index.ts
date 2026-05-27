@@ -21,9 +21,12 @@ export {
 
 export {
   armSealFlow,
+  armSealFlowWithPersistence,
   clearSealFlowArm,
+  getArmedSealDraftIds,
   isSealFlowArmed,
   getSealArmedRemainingMs,
+  readActiveSealArmedPayload,
   readPendingSealDraftIds,
   writePendingSealDraftIds,
   clearPendingSealDraftIds,
@@ -36,3 +39,11 @@ export {
   abandonInProgressSealOnStartPage,
   finalizeSealChainFromSdmResponse,
 } from "./sealFlowClient";
+export {
+  COMPOSER_SNAPSHOT_KEY,
+  composerSnapshotHasContent,
+  hasRecoverableComposerContent,
+  readComposerSnapshot,
+  recoverComposerSnapshotToDraft,
+  tryRecoverSealPrepFromComposerSnapshot,
+} from "./sealComposerRecovery";

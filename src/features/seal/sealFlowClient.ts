@@ -4,8 +4,9 @@
  */
 
 import {
-  armSealFlow,
+  armSealFlowWithPersistence,
   clearSealFlowArm,
+  getArmedSealDraftIds,
   isSealFlowArmed,
 } from "../../../lib/seal-flow";
 import { getDraftItem, removeDraftItem } from "../memories/draftBoxStore";
@@ -28,9 +29,12 @@ import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestSt
 
 export {
   armSealFlow,
+  armSealFlowWithPersistence,
   clearSealFlowArm,
+  getArmedSealDraftIds,
   isSealFlowArmed,
   getSealArmedRemainingMs,
+  readActiveSealArmedPayload,
 } from "../../../lib/seal-flow";
 
 export function readPendingSealDraftIds(): string[] {
@@ -72,14 +76,12 @@ export function clearPendingSealDraftIds() {
 }
 
 /**
- * Clears orphan pending draft ids when the seal arm window is missing or expired
- * (sessionStorage is the source of truth — see `lib/seal-flow`).
+ * Clears orphan pending draft ids when the seal arm window is missing or expired.
  */
 export function syncSealPrepWithSessionArm() {
   if (typeof window === "undefined") return;
   if (isSealFlowArmed()) return;
-  const pending = readPendingSealDraftIds();
-  if (pending.length) clearPendingSealDraftIds();
+  clearPendingSealDraftIds();
 }
 
 /** Drops session arm + pending draft id list /used when abandoning composer prep. */
@@ -187,17 +189,22 @@ export async function finalizeSealWithTicket(
 export function primeSealPrepAfterDraftPersisted(draftId: string) {
   const id = String(draftId || "").trim();
   if (!id) return;
-  writePendingSealDraftIds([id]);
-  armSealFlow();
+  const ids = [id];
+  writePendingSealDraftIds(ids);
+  armSealFlowWithPersistence(ids);
 }
 
-/** SDM resolver body fields on `/start` only when the seal arm window is active. */
+/** SDM resolver body fields on `/start` when the seal arm window is active (cross-tab safe). */
 export function getSealSdmContextPayload(): SealSdmContextPayload {
   if (!isSealFlowArmed()) {
     syncSealPrepWithSessionArm();
     return { context: "", draft_ids: [] };
   }
-  const pending = readPendingSealDraftIds();
+  const fromArm = getArmedSealDraftIds();
+  const pending = fromArm.length ? fromArm : readPendingSealDraftIds();
+  if (fromArm.length) {
+    writePendingSealDraftIds(fromArm);
+  }
   const context = pending.length ? SEAL_SDM_CONTEXT : "";
   return { context, draft_ids: pending };
 }

@@ -460,6 +460,37 @@ export const START_PAGE_EN = {
   sealCountdownPrefix: "Time left to seal:",
 } as const;
 
+/** Foolproof Seal-with-Ring copy — New Memory, /start NFC, success screen. */
+export const SEAL_FLOW_EN = {
+  readyTitle: "Ready to Seal",
+  readySubtitleIos: "Hold your ring to the top of your iPhone",
+  readySubtitleAndroid: "Tap your ring on the back of your phone",
+  readySubtitleOther: "Hold your ring near your phone NFC reader",
+  successTitle: "Memory Sealed!",
+  successMessage: "This moment is now safely protected forever.",
+  autoSaving: "Saving your memory...",
+  oneStepLeft: "Almost there! We saved your content. Tap Seal again to finish.",
+  goBackToSeal:
+    'Open Haven, go to New Memory, and tap "Seal this Memory with Ring" once.',
+  connectingTitle: "Sealing your memory...",
+  connectingBody: "Just a moment...",
+  goBackCta: "Go Back",
+} as const;
+
+export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {
+  readySubtitle: string;
+};
+
+export function getSealFlowCopy(platform: HavenPlatform): SealFlowCopyEn {
+  const readySubtitle =
+    platform === "ios"
+      ? SEAL_FLOW_EN.readySubtitleIos
+      : platform === "android"
+        ? SEAL_FLOW_EN.readySubtitleAndroid
+        : SEAL_FLOW_EN.readySubtitleOther;
+  return { ...SEAL_FLOW_EN, readySubtitle };
+}
+
 /** Post-claim / Plus trial toast copy (used from StartClient and similar) */
 export const HAVEN_CLAIM_SUCCESS_EN = {
   title: "You are all set",

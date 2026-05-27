@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { saveDraftItem } from "../services/draftBoxService";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
@@ -12,12 +12,13 @@ import {
 import {
   clearSealPrepState,
   gateSealWithRingAccess,
+  isSealFlowArmed,
   primeSealPrepAfterDraftPersisted,
 } from "../features/seal";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
-import { getNewMemoryPageCopy } from "../content/havenCopy";
+import { getNewMemoryPageCopy, getSealFlowCopy } from "../content/havenCopy";
 
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
@@ -146,6 +147,7 @@ export function NewMemoryPage({
     () => buildNewMemoryPageCopy(locale, platform, t),
     [locale, platform, t]
   );
+  const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
@@ -191,6 +193,8 @@ export function NewMemoryPage({
   const attachmentInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const attachmentsRef = useRef(attachments);
+  const handleSaveRef = useRef(null);
+  const autoArmBusyRef = useRef(false);
 
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -292,6 +296,15 @@ export function NewMemoryPage({
 }
 @keyframes havenSealBtnSpin {
   to { transform: rotate(360deg); }
+}
+@keyframes havenSealReadyPulse {
+  0%, 100% { transform: scale(1); opacity: 0.82; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+@keyframes havenSealReadyHalo {
+  0% { transform: scale(0.92); opacity: 0.55; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
 }`;
     document.head.appendChild(el);
     return undefined;
@@ -600,31 +613,76 @@ export function NewMemoryPage({
     clearDraftSnapshot();
   }
 
-  function handleOpenSealPrompt() {
-    if (!canSealWithRing) {
-      setUpgradeModalOpen(true);
-      return;
-    }
-    const draftId = String(editingDraftId || "").trim();
-    if (!draftId) {
-      setFeedbackNotice(t.feedbackSealPrepNeedDraftSave);
-      return;
-    }
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
-    setRingTapError("");
-    primeSealPrepAfterDraftPersisted(draftId);
-    setSealPromptOpen(true);
-    setFeedbackNotice(t.feedbackReadyToSeal);
-  }
-
   async function handleSealNow() {
     if (!canSealWithRing) {
       setSealPromptOpen(false);
       setUpgradeModalOpen(true);
       return;
     }
+    setRingTapError("");
+    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     await handleSave({ openSealPromptOnSuccess: true });
   }
+
+  handleSaveRef.current = handleSave;
+
+  const triggerAutoSealPrep = useCallback(async () => {
+    if (!canSealWithRing || sealPromptOpen || saving || autoArmBusyRef.current) return;
+    if (!hasDraftContent) return;
+    autoArmBusyRef.current = true;
+    setFeedbackNotice(sealFlow.autoSaving);
+    try {
+      await handleSaveRef.current?.({ openSealPromptOnSuccess: true });
+    } finally {
+      autoArmBusyRef.current = false;
+    }
+  }, [canSealWithRing, sealPromptOpen, saving, hasDraftContent, sealFlow.autoSaving]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      void triggerAutoSealPrep();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        void triggerAutoSealPrep();
+        return;
+      }
+      if (
+        document.visibilityState === "visible" &&
+        canSealWithRing &&
+        !sealPromptOpen &&
+        !saving &&
+        isSealFlowArmed()
+      ) {
+        setSealPromptOpen(true);
+        setFeedbackNotice(sealFlow.readyTitle);
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [
+    triggerAutoSealPrep,
+    canSealWithRing,
+    sealPromptOpen,
+    saving,
+    sealFlow.readyTitle,
+  ]);
+
+  useEffect(() => {
+    if (!canSealWithRing || !hasDraftContent) return undefined;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (sealPromptOpen || saving || autoArmBusyRef.current) return;
+      if (isSealFlowArmed()) {
+        setSealPromptOpen(true);
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [canSealWithRing, hasDraftContent, sealPromptOpen, saving]);
 
   async function handleSaveSecurelyFallback() {
     await handleSave({ openSealPromptOnSuccess: false });
@@ -646,10 +704,18 @@ export function NewMemoryPage({
     void handleSealNow();
   }
 
-  function sealPrimaryLabel() {
-    if (sealPromptOpen) return pageCopy.sealPrimaryCtaWaiting;
-    if (editingDraftId) return pageCopy.sealPrimaryCtaReady;
-    return pageCopy.sealPrimaryCta;
+  const isIOS = platform === "ios";
+  const isAndroid = platform === "android";
+
+  function getSealPlacementHint() {
+    return sealFlow.readySubtitle;
+  }
+
+  function getPrimaryButtonText() {
+    if (!canSealWithRing) return "Upgrade to Seal with Ring";
+    if (sealPromptOpen) return "Waiting for your ring...";
+    if (editingDraftId) return "Tap your ring to seal this memory";
+    return "Seal this Memory with Ring";
   }
 
   function removeAttachmentById(id) {
@@ -705,27 +771,47 @@ export function NewMemoryPage({
       </header>
 
       <div style={styles.scrollBody}>
-        <section style={styles.heroSeal} aria-labelledby="haven-hero-seal-title">
-          <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
-            {pageCopy.heroTitle}
-          </h2>
-          <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
+        <section
+          style={styles.heroSeal}
+          aria-labelledby={sealPromptOpen ? "haven-seal-ready-title" : "haven-hero-seal-title"}
+        >
           {sealPromptOpen ? (
-            <div style={styles.sealInlineBanner} role="status" aria-live="polite">
-              <p style={styles.sealInlineTitle}>{pageCopy.sealWaitingBannerTitle}</p>
-              <p style={styles.sealInlineBody}>{pageCopy.sealWaitingBannerBody}</p>
-              {sealPromptOpen && sealRemainingMs > 0 ? (
-                <p style={styles.sealInlineMeta}>
-                  {pageCopy.sealCountdownPrefix} <strong>{sealRemainingLabel}</strong>
+            <div style={styles.sealReadyPanel} role="status" aria-live="polite">
+              <div style={styles.sealReadyPulseWrap} aria-hidden>
+                <span style={styles.sealReadyHalo} />
+                <span style={styles.sealReadyRingMark}>◯</span>
+              </div>
+              <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
+                {sealFlow.readyTitle}
+              </h2>
+              <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
+              {sealRemainingMs > 0 ? (
+                <p style={styles.sealReadyMeta}>
+                  {pageCopy.sealCountdownPrefix}{" "}
+                  <strong>{sealRemainingLabel}</strong>
                 </p>
               ) : null}
-              {!networkOnline ? <p style={styles.hint}>{pageCopy.footerOfflineSeal}</p> : null}
+              <p style={styles.sealReadyHint}>{pageCopy.sealPrimaryHint}</p>
+              {!networkOnline ? (
+                <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
+              ) : null}
               {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-              <button type="button" onClick={handleCancelSeal} style={styles.cancelSealBtn}>
+              <button
+                type="button"
+                onClick={handleCancelSeal}
+                style={{ ...styles.cancelSealBtn, alignSelf: "center", marginTop: 12 }}
+              >
                 {pageCopy.cancelSealFlow}
               </button>
             </div>
-          ) : null}
+          ) : (
+            <>
+              <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
+                {pageCopy.heroTitle}
+              </h2>
+              <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
+            </>
+          )}
           {secureSaveToast ? (
             <div style={styles.secureToastStack} role="status" aria-live="polite">
               <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>
@@ -750,7 +836,7 @@ export function NewMemoryPage({
             onClick={handleHeroPrimaryClick}
             disabled={saving || sealPromptOpen}
             aria-busy={saving || sealPromptOpen}
-            aria-label={`${sealPrimaryLabel()}. ${pageCopy.sealPrimaryHint}`}
+            aria-label={`${getPrimaryButtonText()}. ${pageCopy.sealPrimaryHint}`}
             style={{
               ...styles.heroSealButton,
               ...(sealPromptOpen
@@ -764,10 +850,11 @@ export function NewMemoryPage({
                     }),
             }}
           >
+            {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
             {sealPromptOpen ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
-            {sealPrimaryLabel()}
+            {getPrimaryButtonText()}
           </button>
-          <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p>
+          {!sealPromptOpen ? <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p> : null}
           {!canSealWithRing ? (
             <p style={styles.heroUpgrade}>
               {pageCopy.upgradeShort} {pageCopy.upgradeCta}
@@ -1032,7 +1119,7 @@ export function NewMemoryPage({
           open
           status="error"
           errorMessage={saveDialog.errorMessage}
-          onSealNow={canSealWithRing ? handleOpenSealPrompt : () => setUpgradeModalOpen(true)}
+          onSealNow={canSealWithRing ? () => void handleSealNow() : () => setUpgradeModalOpen(true)}
           onCreateAnother={handleCreateAnother}
         />
       ) : null}
@@ -1200,31 +1287,73 @@ const styles = {
     maxWidth: 420,
     justifySelf: "center",
   },
-  sealInlineBanner: {
+  sealReadyPanel: {
     display: "grid",
-    gap: 6,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(217, 166, 122, 0.4)",
-    background: "rgba(40, 30, 24, 0.65)",
-    textAlign: "left",
+    gap: 10,
+    padding: "20px 16px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(217, 166, 122, 0.55)",
+    background:
+      "linear-gradient(165deg, rgba(72, 52, 40, 0.72), rgba(24, 18, 15, 0.95))",
+    textAlign: "center",
+    animation: "havenNfcPulse 2.4s ease-in-out infinite",
   },
-  sealInlineTitle: {
-    margin: 0,
-    fontSize: 13,
-    fontWeight: 650,
-    color: "#faf6f1",
+  sealReadyPulseWrap: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 72,
+    marginBottom: 4,
   },
-  sealInlineBody: {
+  sealReadyHalo: {
+    position: "absolute",
+    width: 64,
+    height: 64,
+    borderRadius: 999,
+    border: "2px solid rgba(232, 184, 146, 0.35)",
+    animation: "havenSealReadyHalo 2.2s ease-out infinite",
+    pointerEvents: "none",
+  },
+  sealReadyRingMark: {
+    position: "relative",
+    fontSize: 42,
+    lineHeight: 1,
+    color: "#e8b892",
+    animation: "havenSealReadyPulse 1.8s ease-in-out infinite",
+    textShadow: "0 0 18px rgba(232, 184, 146, 0.45)",
+  },
+  sealReadyTitle: {
     margin: 0,
+    fontSize: 30,
+    fontWeight: 500,
+    letterSpacing: "-0.02em",
+    lineHeight: 1.15,
+    color: "#ffffff",
+  },
+  sealReadyPlacement: {
+    margin: "12px 0 0",
+    fontSize: 20,
+    lineHeight: 1.35,
+    color: "rgba(255, 255, 255, 0.8)",
+    maxWidth: 360,
+    justifySelf: "center",
+  },
+  sealReadyMeta: {
+    margin: "8px 0 0",
+    fontSize: 14,
+    color: "rgba(232, 216, 206, 0.92)",
+  },
+  sealReadyHint: {
+    margin: "4px 0 0",
     fontSize: 13,
-    color: "#d9c9bf",
     lineHeight: 1.45,
+    color: "rgba(210, 196, 186, 0.78)",
   },
-  sealInlineMeta: {
+  sealReadyOffline: {
     margin: 0,
-    fontSize: 12,
-    color: "rgba(210, 200, 192, 0.92)",
+    fontSize: 13,
+    color: "#ffcab5",
   },
   cancelSealBtn: {
     marginTop: 4,

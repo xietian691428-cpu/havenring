@@ -11,6 +11,7 @@ import { getInstallGuideCopy } from "@/src/content/installGuideContent";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
+  getSealFlowCopy,
   getStartIdleHeroCopy,
   getStartSdmCardCopy,
   type HavenPlatform,
@@ -22,7 +23,9 @@ import {
   finalizeSealChainFromSdmResponse,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
+  hasRecoverableComposerContent,
   isSealFlowArmed,
+  tryRecoverSealPrepFromComposerSnapshot,
 } from "@/src/features/seal";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 import {
@@ -203,6 +206,7 @@ export default function StartClient() {
   const { platform: detectedPlatform, ready: platformReady } = usePlatform();
   const platform = (platformReady ? detectedPlatform : "other") as HavenPlatform;
   const idleHero = useMemo(() => getStartIdleHeroCopy(platform), [platform]);
+  const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const sdmCopy = useMemo(() => {
     if (sdmState.kind === "idle") return null;
     return getStartSdmCardCopy(platform, sdmState);
@@ -215,6 +219,10 @@ export default function StartClient() {
   const pendingSealTapRef = useRef(false);
   const bindRingRedirectDoneRef = useRef(false);
   const nfcSdmResolveGenerationRef = useRef(0);
+  const [sealPrepRevision, setSealPrepRevision] = useState(0);
+  const [nfcSealBootstrapping, setNfcSealBootstrapping] = useState(() =>
+    typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
+  );
 
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
@@ -255,13 +263,34 @@ export default function StartClient() {
     sdmState.scene === "daily_access" &&
     Boolean(sdmState.viewerUserId && sdmState.ownerId && sdmState.viewerUserId === sdmState.ownerId);
 
+  const sealArmed = isSealFlowArmed();
+  void sealPrepRevision;
+
+  const hasRecoverableContent = useMemo(
+    () => (typeof window !== "undefined" ? hasRecoverableComposerContent() : false),
+    [nfcFlow, sdmState, sealPrepRevision]
+  );
+
+  const showSealPrepGuide =
+    nfcFlow &&
+    !sealArmed &&
+    !hasRecoverableContent &&
+    !nfcSealBootstrapping &&
+    (sdmState.kind === "resolving" ||
+      (sdmState.kind === "ready" && sdmState.scene === "daily_access"));
+
+  const showSealConnecting =
+    nfcFlow &&
+    (sealArmed || hasRecoverableContent || nfcSealBootstrapping) &&
+    (sdmState.kind === "resolving" || nfcSealBootstrapping);
+
   useEffect(() => {
-    if (!isDailySelfOwner) return;
+    if (!isDailySelfOwner || showSealPrepGuide) return;
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, 2000);
     return () => window.clearTimeout(t);
-  }, [isDailySelfOwner]);
+  }, [isDailySelfOwner, showSealPrepGuide]);
 
   const hideFtuxOAuthDuringSealTouch =
     nfcFlow &&
@@ -304,10 +333,6 @@ export default function StartClient() {
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
     const myGen = ++nfcSdmResolveGenerationRef.current;
-    const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
-    pendingSealTapRef.current =
-      Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
-    setSealLeaveGuard(pendingSealTapRef.current);
 
     const initialStateTimer = window.setTimeout(() => {
       setNotice(START_PAGE_EN.readingRingStatus);
@@ -315,13 +340,25 @@ export default function StartClient() {
 
     const controller = new AbortController();
     const supabase = getSupabaseBrowserClient();
-    void supabase.auth
-      .getSession()
-      .then(async ({ data: sessionData }) => {
+
+    void (async () => {
+      setNfcSealBootstrapping(true);
+      try {
+        await tryRecoverSealPrepFromComposerSnapshot();
+        setSealPrepRevision((n) => n + 1);
+
+        const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
+        pendingSealTapRef.current =
+          Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
+        setSealLeaveGuard(pendingSealTapRef.current);
+
+        const { data: sessionData } = await supabase.auth.getSession();
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
+
         const accessToken = sessionData.session?.access_token || "";
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
         let res: Response;
         try {
           res = await fetch("/api/rings/sdm/resolve", {
@@ -387,8 +424,7 @@ export default function StartClient() {
             accessToken,
           });
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (controller.signal.aborted) return;
         const baseMsg =
@@ -401,11 +437,17 @@ export default function StartClient() {
           message: `${baseMsg}${sealHint}`,
         });
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
-      });
+      } finally {
+        if (myGen === nfcSdmResolveGenerationRef.current) {
+          setNfcSealBootstrapping(false);
+        }
+      }
+    })();
 
     return () => {
       window.clearTimeout(initialStateTimer);
       controller.abort();
+      setNfcSealBootstrapping(false);
     };
   }, []);
 
@@ -701,6 +743,29 @@ export default function StartClient() {
               <h1 style={styles.title}>{idleHero.title}</h1>
               <p style={{ ...styles.subtitle, whiteSpace: "pre-line" }}>{idleHero.subtitle}</p>
             </>
+          ) : showSealPrepGuide ? (
+            <section style={styles.sealGuideCard} aria-live="polite">
+              <h2 style={styles.sealGuideTitle}>{sealFlow.oneStepLeft}</h2>
+              <p style={styles.sealGuideBody}>{sealFlow.goBackToSeal}</p>
+              <button
+                type="button"
+                style={styles.sealGuidePrimary}
+                onClick={() => {
+                  window.location.assign("/app");
+                }}
+              >
+                {sealFlow.goBackCta}
+              </button>
+            </section>
+          ) : showSealConnecting ? (
+            <>
+              <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>
+                {sealFlow.connectingTitle}
+              </h1>
+              <p style={{ ...styles.subtitle, fontSize: 18, lineHeight: 1.45 }}>
+                {sealFlow.connectingBody}
+              </p>
+            </>
           ) : sdmCopy ? (
             <>
               <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>{sdmCopy.title}</h1>
@@ -717,13 +782,13 @@ export default function StartClient() {
             </p>
           ) : null}
 
-          {nfcFlow && sdmCopy ? (
+          {nfcFlow && sdmCopy && !showSealPrepGuide ? (
             <section
               style={{ ...styles.sdmCard, ...getSdmCardStyle(sdmState) }}
               role={sdmState.kind === "failed" ? "alert" : "status"}
               aria-live="polite"
             >
-              {isDailySelfOwner ? (
+              {isDailySelfOwner && !showSealPrepGuide ? (
                 <p style={styles.sdmSuccessMark} aria-hidden>
                   ✓
                 </p>
@@ -1159,6 +1224,42 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     color: "#cbb09f",
     fontSize: 12,
+  },
+  sealGuideCard: {
+    display: "grid",
+    gap: 14,
+    padding: "22px 18px",
+    borderRadius: 16,
+    border: "1px solid rgba(240, 194, 158, 0.45)",
+    background: "rgba(48, 34, 27, 0.88)",
+    textAlign: "center",
+  },
+  sealGuideTitle: {
+    margin: 0,
+    fontSize: 26,
+    fontWeight: 600,
+    lineHeight: 1.2,
+    color: "#fff7ef",
+  },
+  sealGuideBody: {
+    margin: 0,
+    fontSize: 17,
+    lineHeight: 1.5,
+    color: "#e7d2c3",
+  },
+  sealGuidePrimary: {
+    marginTop: 4,
+    border: "1px solid #d9a67a",
+    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
+    color: "#1b1411",
+    borderRadius: 999,
+    padding: "14px 22px",
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+    width: "100%",
+    maxWidth: 280,
+    justifySelf: "center",
   },
   notice: {
     margin: 0,
