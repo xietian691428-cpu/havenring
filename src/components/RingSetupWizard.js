@@ -20,6 +20,8 @@ import { RING_SETUP_CONTENT } from "../content/ringSetupContent";
 import { usePwaInstall } from "../hooks/usePwaInstall";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
+import { getInstallGuideCopy } from "../content/installGuideContent";
+import { detectPlatform } from "../hooks/usePlatform";
 import { getPlatformGuidance } from "../utils/platformGuidance";
 import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 
@@ -537,11 +539,23 @@ export function RingSetupWizard({
         {step === "blocked_install_recommended" ? (
           <>
             <p style={styles.kicker}>{t.kicker}</p>
-            <h2 style={styles.title}>{t.installRecommendedTitle}</h2>
-            <p style={styles.body}>{t.installRecommendedBody}</p>
+            {(() => {
+              const installCopy = getInstallGuideCopy(detectPlatform());
+              return (
+                <>
+            <h2 style={styles.title}>{installCopy.pageTitle}</h2>
+            <p style={styles.body}>{installCopy.lead}</p>
+            <p style={styles.hint}>{installCopy.secondary}</p>
+                </>
+              );
+            })()}
             <div style={styles.noticeBox}>
-              <p style={styles.noticeTitle}>{t.iosInstallSafetyTitle}</p>
-              <p style={styles.hint}>{t.iosInstallSafetyBrief}</p>
+              {(() => {
+                const installCopy = getInstallGuideCopy(detectPlatform());
+                return (
+                  <>
+              <p style={styles.noticeTitle}>{installCopy.safetyTitle}</p>
+              <p style={styles.hint}>{installCopy.safetyBrief}</p>
               <button
                 type="button"
                 onClick={() => setShowInstallSafetyDetails((prev) => !prev)}
@@ -553,16 +567,21 @@ export function RingSetupWizard({
               </button>
               {showInstallSafetyDetails ? (
                 <>
-                  <p style={styles.hint}>{t.iosInstallSafetyBody}</p>
-                  <p style={styles.hint}>{t.iosInstallSafetyPrivacy}</p>
+                  {installCopy.safetyDetails.map((line) => (
+                    <p key={line} style={styles.hint}>{line}</p>
+                  ))}
+                  <p style={styles.hint}>{installCopy.safetyPrivacy}</p>
                 </>
               ) : null}
+                  </>
+                );
+              })()}
             </div>
             <div style={styles.statusBox}>
               <p style={styles.statusLine}>{installStateLine}</p>
               <p style={styles.statusLine}>{ringLinkStateLine}</p>
             </div>
-            {iosInstallGuideOpen ? (
+            {iosInstallGuideOpen && detectPlatform() === "ios" ? (
               <div style={styles.noticeBox}>
                 <p style={styles.noticeTitle}>{t.iosInstallGuideTitle}</p>
                 <p style={styles.hint}>{t.iosInstallGuideTone}</p>
@@ -586,14 +605,19 @@ export function RingSetupWizard({
             ) : null}
             {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
             <div style={styles.actions}>
-              {canInstall ? (
+              {detectPlatform() === "android" && canInstall ? (
                 <button type="button" onClick={() => void installPwaNow()} style={styles.primaryBtn}>
-                  {t.installNowCta}
+                  {getInstallGuideCopy("android").installAppCta}
                 </button>
               ) : null}
-              <button type="button" onClick={openIosInstallGuide} style={styles.secondaryBtn}>
-                {t.iosInstallGuideCta}
-              </button>
+              {detectPlatform() === "ios" ? (
+                <button type="button" onClick={openIosInstallGuide} style={styles.secondaryBtn}>
+                  {t.iosInstallGuideCta}
+                </button>
+              ) : null}
+              <a href="/setup?return=%2Fapp" style={{ ...styles.secondaryBtn, textAlign: "center", textDecoration: "none" }}>
+                Open full install guide
+              </a>
               <button type="button" onClick={() => void copySiteLink()} style={styles.ghostBtn}>
                 {t.copyLinkCta}
               </button>
@@ -608,7 +632,7 @@ export function RingSetupWizard({
                 }}
                 style={styles.primaryBtn}
               >
-                {t.continueInBrowserCta}
+                {getInstallGuideCopy(detectPlatform()).primaryCta}
               </button>
               <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>
                 {t.ctaSkip}

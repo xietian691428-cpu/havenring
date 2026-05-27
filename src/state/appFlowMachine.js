@@ -1,4 +1,5 @@
 import { RING_SETUP_DISMISSED_KEY } from "../components/RingSetupWizard";
+import { readPwaInstallDeferred, writePwaInstallDeferred } from "../lib/pwaInstallKeys";
 
 const MAIN_STATES = {
   BOOTSTRAP: "BOOTSTRAP",
@@ -24,7 +25,12 @@ function resolveMainState(ctx) {
   if (ctx.recoveryErrorType) return MAIN_STATES.RECOVERY;
   if (!ctx.hasSession) return MAIN_STATES.AUTH_GATE;
   if (ctx.syncing) return MAIN_STATES.SYNC_GATE;
-  if (ctx.platform === "ios" && !ctx.ftuxPwaDone && !ctx.pwaInstalled && !ctx.pwaDeferred) {
+  const needsPwaInstall =
+    (ctx.platform === "ios" || ctx.platform === "android") &&
+    !ctx.ftuxPwaDone &&
+    !ctx.pwaInstalled &&
+    !ctx.pwaDeferred;
+  if (needsPwaInstall) {
     return MAIN_STATES.PWA_INSTALL_GATE;
   }
   if (ctx.hasSession && !ctx.hasBoundRing && !isRingSetupDismissedInStorage()) {
@@ -66,6 +72,7 @@ export function appFlowReducer(state, event) {
       platform: event.platform || "other",
       webNfcAvailable: Boolean(event.webNfcAvailable),
       pwaInstalled: Boolean(event.pwaInstalled),
+      pwaDeferred: Boolean(event.pwaDeferred) || readPwaInstallDeferred(),
       trustedCurrentDevice: Boolean(event.trustedCurrentDevice),
       requireSecondaryOnRingEntry: Boolean(event.requireSecondaryOnRingEntry),
       mainState: MAIN_STATES.BOOTSTRAP,
@@ -115,6 +122,7 @@ export function appFlowReducer(state, event) {
     return { ...next, mainState: resolveMainState(next) };
   }
   if (type === "PWA_DEFERRED") {
+    writePwaInstallDeferred(true);
     const next = {
       ...state,
       pwaDeferred: true,

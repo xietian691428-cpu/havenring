@@ -1,11 +1,8 @@
+import { detectPlatform } from "../hooks/usePlatform";
 import { getStartIdleHeroCopy } from "../content/havenCopy";
 
 export function detectPlatformFromNavigator() {
-  if (typeof navigator === "undefined") return "other";
-  const ua = String(navigator.userAgent || "").toLowerCase();
-  if (/iphone|ipad|ipod/.test(ua)) return "ios";
-  if (ua.includes("android")) return "android";
-  return "other";
+  return detectPlatform();
 }
 
 export function getPlatformGuidance(platformInput) {
@@ -22,11 +19,14 @@ export function getPlatformGuidance(platformInput) {
     startSubtitle: hero.subtitle,
     ringClaimLine: isIos
       ? "Your ring has been pre-configured to open this sanctuary. We will now connect it to your account."
-      : "Let's connect and configure your ring.",
+      : isAndroid
+        ? "Let's connect and configure your ring."
+        : "Open Haven on your phone to connect your ring.",
     ringsHint: isIos
       ? "Touch your ring to quickly access your sanctuary."
-      : "Touch your ring to quickly access your sanctuary. You can also rewrite the ring link here.",
+      : isAndroid
+        ? "Touch your ring to quickly access your sanctuary. You can also rewrite the ring link here."
+        : "Ring tap works on supported mobile browsers after install.",
     sealPrimaryMode: isIos ? "secure_save" : "ring_seal",
   };
 }
-

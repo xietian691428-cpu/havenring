@@ -16,6 +16,9 @@ export const APP_ENTRY_PATH = "/app" as const;
 /** Website account sign-in (orders, waitlist, sharing) — separate UX from `/start` + `/app`. */
 export const MARKETING_LOGIN_PATH = "/login" as const;
 
+/** Platform-specific PWA / Add to Home Screen instructions. */
+export const SETUP_PATH = "/setup" as const;
+
 /** Client: full URL to the app shell entry on the current origin. */
 export function appEntryUrl(origin: string): string {
   const base = origin.replace(/\/$/, "");

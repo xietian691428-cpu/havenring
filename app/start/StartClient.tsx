@@ -6,7 +6,8 @@ import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { resolvePlatformTarget } from "@/src/hooks/usePlatformTarget";
+import { isStandaloneDisplayMode, usePlatform } from "@/src/hooks/usePlatform";
+import { getInstallGuideCopy } from "@/src/content/installGuideContent";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
@@ -199,7 +200,8 @@ export default function StartClient() {
     "idle" | "waiting_signin" | "claiming" | "claimed" | "failed" | "skipped"
   >("idle");
   const [sdmState, setSdmState] = useState<StartSdmStateForCopy>(() => readInitialSdmState());
-  const platform = useMemo(() => resolvePlatformTarget() as HavenPlatform, []);
+  const { platform: detectedPlatform, ready: platformReady } = usePlatform();
+  const platform = (platformReady ? detectedPlatform : "other") as HavenPlatform;
   const idleHero = useMemo(() => getStartIdleHeroCopy(platform), [platform]);
   const sdmCopy = useMemo(() => {
     if (sdmState.kind === "idle") return null;
@@ -877,12 +879,28 @@ export default function StartClient() {
             </>
           ) : null}
 
-          {!nfcFlow && platform === "ios" ? (
-            <section style={{ ...styles.tipCard, ...styles.tipCardIosStrong }}>
-              <p style={styles.tipTitle}>iPhone tip</p>
-              <p style={styles.tipBody}>
-                In Safari, tap Share, then Add to Home Screen for the smoothest flow.
+          {!nfcFlow && platformReady && !isStandaloneDisplayMode() && platform !== "other" ? (
+            <section
+              style={{
+                ...styles.tipCard,
+                ...(platform === "ios" ? styles.tipCardIosStrong : {}),
+              }}
+            >
+              <p style={styles.tipTitle}>
+                {platform === "ios" ? "Install on iPhone" : "Install on Android"}
               </p>
+              <p style={styles.tipBody}>{getInstallGuideCopy(platform).lead}</p>
+              <Link
+                href="/setup?return=%2Fstart"
+                style={{
+                  ...styles.link,
+                  display: "inline-block",
+                  marginTop: 8,
+                  fontWeight: 600,
+                }}
+              >
+                Open install guide →
+              </Link>
             </section>
           ) : null}
 

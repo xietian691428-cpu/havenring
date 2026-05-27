@@ -40,12 +40,18 @@ export function getFlowPrimaryUi(flowState) {
     };
   }
   if (flowState.mainState === APP_FLOW_MAIN_STATES.PWA_INSTALL_GATE) {
-    const noWebNfcOnIos = flowState.platform === "ios" && !flowState.webNfcAvailable;
-    return {
-      title: "Add to Home Screen recommended",
-      body: noWebNfcOnIos
+    const isIos = flowState.platform === "ios";
+    const isAndroid = flowState.platform === "android";
+    const noWebNfcOnIos = isIos && !flowState.webNfcAvailable;
+    const title = isAndroid ? "Install Haven on your phone" : "Add to Home Screen recommended";
+    const body = isAndroid
+      ? "Install Haven from Chrome for a full-screen app icon and smoother daily access."
+      : noWebNfcOnIos
         ? "Web NFC is unavailable in this browser. Add to Home Screen first for a more reliable daily entry."
-        : "On iOS, open Haven from your Home Screen icon for a smoother daily experience. Ring ritual remains optional.",
+        : "On iOS, add Haven to your Home Screen in Safari, then open from the new icon.";
+    return {
+      title,
+      body,
       actionLabel: "Open install guide",
       secondaryActionLabel: "Skip for now",
       secondaryActionIntent: "defer_pwa",

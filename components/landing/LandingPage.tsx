@@ -1,6 +1,7 @@
 import { LandingNav } from "./LandingNav";
 import { HeroSection } from "./HeroSection";
 import { LandingStorySection } from "./LandingStorySection";
+import { LandingInstallBanner } from "./LandingInstallBanner";
 import { LandingPromisesPoster } from "./LandingPromisesPoster";
 import { LandingHowItWorksLux } from "./LandingHowItWorksLux";
 import { LandingRealMoments } from "./LandingRealMoments";
@@ -20,6 +21,7 @@ export function LandingPage() {
         <LandingRealMoments />
         <LandingTheRing />
         <LandingTrustPrivacy />
+        <LandingInstallBanner />
         <LandingFinalCtaFooter />
       </main>
     </>

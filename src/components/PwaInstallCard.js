@@ -1,14 +1,24 @@
+import Link from "next/link";
 import { useState } from "react";
+import { getInstallGuideCopy } from "../content/installGuideContent";
+import { usePlatform, isStandaloneDisplayMode } from "../hooks/usePlatform";
 import { usePwaInstall } from "../hooks/usePwaInstall";
 import { PWA_INSTALL_CARD_CONTENT } from "../content/pwaInstallCardContent";
 
 export function PwaInstallCard({ locale = "en" }) {
   const t = PWA_INSTALL_CARD_CONTENT[locale] || PWA_INSTALL_CARD_CONTENT.en;
+  const { platform, ready } = usePlatform();
   const [installing, setInstalling] = useState(false);
   const { canInstall, installStatus, swReady, install } = usePwaInstall({
     installPreparingTimeout: t.installPreparingTimeout,
     installReadyAfterDelay: t.installReadyAfterDelay,
   });
+
+  if (!ready || isStandaloneDisplayMode()) {
+    return null;
+  }
+
+  const guide = getInstallGuideCopy(platform);
 
   async function onInstallClick() {
     setInstalling(true);
@@ -21,21 +31,21 @@ export function PwaInstallCard({ locale = "en" }) {
 
   return (
     <section style={cardStyle}>
-      <p style={hintStyle}>
-        {t.hintPrefix}
-        <strong>{t.hintStrong}</strong>.
-      </p>
+      <p style={hintStyle}>{guide.lead}</p>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {canInstall ? (
+        {platform === "android" && canInstall ? (
           <button
             type="button"
             onClick={onInstallClick}
             disabled={installing}
             style={buttonStyle}
           >
-            {installing ? t.installing : t.install}
+            {installing ? t.installing : guide.installAppCta}
           </button>
         ) : null}
+        <Link href="/setup?return=%2Fapp" style={{ ...buttonStyle, textDecoration: "none" }}>
+          {platform === "ios" ? "Add to Home Screen" : platform === "android" ? "Install guide" : t.hintStrong}
+        </Link>
         <span style={statusStyle}>
           {installStatus || (swReady ? t.offlineReady : "")}
         </span>

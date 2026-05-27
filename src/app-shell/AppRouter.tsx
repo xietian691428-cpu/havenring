@@ -16,6 +16,7 @@ import {
   RingSetupWizard,
   RING_SETUP_DISMISSED_KEY,
 } from "../components/RingSetupWizard";
+import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
 import { useMemories } from "../hooks/useMemories";
 import { useRingRegistryContext } from "../providers/RingProvider";
@@ -145,8 +146,13 @@ export function AppRouter() {
           dispatchFlow({ type: "PWA_DEFERRED" });
           return;
         }
-        openRingSetup();
-        navigateTo({ name: "home", memoryId: null }, "back");
+        const returnPath =
+          typeof window !== "undefined"
+            ? `${window.location.pathname}${window.location.search}`
+            : "/app";
+        window.location.assign(
+          `/setup?return=${encodeURIComponent(returnPath || "/app")}`
+        );
         return;
       }
       if (flowState.mainState === "RECOVERY") {
@@ -377,7 +383,8 @@ export function AppRouter() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ua = navigator.userAgent.toLowerCase();
-    const platform = /iphone|ipad|ipod/.test(ua)
+    const isTouchMac = ua.includes("macintosh") && "ontouchend" in window;
+    const platform = /iphone|ipad|ipod/.test(ua) || isTouchMac
       ? "ios"
       : ua.includes("android")
         ? "android"
@@ -396,6 +403,7 @@ export function AppRouter() {
       platform,
       webNfcAvailable,
       pwaInstalled,
+      pwaDeferred: readPwaInstallDeferred(),
       trustedCurrentDevice: Boolean(security.trustedCurrentDevice),
       requireSecondaryOnRingEntry: true,
     });
