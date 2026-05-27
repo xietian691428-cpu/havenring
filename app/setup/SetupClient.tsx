@@ -1,28 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { InstallGuide } from "@/src/components/InstallGuide";
 import { APP_ENTRY_PATH } from "@/lib/site";
 import { isStandaloneDisplayMode } from "@/src/hooks/usePlatform";
 import { writePwaInstallDeferred } from "@/src/lib/pwaInstallKeys";
 
-function readSafeReturnPath(raw: string | null): string {
-  const fallback = "/start";
-  const trimmed = (raw || "").trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return fallback;
-  if (/^\/(setup|api)(\/|$)/i.test(trimmed)) return fallback;
-  return trimmed;
-}
+type SetupClientProps = {
+  returnPath: string;
+};
 
-export default function SetupClient() {
+export default function SetupClient({ returnPath }: SetupClientProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const returnPath = useMemo(
-    () => readSafeReturnPath(searchParams.get("return") || searchParams.get("next")),
-    [searchParams]
-  );
 
   const continueToReturn = useCallback(() => {
     router.replace(returnPath);
