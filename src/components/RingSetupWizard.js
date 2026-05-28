@@ -34,6 +34,7 @@ function privacyPolicyHref() {
 
 export const RING_SETUP_DISMISSED_KEY = "haven.ring.setup.dismissed.v1";
 const INSTALL_CONFIRM_SUPPRESS_KEY = "haven.install.confirm.suppress.v1";
+const PENDING_RING_SCAN_KEY = "haven.ring.setup.pending_scan.v1";
 
 function isIosLike() {
   if (typeof navigator === "undefined") return false;
@@ -163,6 +164,56 @@ export function RingSetupWizard({
     setRewriteError("");
   }, []);
 
+  const persistPendingScan = useCallback((payload) => {
+    if (typeof window === "undefined" || !payload) return;
+    try {
+      window.localStorage.setItem(PENDING_RING_SCAN_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage failures
+    }
+  }, []);
+
+  const clearPendingScan = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(PENDING_RING_SCAN_KEY);
+    } catch {
+      // ignore storage failures
+    }
+  }, []);
+
+  const resumeAfterSecuritySetup = useCallback(() => {
+    const security = getSecuritySummary();
+    if (!security.initialized) {
+      setStepNote(t.needSecurityStillMissing || "Device protection is still not ready.");
+      return false;
+    }
+    clearPendingScan();
+    setStepNote("");
+    setStep("verify");
+    return true;
+  }, [clearPendingScan, t.needSecurityStillMissing]);
+
+  useEffect(() => {
+    if (!open || step !== "intro" || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(PENDING_RING_SCAN_KEY);
+      if (!raw) return;
+      const payload = JSON.parse(raw);
+      if (!payload || (!payload.serialNumber && !payload.text)) return;
+      setScanPayload(payload);
+      const security = getSecuritySummary();
+      if (security.initialized) {
+        clearPendingScan();
+        setStep("verify");
+      } else {
+        setStep("blocked_security");
+      }
+    } catch {
+      // ignore malformed pending payload
+    }
+  }, [open, step, clearPendingScan]);
+
   function dismissWizard() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(RING_SETUP_DISMISSED_KEY, "1");
@@ -178,6 +229,7 @@ export function RingSetupWizard({
       setScanPayload(data);
       const security = getSecuritySummary();
       if (!security.initialized) {
+        persistPendingScan(data);
         setStep("blocked_security");
         return;
       }
@@ -228,6 +280,10 @@ export function RingSetupWizard({
     });
     const security = getSecuritySummary();
     if (!security.initialized) {
+      persistPendingScan({
+        serialNumber: normalized,
+        text: normalized,
+      });
       setStep("blocked_security");
       return;
     }
@@ -765,16 +821,31 @@ export function RingSetupWizard({
           <>
             <h2 style={styles.title}>{t.needSecurityTitle}</h2>
             <p style={styles.body}>{t.needSecurityBody}</p>
+            <p style={styles.hint}>
+              {t.needSecurityResumeHint ||
+                "After setting your device password, come back here and tap Continue — no need to scan again."}
+            </p>
+            {stepNote ? <p style={styles.statusLine}>{stepNote}</p> : null}
             <div style={styles.actions}>
               <button
                 type="button"
                 onClick={() => {
+                  persistPendingScan(scanPayload);
                   onOpenSettings?.();
                   onClose?.();
                 }}
                 style={styles.primaryBtn}
               >
                 {t.goSettings}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void resumeAfterSecuritySetup();
+                }}
+                style={styles.secondaryBtn}
+              >
+                {t.continueAfterSecurity || "I set it, continue"}
               </button>
               <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>
                 {t.androidOk}

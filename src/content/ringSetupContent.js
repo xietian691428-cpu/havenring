@@ -92,6 +92,11 @@ const EN = {
   needSecurityTitle: "Device protection required",
   needSecurityBody:
     "Set a device password in Settings first. We use it to confirm sensitive steps like linking a ring — your ring alone is not enough.",
+  needSecurityResumeHint:
+    "Your ring has been read, but it is not linked yet. Set device protection, then tap continue to finish linking.",
+  needSecurityStillMissing:
+    "Device protection is still not ready. Please set it in Settings first.",
+  continueAfterSecurity: "I set it, continue",
   goSettings: "Open Settings",
   nameTitle: "Name this ring",
   nameBody: "A short label helps you tell rings apart. You can change this later.",
