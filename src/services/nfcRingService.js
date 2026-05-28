@@ -6,6 +6,10 @@
  * - Save-to-Haven remains local-only; NFC write is for initial setup/recovery only.
  */
 
+import {
+  acquireNfcLock,
+  forceClearNfcLock,
+} from "./nfcLockService";
 const NFC_ERROR_LOG_KEY = "haven.nfc.error.log.v1";
 
 function ensureNdefSupport() {
@@ -51,10 +55,44 @@ export async function readRingTextRecord() {
  * @returns {{ text: string, serialNumber: string | null, recordType?: string }}
  */
 export async function readNfcScanFull() {
+  const lock = acquireNfcLock("nfcRingService.read", 15_000);
+
+  const handleNfcReading = (event, resolve, reject, timeout) => {
+    window.clearTimeout(timeout);
+    try {
+      event?.stopImmediatePropagation?.();
+      const record = event.message.records?.[0];
+      let text = "";
+      let recordType = "";
+      if (record) {
+        recordType = record.recordType || "";
+        const decoder = new TextDecoder(record.encoding || "utf-8");
+        text = decoder.decode(record.data);
+      }
+      const serialNumber =
+        typeof event.serialNumber === "string" && event.serialNumber.trim()
+          ? event.serialNumber.trim()
+          : null;
+      if (!text && !serialNumber) {
+        reject(new Error("Nothing found on ring."));
+        return;
+      }
+      resolve({ text, serialNumber, recordType });
+    } catch (error) {
+      reject(error);
+    }
+  };
+
   try {
     ensureNdefSupport();
+    if (!lock.ok) {
+      console.log("NFC reader already active", lock.owner);
+      return null;
+    }
+
     const reader = new window.NDEFReader();
     await reader.scan();
+    console.log("=== NFC SCAN STARTED SUCCESSFULLY ===");
 
     return await new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
@@ -67,33 +105,20 @@ export async function readNfcScanFull() {
       };
 
       reader.onreading = (event) => {
-        window.clearTimeout(timeout);
-        try {
-          const record = event.message.records?.[0];
-          let text = "";
-          let recordType = "";
-          if (record) {
-            recordType = record.recordType || "";
-            const decoder = new TextDecoder(record.encoding || "utf-8");
-            text = decoder.decode(record.data);
-          }
-          const serialNumber =
-            typeof event.serialNumber === "string" && event.serialNumber.trim()
-              ? event.serialNumber.trim()
-              : null;
-          if (!text && !serialNumber) {
-            reject(new Error("Nothing found on ring."));
-            return;
-          }
-          resolve({ text, serialNumber, recordType });
-        } catch (error) {
-          reject(error);
-        }
+        console.log("=== NFC ONREADING TRIGGERED ===", event);
+        window.setTimeout(() => {
+          handleNfcReading(event, resolve, reject, timeout);
+        }, 60);
       };
     });
   } catch (error) {
+    console.error("=== NFC SCAN FAILED ===", error);
     pushNfcErrorLog(error, "read");
     throw error;
+  } finally {
+    lock.release();
+    // Force clear stale locks defensively.
+    window.setTimeout(() => forceClearNfcLock(), 15_000);
   }
 }
 

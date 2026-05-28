@@ -188,6 +188,7 @@ export function NewMemoryPage({
     () => typeof navigator !== "undefined" && navigator.onLine
   );
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [sealPreparingOverlay, setSealPreparingOverlay] = useState(false);
   const sealArmHadTimeRef = useRef(false);
   const { remainingMs: sealRemainingMs, remainingLabel: sealRemainingLabel } =
     useSealArmCountdown(sealPromptOpen);
@@ -627,6 +628,8 @@ export function NewMemoryPage({
   }
 
   async function handleSealNow() {
+    // eslint-disable-next-line no-console
+    console.log(`=== SEAL BUTTON CLICKED === autoSeal: ${String(autoSealMode)}`);
     if (!canSealWithRing) {
       setSealPromptOpen(false);
       setUpgradeModalOpen(true);
@@ -634,7 +637,12 @@ export function NewMemoryPage({
     }
     setRingTapError("");
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
-    await handleSave({ openSealPromptOnSuccess: true });
+    setSealPreparingOverlay(true);
+    try {
+      await handleSave({ openSealPromptOnSuccess: true });
+    } finally {
+      setSealPreparingOverlay(false);
+    }
   }
 
   handleSaveRef.current = handleSave;
@@ -706,6 +714,7 @@ export function NewMemoryPage({
     setSealPromptOpen(false);
     setRingTapError("");
     setFeedback("");
+    setSealPreparingOverlay(false);
   }
 
   function handleHeroPrimaryClick() {
@@ -766,6 +775,14 @@ export function NewMemoryPage({
 
   return (
     <main style={styles.page}>
+      {sealPreparingOverlay ? (
+        <div style={styles.sealPreparingOverlay} role="status" aria-live="polite">
+          <div style={styles.sealPreparingCard}>
+            <p style={styles.sealPreparingTitle}>Preparing seal...</p>
+            <p style={styles.sealPreparingBody}>Please tap your ring.</p>
+          </div>
+        </div>
+      ) : null}
       <header style={styles.topBar}>
         <button type="button" onClick={onBack} style={styles.topBarBtn}>
           ← {t.back}
@@ -1245,6 +1262,39 @@ const styles = {
     color: "#f3ece6",
     fontFamily: "Inter, system-ui, sans-serif",
     paddingBottom: "env(safe-area-inset-bottom, 0px)",
+  },
+  sealPreparingOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 90,
+    background: "rgba(8, 7, 6, 0.72)",
+    backdropFilter: "blur(6px)",
+    display: "grid",
+    placeItems: "center",
+    padding: 20,
+  },
+  sealPreparingCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    border: "1px solid rgba(212, 175, 55, 0.35)",
+    background: "rgba(18, 14, 12, 0.94)",
+    textAlign: "center",
+    padding: "20px 16px",
+    display: "grid",
+    gap: 8,
+  },
+  sealPreparingTitle: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 600,
+    color: "#f8efe7",
+  },
+  sealPreparingBody: {
+    margin: 0,
+    fontSize: 14,
+    color: "#d9c3b3",
+    lineHeight: 1.45,
   },
   topBar: {
     display: "grid",

@@ -226,6 +226,16 @@ export default function StartClient() {
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // eslint-disable-next-line no-console
+    console.log("=== START ROUTE ENTERED ===", {
+      href: window.location.href,
+      search: window.location.search,
+      isSealLaunch: isSealNfcLaunchSearch(window.location.search),
+    });
+  }, []);
+
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
@@ -361,6 +371,13 @@ export default function StartClient() {
         setNotice(START_PAGE_EN.preparingMemory);
       }
       try {
+        // eslint-disable-next-line no-console
+        console.log("=== START NFC RESOLVE BEGIN ===", {
+          uid,
+          ctr,
+          hasCmac: Boolean(cmac),
+          hasPicc: Boolean(picc),
+        });
         await tryRecoverSealPrepFromComposerSnapshot();
         if (!isSealFlowArmed() && hasRecoverableComposerContent()) {
           setNotice(START_PAGE_EN.preparingMemory);
@@ -402,6 +419,12 @@ export default function StartClient() {
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
+        // eslint-disable-next-line no-console
+        console.log("=== START NFC RESOLVE RESPONSE ===", {
+          ok: res.ok,
+          status: res.status,
+          data,
+        });
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (!res.ok || data?.valid !== true) {
           throw new Error(
@@ -446,6 +469,8 @@ export default function StartClient() {
           });
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("=== START NFC RESOLVE FAILED ===", error);
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (controller.signal.aborted) return;
         const baseMsg =

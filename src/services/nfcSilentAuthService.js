@@ -12,6 +12,7 @@ import {
   setActiveRingFromNormalizedUid,
   upsertBoundRingByUidKey,
 } from "./ringRegistryService";
+import { isNfcLockActive } from "./nfcLockService";
 
 export async function loginWithNormalizedUid(normalizedUid) {
   const uid = normalizeNfcUidInput(normalizedUid);
@@ -64,7 +65,13 @@ export async function loginWithNormalizedUid(normalizedUid) {
  * Full flow: Web NFC scan → normalize UID from serial or NDEF fallback → login.
  */
 export async function silentLoginViaNfcScan() {
+  if (isNfcLockActive()) {
+    throw new Error("nfc_busy");
+  }
   const scan = await readNfcScanFull();
+  if (!scan) {
+    throw new Error("nfc_scan_skipped_active_lock");
+  }
   const raw = scan.serialNumber || scan.text || "";
   let normalized = normalizeNfcUidInput(raw);
   if (!normalized && scan.text) {

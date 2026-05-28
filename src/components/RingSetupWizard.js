@@ -36,6 +36,7 @@ function privacyPolicyHref() {
 export const RING_SETUP_DISMISSED_KEY = "haven.ring.setup.dismissed.v1";
 const INSTALL_CONFIRM_SUPPRESS_KEY = "haven.install.confirm.suppress.v1";
 const PENDING_RING_SCAN_KEY = "haven.ring.setup.pending_scan.v1";
+const PENDING_RING_SCAN_COMPAT_KEY = "pendingNfcScan";
 
 function isIosLike() {
   if (typeof navigator === "undefined") return false;
@@ -150,6 +151,33 @@ export function RingSetupWizard({
     ? t.ringLinkDetected
     : t.ringLinkNotDetected;
 
+  const safeSetStep = useCallback((next) => {
+    window.setTimeout(() => setStep(next), 0);
+  }, []);
+
+  const safeSetScanPayload = useCallback((payload) => {
+    window.requestAnimationFrame(() => setScanPayload(payload));
+  }, []);
+
+  const progressIndex = useMemo(() => {
+    if (step === "scan") return 1;
+    if (step === "blocked_security" || step === "verify") return 2;
+    if (step === "name") return 3;
+    if (step === "success") return 4;
+    return 1;
+  }, [step]);
+
+  useEffect(() => {
+    // Temporary verbose diagnostics for real-device binding investigations.
+    // eslint-disable-next-line no-console
+    console.log("[RingSetupWizard][step]", {
+      step,
+      hasScanPayload: Boolean(scanPayload),
+      scanPayload,
+      securityInitialized: getSecuritySummary().initialized,
+    });
+  }, [step, scanPayload]);
+
   const resetFormState = useCallback(() => {
     setScanPayload(null);
     setPassword("");
@@ -179,6 +207,7 @@ export function RingSetupWizard({
     if (typeof window === "undefined" || !payload) return;
     try {
       window.localStorage.setItem(PENDING_RING_SCAN_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(PENDING_RING_SCAN_COMPAT_KEY, JSON.stringify(payload));
     } catch {
       // ignore storage failures
     }
@@ -188,6 +217,7 @@ export function RingSetupWizard({
     if (typeof window === "undefined") return;
     try {
       window.localStorage.removeItem(PENDING_RING_SCAN_KEY);
+      window.localStorage.removeItem(PENDING_RING_SCAN_COMPAT_KEY);
     } catch {
       // ignore storage failures
     }
@@ -201,9 +231,9 @@ export function RingSetupWizard({
     }
     clearPendingScan();
     setStepNote("");
-    setStep("verify");
+    safeSetStep("verify");
     return true;
-  }, [clearPendingScan, t.needSecurityStillMissing]);
+  }, [clearPendingScan, t.needSecurityStillMissing, safeSetStep]);
 
   useEffect(() => {
     if (!open || step !== "intro" || typeof window === "undefined") return;
@@ -212,18 +242,32 @@ export function RingSetupWizard({
       if (!raw) return;
       const payload = JSON.parse(raw);
       if (!payload || (!payload.serialNumber && !payload.text)) return;
-      setScanPayload(payload);
+      safeSetScanPayload(payload);
       const security = getSecuritySummary();
       if (security.initialized) {
         clearPendingScan();
-        setStep("verify");
+        safeSetStep("verify");
       } else {
-        setStep("blocked_security");
+        safeSetStep("blocked_security");
       }
     } catch {
       // ignore malformed pending payload
     }
-  }, [open, step, clearPendingScan]);
+  }, [open, step, clearPendingScan, safeSetScanPayload, safeSetStep]);
+
+  useEffect(() => {
+    if (!open || step !== "blocked_security" || typeof document === "undefined") return;
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      const resumed = resumeAfterSecuritySetup();
+      if (resumed) {
+        // eslint-disable-next-line no-console
+        console.log("[RingSetupWizard][resume] auto-resumed from blocked_security");
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [open, step, resumeAfterSecuritySetup]);
 
   function dismissWizard() {
     if (typeof window !== "undefined") {
@@ -237,15 +281,20 @@ export function RingSetupWizard({
     setBindError("");
     try {
       const data = await readNfcScanFull();
-      setScanPayload(data);
+      if (!data) return;
+      // eslint-disable-next-line no-console
+      console.log("[RingSetupWizard][scan] success", data);
+      safeSetScanPayload(data);
       const security = getSecuritySummary();
       if (!security.initialized) {
         persistPendingScan(data);
-        setStep("blocked_security");
+        safeSetStep("blocked_security");
         return;
       }
-      setStep("verify");
-    } catch {
+      safeSetStep("verify");
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("[RingSetupWizard][scan] failed", error);
       setBindError(t.readError);
     } finally {
       setScanBusy(false);
@@ -260,7 +309,7 @@ export function RingSetupWizard({
         password,
         recoveryCode,
       });
-      setStep("name");
+      safeSetStep("name");
     } catch {
       setVerifyError(t.verifyError);
     } finally {
@@ -285,7 +334,7 @@ export function RingSetupWizard({
       return;
     }
     setBindError("");
-    setScanPayload({
+    safeSetScanPayload({
       serialNumber: normalized,
       text: normalized,
     });
@@ -295,10 +344,10 @@ export function RingSetupWizard({
         serialNumber: normalized,
         text: normalized,
       });
-      setStep("blocked_security");
+      safeSetStep("blocked_security");
       return;
     }
-    setStep("verify");
+    safeSetStep("verify");
   }
 
   async function handleSaveRing() {
@@ -341,6 +390,18 @@ export function RingSetupWizard({
         }),
       });
       const json = await res.json().catch(() => ({}));
+      // eslint-disable-next-line no-console
+      console.log("[RingSetupWizard][bind] request", {
+        nfc_uid: normalizedUid,
+        nickname: (label.trim() || "Ring").trim(),
+        privacy_acknowledged: true,
+      });
+      // eslint-disable-next-line no-console
+      console.log("[RingSetupWizard][bind] response", {
+        ok: res.ok,
+        status: res.status,
+        body: json,
+      });
       if (!res.ok) {
         const errMsg =
           typeof json.error === "string" && json.error ? json.error : "";
@@ -349,7 +410,7 @@ export function RingSetupWizard({
           upsertBoundRingByUidKey(computeRingUidKey(normalizedUid), {
             label: label.trim() || "Ring",
           });
-          setStep("success");
+          safeSetStep("success");
           return;
         }
         setBindError(
@@ -387,12 +448,14 @@ export function RingSetupWizard({
         locale,
         metadata: { source: "ring_setup_bind", strategy: "factory_prewritten_url" },
       });
-      setStep("success");
+      safeSetStep("success");
     } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[RingSetupWizard][bind] exception", e);
       if (e?.code === "duplicate_ring") {
         setBindError(t.duplicateError);
       } else if (e?.code === "ring_limit") {
-        setStep("limit");
+        safeSetStep("limit");
       } else {
         setBindError(t.readError);
       }
@@ -419,7 +482,7 @@ export function RingSetupWizard({
       setSetupRecoveryCode(code || "");
       setPassword(pwd);
       setStepNote(t.setupSecurityDone || "Device protection is ready. Continuing binding...");
-      setStep("name");
+      safeSetStep("name");
     } catch {
       setSetupError(t.setupSecurityFailed || "Could not set device protection. Please try again.");
     } finally {
@@ -520,6 +583,23 @@ export function RingSetupWizard({
   return (
     <div style={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="ring-setup-title">
       <section style={styles.modal}>
+        <div style={styles.progressWrap} aria-label="Ring binding progress">
+          <div style={styles.progressHeader}>
+            <span style={styles.progressTitle}>Step {progressIndex} of 4</span>
+          </div>
+          <div style={styles.progressTrack}>
+            <span style={{ ...styles.progressFill, width: `${(progressIndex / 4) * 100}%` }} />
+          </div>
+          <p style={styles.progressLabel}>
+            {progressIndex === 1
+              ? "Step 1: Scan ring"
+              : progressIndex === 2
+                ? "Step 2: Device security"
+                : progressIndex === 3
+                  ? "Step 3: Name and bind"
+                  : "Step 4: Done"}
+          </p>
+        </div>
         {step === "intro" ? (
           <>
             <p style={styles.kicker}>{t.kicker}</p>
@@ -1149,6 +1229,43 @@ const styles = {
     display: "grid",
     gap: 12,
     fontFamily: "Inter, system-ui, sans-serif",
+  },
+  progressWrap: {
+    border: "1px solid rgba(90, 59, 48, 0.6)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    background: "rgba(23, 18, 16, 0.55)",
+    display: "grid",
+    gap: 6,
+  },
+  progressHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressTitle: {
+    fontSize: 12,
+    color: "#f0c29e",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    display: "block",
+    height: "100%",
+    borderRadius: 999,
+    background: "linear-gradient(90deg, #d9a67a, #f0c29e)",
+    transition: "width 220ms ease",
+  },
+  progressLabel: {
+    margin: 0,
+    fontSize: 12,
+    color: "#d9c3b3",
   },
   kicker: {
     margin: 0,

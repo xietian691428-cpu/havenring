@@ -16,6 +16,7 @@ import {
   RingSetupWizard,
   RING_SETUP_DISMISSED_KEY,
 } from "../components/RingSetupWizard";
+import { RingSetupErrorBoundary } from "../components/RingSetupErrorBoundary";
 import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
 import { useMemories } from "../hooks/useMemories";
@@ -813,20 +814,22 @@ export function AppRouter() {
   return (
     <>
       {renderWithShell(mainContent)}
-      <RingSetupWizard
-        key={ringSetupKey}
-        open={ringSetupOpen}
-        locale={locale}
-        onClose={() => setRingSetupOpen(false)}
-        onFinished={handleRingSetupFinished}
-        onTestSeal={() => {
-          setRingSetupOpen(false);
-          navigateTo({ name: "new", memoryId: null, autoSeal: true }, "forward");
-        }}
-        onOpenSettings={() =>
-          navigateTo({ name: "settings", memoryId: null }, "forward")
-        }
-      />
+      <RingSetupErrorBoundary>
+        <RingSetupWizard
+          key={ringSetupKey}
+          open={ringSetupOpen}
+          locale={locale}
+          onClose={() => setRingSetupOpen(false)}
+          onFinished={handleRingSetupFinished}
+          onTestSeal={() => {
+            setRingSetupOpen(false);
+            navigateTo({ name: "new", memoryId: null, autoSeal: true }, "forward");
+          }}
+          onOpenSettings={() =>
+            navigateTo({ name: "settings", memoryId: null }, "forward")
+          }
+        />
+      </RingSetupErrorBoundary>
     </>
   );
 }
