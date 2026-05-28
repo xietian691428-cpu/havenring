@@ -46,4 +46,5 @@ export {
   readComposerSnapshot,
   recoverComposerSnapshotToDraft,
   tryRecoverSealPrepFromComposerSnapshot,
+  forceArmSealForCurrentUser,
 } from "./sealComposerRecovery";

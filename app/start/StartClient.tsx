@@ -25,6 +25,7 @@ import {
   getSealSdmContextPayload,
   hasRecoverableComposerContent,
   isSealFlowArmed,
+  forceArmSealForCurrentUser,
   tryRecoverSealPrepFromComposerSnapshot,
 } from "@/src/features/seal";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
@@ -271,26 +272,38 @@ export default function StartClient() {
     [nfcFlow, sdmState, sealPrepRevision]
   );
 
+  const showSealArmFailedGuide =
+    nfcFlow &&
+    !sealArmed &&
+    hasRecoverableContent &&
+    !nfcSealBootstrapping &&
+    sdmState.kind === "ready" &&
+    sdmState.scene === "daily_access" &&
+    isDailySelfOwner;
+
   const showSealPrepGuide =
     nfcFlow &&
     !sealArmed &&
     !hasRecoverableContent &&
     !nfcSealBootstrapping &&
+    !showSealArmFailedGuide &&
     (sdmState.kind === "resolving" ||
       (sdmState.kind === "ready" && sdmState.scene === "daily_access"));
 
   const showSealConnecting =
     nfcFlow &&
+    !showSealArmFailedGuide &&
     (sealArmed || hasRecoverableContent || nfcSealBootstrapping) &&
     (sdmState.kind === "resolving" || nfcSealBootstrapping);
 
   useEffect(() => {
-    if (!isDailySelfOwner || showSealPrepGuide) return;
+    if (!isDailySelfOwner || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
+      return;
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, 2000);
     return () => window.clearTimeout(t);
-  }, [isDailySelfOwner, showSealPrepGuide]);
+  }, [isDailySelfOwner, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
 
   const hideFtuxOAuthDuringSealTouch =
     nfcFlow &&
@@ -343,8 +356,15 @@ export default function StartClient() {
 
     void (async () => {
       setNfcSealBootstrapping(true);
+      if (hasRecoverableComposerContent()) {
+        setNotice(START_PAGE_EN.preparingMemory);
+      }
       try {
         await tryRecoverSealPrepFromComposerSnapshot();
+        if (!isSealFlowArmed() && hasRecoverableComposerContent()) {
+          setNotice(START_PAGE_EN.preparingMemory);
+          await forceArmSealForCurrentUser();
+        }
         setSealPrepRevision((n) => n + 1);
 
         const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
@@ -743,29 +763,27 @@ export default function StartClient() {
               <h1 style={styles.title}>{idleHero.title}</h1>
               <p style={{ ...styles.subtitle, whiteSpace: "pre-line" }}>{idleHero.subtitle}</p>
             </>
-          ) : showSealPrepGuide ? (
-            <section style={styles.sealGuideCard} aria-live="polite">
-              <h2 style={styles.sealGuideTitle}>{sealFlow.oneStepLeft}</h2>
-              <p style={styles.sealGuideBody}>{sealFlow.goBackToSeal}</p>
+          ) : showSealArmFailedGuide || showSealPrepGuide ? (
+            <p
+              style={{ ...styles.subtitle, fontSize: 17, lineHeight: 1.45, marginTop: 8 }}
+              role={showSealArmFailedGuide ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {sealFlow.sealNotReadyLine}{" "}
               <button
                 type="button"
-                style={styles.sealGuidePrimary}
                 onClick={() => {
-                  window.location.assign("/app");
+                  window.location.assign("/app?open=new");
                 }}
+                style={styles.sealGuideInlineLink}
               >
-                {sealFlow.goBackCta}
+                {sealFlow.sealArmFailedCta}
               </button>
-            </section>
+            </p>
           ) : showSealConnecting ? (
-            <>
-              <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>
-                {sealFlow.connectingTitle}
-              </h1>
-              <p style={{ ...styles.subtitle, fontSize: 18, lineHeight: 1.45 }}>
-                {sealFlow.connectingBody}
-              </p>
-            </>
+            <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8, letterSpacing: "-0.02em" }}>
+              {sealFlow.sealingLabel}
+            </h1>
           ) : sdmCopy ? (
             <>
               <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>{sdmCopy.title}</h1>
@@ -775,14 +793,21 @@ export default function StartClient() {
             </>
           ) : null}
 
-          {showSealCountdown && sealRemainingMs > 0 ? (
+          {showSealCountdown &&
+          sealRemainingMs > 0 &&
+          !showSealConnecting &&
+          !showSealArmFailedGuide ? (
             <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
               {START_PAGE_EN.sealCountdownPrefix}{" "}
               <strong>{formatSealCountdown(sealRemainingMs)}</strong>
             </p>
           ) : null}
 
-          {nfcFlow && sdmCopy && !showSealPrepGuide ? (
+          {nfcFlow &&
+          sdmCopy &&
+          !showSealPrepGuide &&
+          !showSealConnecting &&
+          !showSealArmFailedGuide ? (
             <section
               style={{ ...styles.sdmCard, ...getSdmCardStyle(sdmState) }}
               role={sdmState.kind === "failed" ? "alert" : "status"}
@@ -1260,6 +1285,17 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 280,
     justifySelf: "center",
+  },
+  sealGuideInlineLink: {
+    border: "none",
+    background: "none",
+    padding: 0,
+    margin: 0,
+    color: "#e6b48d",
+    fontSize: "inherit",
+    fontWeight: 600,
+    textDecoration: "underline",
+    cursor: "pointer",
   },
   notice: {
     margin: 0,

@@ -87,3 +87,36 @@ export async function tryRecoverSealPrepFromComposerSnapshot(): Promise<boolean>
   primeSealPrepAfterDraftPersisted(draftId);
   return true;
 }
+
+/**
+ * Last-resort arm before /start SDM resolve when the user has draft content but
+ * never pressed Seal — used so a ring tap can still finish as seal_confirmation.
+ */
+export async function forceArmSealForCurrentUser(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (isSealFlowArmed()) return true;
+
+  // Prefer saving live composer snapshot → draft + arm (highest success on ring tap).
+  if (composerSnapshotHasContent()) {
+    const fromSnapshot = await recoverComposerSnapshotToDraft();
+    if (fromSnapshot) {
+      primeSealPrepAfterDraftPersisted(fromSnapshot);
+      if (isSealFlowArmed()) return true;
+    }
+  }
+
+  const pending = readPendingSealDraftIds();
+  if (pending.length) {
+    armSealFlowWithPersistence(pending);
+    return true;
+  }
+
+  const recovered = await tryRecoverSealPrepFromComposerSnapshot();
+  if (recovered || isSealFlowArmed()) return true;
+
+  if (!hasRecoverableComposerContent()) return false;
+  const draftId = await recoverComposerSnapshotToDraft();
+  if (!draftId) return false;
+  primeSealPrepAfterDraftPersisted(draftId);
+  return isSealFlowArmed();
+}

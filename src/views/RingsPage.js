@@ -18,6 +18,7 @@ import {
   getSubscriptionSummary,
 } from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
+import { RingReadyBadge } from "../components/RingReadyBadge";
 
 export function RingsPage({
   locale = "en",
@@ -266,6 +267,8 @@ export function RingsPage({
             {t.addRingHeaderCta || t.openSetup}
           </button>
         </header>
+
+        <RingReadyBadge ready={!loading && rings.length > 0} />
 
         <section style={styles.guideCard}>
           <p style={styles.guideTitle}>{getPlanBadgeLabel(userEntitlements)}</p>

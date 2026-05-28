@@ -18,7 +18,7 @@ const EN = {
     "Link a Haven NFC ring to unlock the seal ritual on Haven Plus, or keep using Save Securely without a ring.",
   emptyTrialHint:
     "Link your first ring to start a 30-day Haven Plus trial where offered — Seal with Ring is included during the trial.",
-  bindFirstRingCta: "Bind your first ring",
+  bindFirstRingCta: "Bind New Ring",
   addAnotherRingSecondary: "Add another ring",
   howHavenToggleShow: "How your ring works with Face ID",
   howHavenToggleHide: "Hide guide",

@@ -57,6 +57,7 @@ const EN = {
     "5. Your memories are protected with strong encryption on supported flows and stored as sealed records on your devices (not casually editable).",
   ],
   howHavenWorksOneLine: HAVEN_EN_QUICK_GUIDE_ONE_LINE,
+  sealRitualDetail: HAVEN_HELP_CENTER_EN.sealRitualDetail,
 };
 
 export const HELP_CENTER_CONTENT = {

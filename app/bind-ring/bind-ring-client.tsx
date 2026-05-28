@@ -21,6 +21,9 @@ type AuthState = "checking" | "signed_out" | "ready";
 type BindState = "idle" | "binding" | "success" | "error";
 
 type BindResponse = {
+  success?: boolean;
+  alreadyLinkedToYou?: boolean;
+  message?: string;
   ring?: {
     id?: string;
     bound_at?: string | null;
@@ -250,14 +253,10 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       }
       await saveLocalRing(payload);
       setBindState("success");
-      setMessage(
-        payload.plusTrialActivated
-          ? "Ring linked. 30-Day Haven Plus activated! Opening Haven..."
-          : "Ring linked. Opening Haven..."
-      );
+      const trial = payload.plusTrialActivated ? "1" : "0";
       window.setTimeout(() => {
-        window.location.href = "/hub";
-      }, 900);
+        window.location.href = `/bind-success?trial=${trial}`;
+      }, 400);
     } catch {
       setBindState("error");
       setMessage("Verification or binding failed. Check your password or recovery code and try again.");

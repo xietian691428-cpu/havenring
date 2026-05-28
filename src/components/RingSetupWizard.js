@@ -86,6 +86,7 @@ export function RingSetupWizard({
   open,
   onClose,
   onFinished,
+  onTestSeal,
   locale = "en",
   onOpenSettings,
 }) {
@@ -940,9 +941,20 @@ export function RingSetupWizard({
                 type="button"
                 onClick={() => {
                   onFinished?.({ nickname: label.trim() || "friend" });
+                  onTestSeal?.();
                   onClose?.();
                 }}
                 style={styles.primaryBtn}
+              >
+                {t.testSealNow || "Test Seal Now"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onFinished?.({ nickname: label.trim() || "friend" });
+                  onClose?.();
+                }}
+                style={styles.secondaryBtn}
               >
                 {t.doneToHaven}
               </button>

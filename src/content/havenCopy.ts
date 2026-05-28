@@ -70,7 +70,33 @@ export const HAVEN_EN_QUICK_GUIDE_ONE_LINE =
 
 /** Short compliance note for Pricing, Settings, upgrade modal, and in-app footers. */
 export const HAVEN_CLOUD_STORAGE_DISCLAIMER_EN =
-  "Cloud storage (Haven Plus only) is optional. By default, memories stay on this device. Full end-to-end encrypted cloud sync is still in development — cloud features may be limited or in beta until then. Where client-side encryption applies, we cannot read your memory content. See the Privacy Policy for details.";
+  "Free: memories stay on this device only (encrypted local storage). Haven Plus adds optional end-to-end encrypted cloud backup and multi-device sync where available. If you cancel Plus, cloud copies remain available to download for 30 days, then are deleted automatically. We cannot read your memory content where encryption applies. See the Privacy Policy for details.";
+
+/** Where we explain local vs cloud storage (settings, upgrade, seal success). */
+export const HAVEN_STORAGE_MODE_EN = {
+  freeLocal:
+    "Free plan: your sealed memories stay on this device only (encrypted local storage).",
+  plusDual:
+    "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync across devices.",
+  cancelPlus:
+    "If you cancel Plus, you can download cloud backups for 30 days; after that, cloud copies are removed automatically. Memories on your device are not deleted.",
+  sealSuccess:
+    "This memory is saved on this device. Haven Plus adds optional encrypted cloud backup and sync across your devices.",
+} as const;
+
+export const BIND_SUCCESS_EN = {
+  title: "Your Ring is Ready!",
+  subtitle: "You can now seal important memories with a simple tap.",
+  sealFirstMemoryCta: "Seal Your First Memory Now",
+  goToMemoriesCta: "Go to My Memories",
+  plusTrialNote:
+    "Your 30-day Haven Plus trial is active — write a memory, then tap your ring to seal it.",
+} as const;
+
+export const RING_READY_BADGE_EN = {
+  ready: "Ring Ready",
+  notLinked: "Link a ring to unlock Seal with Ring",
+} as const;
 
 const HAVEN_SECURITY_DELETE_NOTE: Record<HavenPlatform, string> = {
   ios: "Sealed memories need Face ID plus an extra confirmation before they can be removed.",
@@ -453,32 +479,37 @@ export const START_PAGE_EN = {
     "Leave now? Your draft is safe on this device — you can resume sealing from Capture when you are ready.",
   leaveSealConfirmCta: "Leave anyway",
   retryRingTap: "Try again",
-  readingRingStatus: "Reading ring status…",
+  readingRingStatus: "Reading your ring…",
+  preparingMemory: "Sealing…",
   ringVerifyFailedNotice: "We could not verify that tap. Try again, or check your connection.",
   footerSecurityReminder:
     "Haven encrypts your memories on your device. Leaving this screen during a seal only pauses the ritual — nothing is published without your confirmation.",
   sealCountdownPrefix: "Time left to seal:",
 } as const;
 
-/** Foolproof Seal-with-Ring copy — New Memory, /start NFC, success screen. */
+/** Minimal Seal-with-Ring copy — details live in Help Center. */
 export const SEAL_FLOW_EN = {
-  readyTitle: "Ready to Seal",
-  readySubtitleIos: "Hold your ring to the top of your iPhone",
-  readySubtitleAndroid: "Tap your ring on the back of your phone",
-  readySubtitleOther: "Hold your ring near your phone NFC reader",
-  successTitle: "Memory Sealed!",
-  successMessage: "This moment is now safely protected forever.",
-  autoSaving: "Saving your memory...",
-  oneStepLeft: "Almost there! We saved your content. Tap Seal again to finish.",
-  goBackToSeal:
-    'Open Haven, go to New Memory, and tap "Seal this Memory with Ring" once.',
-  connectingTitle: "Sealing your memory...",
-  connectingBody: "Just a moment...",
-  goBackCta: "Go Back",
+  readyTitle: "Tap your ring",
+  tapPlacementIos: "Near top of phone",
+  tapPlacementAndroid: "On back of phone",
+  tapPlacementOther: "Near NFC reader",
+  readySubtitleIos: "Near top of phone",
+  readySubtitleAndroid: "On back of phone",
+  readySubtitleOther: "Near NFC reader",
+  autoSealHint: "Write something meaningful, then tap your ring.",
+  sealingLabel: "Sealing…",
+  sealNotReadyLine: "Almost ready — please tap Seal first.",
+  successTitle: "Sealed.",
+  successMessage: "Beautiful moment.",
+  successViewMemoriesCta: "Memories",
+  successSealAnotherCta: "Seal another",
+  autoSaving: "Saving…",
+  sealArmFailedCta: "Open",
 } as const;
 
 export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {
   readySubtitle: string;
+  tapPlacement: string;
 };
 
 export function getSealFlowCopy(platform: HavenPlatform): SealFlowCopyEn {
@@ -488,7 +519,13 @@ export function getSealFlowCopy(platform: HavenPlatform): SealFlowCopyEn {
       : platform === "android"
         ? SEAL_FLOW_EN.readySubtitleAndroid
         : SEAL_FLOW_EN.readySubtitleOther;
-  return { ...SEAL_FLOW_EN, readySubtitle };
+  const tapPlacement =
+    platform === "ios"
+      ? SEAL_FLOW_EN.tapPlacementIos
+      : platform === "android"
+        ? SEAL_FLOW_EN.tapPlacementAndroid
+        : SEAL_FLOW_EN.tapPlacementOther;
+  return { ...SEAL_FLOW_EN, readySubtitle, tapPlacement };
 }
 
 /** Post-claim / Plus trial toast copy (used from StartClient and similar) */
@@ -930,6 +967,8 @@ export const HAVEN_HELP_CENTER_EN = {
   categoryHowSubtitle: "One calm overview — ring vs Face ID in one place.",
   categoryRitualTitle: "The Ring & Seal Ritual",
   categoryRitualSubtitle: "Where to tap, what to expect, iOS vs Android.",
+  sealRitualDetail:
+    "To seal a memory: open New Memory, write your story, then tap Seal with Ring. When you see Tap your ring, hold your Haven ring to the NFC spot on your phone (top on iPhone, back on most Android phones) until the seal completes. If sealing does not start, return to New Memory, tap Seal with Ring once, then tap your ring again. Your draft stays on this device until the seal finishes. Haven Plus adds optional encrypted cloud backup — see Settings and Privacy Policy.",
   categoryPrivacyTitle: "Privacy & Security",
   categoryPrivacySubtitle: "What stays on-device, exports, and high-risk actions.",
   categoryBillingTitle: "Subscription & Billing",

@@ -52,7 +52,7 @@ type Route =
   | { name: "timeline"; memoryId: null }
   | { name: "explore"; memoryId: null }
   | { name: "rings"; memoryId: null }
-  | { name: "new"; memoryId: string | null }
+  | { name: "new"; memoryId: string | null; autoSeal?: boolean }
   | { name: "settings"; memoryId: null }
   | { name: "pricing"; memoryId: null }
   | { name: "help"; memoryId: null }
@@ -343,6 +343,20 @@ export function AppRouter() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    const openNew =
+      params.get("open") === "new" || params.get("seal") === "1" || params.get("seal") === "new";
+    const autoSeal =
+      params.get("autoSeal") === "true" || params.get("autoSeal") === "1";
+    if (openNew) {
+      navigateTo({ name: "new", memoryId: null, autoSeal }, "forward");
+      params.delete("open");
+      params.delete("seal");
+      params.delete("autoSeal");
+      const qs = params.toString();
+      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+      return;
+    }
     const memoryId =
       params.get("memoryId") ?? params.get("memory") ?? params.get("m");
     if (!memoryId) return;
@@ -652,6 +666,7 @@ export function AppRouter() {
         <NewMemoryPage
           locale={locale}
           userEntitlements={entitlements}
+          autoSealMode={Boolean(route.autoSeal)}
           initialEditMemory={
             route.memoryId
               ? ((memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ?? null)
@@ -791,6 +806,10 @@ export function AppRouter() {
         locale={locale}
         onClose={() => setRingSetupOpen(false)}
         onFinished={handleRingSetupFinished}
+        onTestSeal={() => {
+          setRingSetupOpen(false);
+          navigateTo({ name: "new", memoryId: null, autoSeal: true }, "forward");
+        }}
         onOpenSettings={() =>
           navigateTo({ name: "settings", memoryId: null }, "forward")
         }

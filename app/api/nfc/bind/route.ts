@@ -47,9 +47,9 @@ export async function POST(req: NextRequest) {
     if (secondary !== "1") {
       return NextResponse.json(
         {
-          error: "Secondary verification required.",
+          error: "Please verify your identity first.",
           code: "secondary_verification_required",
-          hint: "Complete device / passkey verification, then set X-Haven-Secondary-Verified: 1.",
+          hint: "Complete device verification, then set X-Haven-Secondary-Verified: 1.",
         },
         { status: 403 }
       );
@@ -89,13 +89,18 @@ export async function POST(req: NextRequest) {
     }
     if (existingGlobal) {
       if (existingGlobal.user_id === user.id) {
-        return NextResponse.json(
-          {
-            error: "This ring is already linked to your account.",
-            code: "ALREADY_BOUND_SELF",
-          },
-          { status: 409 }
-        );
+        const { data: existingRing } = await supabase
+          .from("user_nfc_rings")
+          .select("id, nickname, bound_at, last_used_at, is_active")
+          .eq("id", existingGlobal.id)
+          .maybeSingle();
+
+        return NextResponse.json({
+          success: true,
+          alreadyLinkedToYou: true,
+          ring: existingRing ?? { id: existingGlobal.id },
+          message: "This ring is already linked to your account.",
+        });
       }
       return NextResponse.json(
         {
@@ -169,7 +174,11 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({
+      success: true,
+      ringId: data.id,
       ring: data,
+      message:
+        "Ring successfully linked! You can now use it to seal memories.",
       plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
       plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
       subscription: plusTrial,

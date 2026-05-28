@@ -106,7 +106,8 @@ const EN = {
   rewriteVerifyFailed:
     "Write finished, but read-back verification did not match. Please try once more.",
   rewriteFailed: "Could not rewrite ring link. Hold still and try again.",
-  successTitle: "Ring linked",
+  successTitle: "Your Ring is Ready!",
+  testSealNow: "Seal Your First Memory Now",
   successBody:
     "This ring is now linked to your account for quick sign-in and optional sealing. Any linked ring can bring you back to Haven.",
   successEncourage:
@@ -116,7 +117,7 @@ const EN = {
   factoryStartLinkReadyAndroid:
     "Factory setup note: this ring should already open https://havenring.me/start. If needed, you can rewrite the link later in Settings on Android.",
   addAnother: "Add another ring",
-  doneToHaven: "Go to my memory space",
+  doneToHaven: "Open Haven",
   duplicateError: "This ring is already in your list.",
   limitTitle: "Ring limit reached",
   limitBody:

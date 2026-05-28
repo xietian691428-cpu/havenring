@@ -3,12 +3,12 @@ const EN = {
   title: "Privacy-first controls",
   upgradeSectionTitle: "Haven Plus",
   upgradeSectionBody:
-    "Unlock Seal with Ring and optional cloud backup where we offer it — upgrade when you are ready.",
+    "Haven Plus unlocks Seal with Ring plus optional end-to-end encrypted cloud backup and multi-device sync. Free plan keeps everything on this device only.",
   upgradeSectionCta: "View plans & pricing",
   back: "Back",
   localSectionTitle: "Local data",
   localDefault:
-    "Default: Everything stays on your device. Cloud backup is optional.",
+    "Free plan: memories stay on this device only (encrypted local storage). Cloud is optional with Haven Plus.",
   loadingStats: "Loading local stats...",
   storageUnavailable: "Unavailable",
   storedStatsLabel: "Stored memories",
@@ -25,10 +25,10 @@ const EN = {
   confirmRevokeDevice:
     "Remove this device trust? It will require password or recovery code next time.",
   deviceRevoked: "Device access revoked.",
-  cloudSectionTitle: "Optional cloud backup",
+  cloudSectionTitle: "Cloud backup (Haven Plus)",
   cloudToggleLabel:
-    "Enable Cloud Backup (Sign in with Apple, can be turned off anytime)",
-  cloudOff: "Cloud backup is off.",
+    "Enable encrypted cloud backup and sync (Plus). You can turn this off anytime.",
+  cloudOff: "Cloud backup is off — your memories stay on this device only.",
   cloudEnabledNoSignIn: "Cloud backup is enabled but not signed in yet.",
   cloudEnabledSignedIn: "Cloud backup is enabled and linked.",
   signInApple: "Sign in with Apple",
@@ -120,7 +120,7 @@ const EN = {
   accountCloudOff: "Not signed in for cloud backup.",
   subscriptionSectionTitle: "Subscription",
   subscriptionBody:
-    "Manage Haven Plus or your trial from your device’s subscription settings when billing is available.",
+    "Free: local storage only. Plus: local plus optional cloud sync. If you cancel Plus, download cloud data within 30 days — cloud copies are then removed automatically. Manage billing from your device’s subscription settings when available.",
   subscriptionManageCta: "Manage subscription",
   ringsSectionTitle: "Rings",
   ringsBody: "See linked rings, bind a new one, or revoke access if a ring is lost.",

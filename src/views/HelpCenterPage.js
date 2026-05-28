@@ -73,7 +73,7 @@ export function HelpCenterPage({
         keywords: "nfc tap ring seal ios android placement",
         body: (
           <>
-            <p style={styles.muted}>{t.tapBody}</p>
+            <p style={styles.muted}>{t.sealRitualDetail || t.tapBody}</p>
             <button type="button" onClick={() => setNfcGuideOpen(true)} style={styles.primaryButton}>
               {t.tapCta}
             </button>

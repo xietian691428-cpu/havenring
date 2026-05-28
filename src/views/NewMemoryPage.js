@@ -19,6 +19,8 @@ import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
 import { getNewMemoryPageCopy, getSealFlowCopy } from "../content/havenCopy";
+import { RingReadyBadge } from "../components/RingReadyBadge";
+import { getBoundRingCount } from "../services/ringRegistryService";
 
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
@@ -140,6 +142,7 @@ export function NewMemoryPage({
   locale = "en",
   userEntitlements = getFreeEntitlements(),
   initialEditMemory = null,
+  autoSealMode = false,
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
   const platform = useMemo(() => resolvePlatformTarget(), []);
@@ -149,6 +152,7 @@ export function NewMemoryPage({
   );
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
+  const ringReady = getBoundRingCount() > 0;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [releaseAtInput, setReleaseAtInput] = useState("");
@@ -234,6 +238,15 @@ export function NewMemoryPage({
     });
     return () => window.cancelAnimationFrame(id);
   }, []);
+
+  useEffect(() => {
+    if (!autoSealMode) return undefined;
+    const id = window.requestAnimationFrame(() => {
+      storyTextareaRef.current?.focus();
+      storyTextareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [autoSealMode]);
 
   const hasDraftContent = Boolean(
     title.trim() ||
@@ -708,7 +721,7 @@ export function NewMemoryPage({
   const isAndroid = platform === "android";
 
   function getSealPlacementHint() {
-    return sealFlow.readySubtitle;
+    return sealFlow.tapPlacement;
   }
 
   function getPrimaryButtonText() {
@@ -771,27 +784,29 @@ export function NewMemoryPage({
       </header>
 
       <div style={styles.scrollBody}>
+        {autoSealMode && !sealPromptOpen ? (
+          <p style={styles.autoSealHint} aria-live="polite">
+            {sealFlow.autoSealHint}
+          </p>
+        ) : null}
         <section
           style={styles.heroSeal}
           aria-labelledby={sealPromptOpen ? "haven-seal-ready-title" : "haven-hero-seal-title"}
         >
+          {ringReady ? <RingReadyBadge ready /> : null}
           {sealPromptOpen ? (
             <div style={styles.sealReadyPanel} role="status" aria-live="polite">
               <div style={styles.sealReadyPulseWrap} aria-hidden>
                 <span style={styles.sealReadyHalo} />
-                <span style={styles.sealReadyRingMark}>◯</span>
+                <span style={styles.sealReadyHaloOuter} />
+                <span style={styles.sealReadyRingMark} title="Haven Ring">
+                  ◎
+                </span>
               </div>
               <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
                 {sealFlow.readyTitle}
               </h2>
               <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
-              {sealRemainingMs > 0 ? (
-                <p style={styles.sealReadyMeta}>
-                  {pageCopy.sealCountdownPrefix}{" "}
-                  <strong>{sealRemainingLabel}</strong>
-                </p>
-              ) : null}
-              <p style={styles.sealReadyHint}>{pageCopy.sealPrimaryHint}</p>
               {!networkOnline ? (
                 <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
               ) : null}
@@ -1262,6 +1277,14 @@ const styles = {
     textAlign: "center",
     color: "#faf6f1",
   },
+  autoSealHint: {
+    margin: "0 0 12px",
+    padding: "0 4px",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "rgba(212, 175, 55, 0.85)",
+    textAlign: "center",
+  },
   heroSeal: {
     display: "grid",
     gap: 12,
@@ -1303,39 +1326,49 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 72,
-    marginBottom: 4,
+    minHeight: 96,
+    marginBottom: 8,
   },
   sealReadyHalo: {
     position: "absolute",
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: 999,
-    border: "2px solid rgba(232, 184, 146, 0.35)",
+    border: "2px solid rgba(232, 184, 146, 0.45)",
     animation: "havenSealReadyHalo 2.2s ease-out infinite",
+    pointerEvents: "none",
+  },
+  sealReadyHaloOuter: {
+    position: "absolute",
+    width: 96,
+    height: 96,
+    borderRadius: 999,
+    border: "1px solid rgba(212, 175, 55, 0.25)",
+    animation: "havenSealReadyHalo 2.8s ease-out infinite 0.4s",
     pointerEvents: "none",
   },
   sealReadyRingMark: {
     position: "relative",
-    fontSize: 42,
+    fontSize: 56,
     lineHeight: 1,
-    color: "#e8b892",
+    color: "#d4af37",
     animation: "havenSealReadyPulse 1.8s ease-in-out infinite",
-    textShadow: "0 0 18px rgba(232, 184, 146, 0.45)",
+    textShadow: "0 0 24px rgba(212, 175, 55, 0.55)",
   },
   sealReadyTitle: {
     margin: 0,
-    fontSize: 30,
-    fontWeight: 500,
+    fontSize: 34,
+    fontWeight: 600,
     letterSpacing: "-0.02em",
-    lineHeight: 1.15,
+    lineHeight: 1.12,
     color: "#ffffff",
   },
   sealReadyPlacement: {
-    margin: "12px 0 0",
-    fontSize: 20,
+    margin: "10px 0 0",
+    fontSize: 16,
+    fontWeight: 400,
     lineHeight: 1.35,
-    color: "rgba(255, 255, 255, 0.8)",
+    color: "rgba(255, 255, 255, 0.65)",
     maxWidth: 360,
     justifySelf: "center",
   },

@@ -50,13 +50,13 @@ const EN = {
   storyRequiredHint: "Add a few words about this moment — it's required to seal.",
   upgradeModalTitle: "Unlock the Ritual Experience",
   upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional cloud backup where we offer it — about 50 GB for Plus where available. Link your first ring to start a 30-day trial where available.",
+    "Haven Plus unlocks Seal with Ring and optional encrypted cloud backup and sync. Free plan keeps memories on this device only. Link your first ring to start a 30-day trial where available.",
   upgradeModalDismiss: "Maybe later",
   upgradeSealShort: "Haven Plus unlocks Seal with Ring.",
   upgradeSealCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   title: "Capture this moment",
   freePlanOneLiner:
-    "Free plan: 2 GB local storage. Seal with Ring requires Haven Plus.",
+    "Free plan: encrypted local storage on this device only. Seal with Ring requires Haven Plus.",
   addPhotosCta: "Add Photos (max 6)",
   addVideoCta: "Add Videos (max 6)",
   addFilesCta: "Add Files (max 5)",

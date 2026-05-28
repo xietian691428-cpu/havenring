@@ -30,18 +30,18 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
     {
       heading: "2. Data Storage",
       bullets: [
-        "Default: All your memories are stored locally on your device (PWA IndexedDB).",
-        "Cloud Storage (Haven Plus only): Optional end-to-end encrypted cloud backup and sync (when available).",
-        "Currently, all memories are stored locally on your device by default.",
-        "We are working on full E2EE cloud sync. Until then, cloud features are limited or in beta.",
-        "We cannot access your memory content where encryption is applied.",
-        "Free users have limited local storage (2 GB). Plus users receive 50 GB cloud storage where that tier is offered.",
+        "Free plan: memories stay on your device only, in encrypted local storage (IndexedDB).",
+        "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and multi-device sync where available.",
+        "We cannot access your memory content where client-side encryption applies.",
+        "Free plan includes about 2 GB of local storage. Plus includes expanded storage and optional cloud capacity where offered.",
+        "Cloud features may be limited or in beta while full E2EE sync rolls out.",
       ],
     },
     {
       heading: "3. Data Retention",
       bullets: [
-        "Sealed memories are kept as long as you want them on your devices.",
+        "Sealed memories remain on your devices until you delete them.",
+        "If you cancel Haven Plus, cloud copies remain available to download for 30 days, then are deleted automatically. Local copies on your device are not removed by cancellation alone.",
         "When you delete your account, local and cloud data are typically removed within 30 days.",
       ],
     },
