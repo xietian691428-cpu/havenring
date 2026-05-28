@@ -463,14 +463,6 @@ export function RingSetupWizard({
                   type="button"
                   onClick={() => {
                     resetFormState();
-                    if (isIosLike()) {
-                      setStep("blocked_ios");
-                      return;
-                    }
-                    if (!isStandalonePwa()) {
-                      setStep("blocked_install_recommended");
-                      return;
-                    }
                     if (!hasWebNfc()) {
                       setStep(isIosLike() ? "blocked_ios" : "blocked_no_nfc");
                       return;
@@ -488,8 +480,10 @@ export function RingSetupWizard({
             )}
             {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
             <div style={styles.statusBox}>
-              <p style={styles.statusLine}>{installStateLine}</p>
-              <p style={styles.statusLine}>{ringLinkStateLine}</p>
+              <p style={styles.statusLine}>
+                {t.installOptionalLater ||
+                  "Install is optional now. You can do it later in Settings."}
+              </p>
             </div>
             {installConsentOpen ? (
               <div style={styles.noticeBox}>

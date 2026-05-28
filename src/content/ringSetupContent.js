@@ -25,7 +25,8 @@ const EN = {
   installRecommendedBody:
     "iOS needs manual Add to Home Screen. Once added, Haven feels much closer to a native app and is more stable for daily use.",
   continueInBrowserCta: "Continue in browser anyway",
-  installNowCta: "Install to Home Screen now",
+  installNowCta: "Install app (optional)",
+  installOptionalLater: "Install is optional now. You can do it later in Settings.",
   installDoneHint: "Install prompt shown. Return here after adding Haven to your Home Screen.",
   installConsentTitle: "Before installing to Home Screen",
   installConsentBody:
