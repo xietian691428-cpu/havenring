@@ -743,6 +743,13 @@ export function RingSetupWizard({
               <h2 style={{ ...styles.title, textAlign: "center" }}>{t.scanTitle}</h2>
               <p style={{ ...styles.body, textAlign: "center" }}>{t.scanBody}</p>
             </div>
+            <div style={styles.statusBox} role="note" aria-live="polite">
+              <p style={styles.noticeTitle}>{t.scanOrderTitle || "Order"}</p>
+              <p style={styles.statusLine}>{t.scanOrderStep1 || "1) Tap the button below."}</p>
+              <p style={styles.statusLine}>
+                {t.scanOrderStep2 || "2) Then touch your ring to the phone."}
+              </p>
+            </div>
             {bindError ? <p style={styles.error}>{bindError}</p> : null}
             {!scanBusy ? (
               <button type="button" onClick={() => void runScan()} style={styles.primaryBtn}>
@@ -751,7 +758,7 @@ export function RingSetupWizard({
             ) : (
               <div style={styles.statusBox} role="status" aria-live="polite">
                 <p style={styles.noticeTitle}>{t.statusBindingTitle}</p>
-                <p style={styles.statusLine}>{t.statusBindingScanning}</p>
+                <p style={styles.statusLine}>{t.scanWorking || t.statusBindingScanning}</p>
               </div>
             )}
             <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>

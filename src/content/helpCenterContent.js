@@ -19,7 +19,7 @@ const EN = {
   quickCta: "Open First-Time Guide",
   tapTitle: "How to Tap Your Ring",
   tapBody:
-    "See exactly where to place your ring and how long to hold for a reliable tap.",
+    "Always tap Start scanning first, then place your ring on the phone NFC area.",
   tapBodyByPlatform: {
     ios: "iPhone path: place ring near the upper back camera area and hold 3-5 seconds.",
     android:
