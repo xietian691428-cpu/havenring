@@ -68,8 +68,8 @@ function buildOAuthReturnUrl(safeOrigin: string): string {
     const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
     return qs ? `${safeOrigin}/start?${qs}` : `${safeOrigin}/start`;
   }
-  // Default login should round-trip to /app (widest allow-list compatibility).
-  return `${safeOrigin}/app`;
+  // Default login should land in app and immediately open ring binding.
+  return `${safeOrigin}/app?open=bind`;
 }
 
 function normalizeClaimValue(input: string): string {

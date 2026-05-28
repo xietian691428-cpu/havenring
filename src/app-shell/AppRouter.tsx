@@ -343,6 +343,19 @@ export function AppRouter() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    const openBind =
+      params.get("open") === "bind" ||
+      params.get("open") === "ring" ||
+      params.get("bind") === "1";
+    if (openBind) {
+      openRingSetup();
+      params.delete("open");
+      params.delete("bind");
+      const qs = params.toString();
+      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+      return;
+    }
     const openNew =
       params.get("open") === "new" || params.get("seal") === "1" || params.get("seal") === "new";
     const autoSeal =
