@@ -49,7 +49,7 @@ function isSealNfcLaunchSearch(search: string): boolean {
 /** OAuth return URL: reads the live `/start` query so redirects never miss NFC params if the user signs in immediately. */
 function buildOAuthReturnUrl(safeOrigin: string): string {
   if (typeof window === "undefined") {
-    return `${safeOrigin}/start`;
+    return `${safeOrigin}/app`;
   }
   const rawSearch = window.location.search || "";
   const sp = new URLSearchParams(
@@ -68,7 +68,8 @@ function buildOAuthReturnUrl(safeOrigin: string): string {
     const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
     return qs ? `${safeOrigin}/start?${qs}` : `${safeOrigin}/start`;
   }
-  return `${safeOrigin}/start`;
+  // Default login should round-trip to /app (widest allow-list compatibility).
+  return `${safeOrigin}/app`;
 }
 
 function normalizeClaimValue(input: string): string {
@@ -681,6 +682,10 @@ export default function StartClient() {
         return "Apple Sign In is not ready yet. Please continue with Google.";
       }
       return "Google Sign In is not ready yet. Please try Apple Sign In.";
+    }
+    const detail = String(message || "").trim();
+    if (detail) {
+      return `Sign-in could not start. ${detail}`;
     }
     return "Sign-in could not start. Please try again in a moment.";
   }
