@@ -14,6 +14,7 @@ import {
 } from "../services/ringRegistryService";
 import {
   getSecuritySummary,
+  initializeSecurity,
   verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
 import { RING_SETUP_CONTENT } from "../content/ringSetupContent";
@@ -116,6 +117,11 @@ export function RingSetupWizard({
   const [scanBusy, setScanBusy] = useState(false);
   const [scanPayload, setScanPayload] = useState(null);
   const [password, setPassword] = useState("");
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupConfirm, setSetupConfirm] = useState("");
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupError, setSetupError] = useState("");
+  const [setupRecoveryCode, setSetupRecoveryCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyError, setVerifyError] = useState("");
@@ -147,6 +153,11 @@ export function RingSetupWizard({
   const resetFormState = useCallback(() => {
     setScanPayload(null);
     setPassword("");
+    setSetupPassword("");
+    setSetupConfirm("");
+    setSetupBusy(false);
+    setSetupError("");
+    setSetupRecoveryCode("");
     setRecoveryCode("");
     setVerifyError("");
     setBindError("");
@@ -387,6 +398,32 @@ export function RingSetupWizard({
       }
     } finally {
       setVerifyBusy(false);
+    }
+  }
+
+  async function setupSecurityAndContinue() {
+    const pwd = String(setupPassword || "");
+    const confirm = String(setupConfirm || "");
+    if (pwd.trim().length < 6) {
+      setSetupError(t.setupPasswordTooShort || "Password must be at least 6 characters.");
+      return;
+    }
+    if (pwd !== confirm) {
+      setSetupError(t.setupPasswordMismatch || "Passwords do not match.");
+      return;
+    }
+    setSetupBusy(true);
+    setSetupError("");
+    try {
+      const { recoveryCode: code } = await initializeSecurity(pwd);
+      setSetupRecoveryCode(code || "");
+      setPassword(pwd);
+      setStepNote(t.setupSecurityDone || "Device protection is ready. Continuing binding...");
+      setStep("name");
+    } catch {
+      setSetupError(t.setupSecurityFailed || "Could not set device protection. Please try again.");
+    } finally {
+      setSetupBusy(false);
     }
   }
 
@@ -825,6 +862,47 @@ export function RingSetupWizard({
               {t.needSecurityResumeHint ||
                 "After setting your device password, come back here and tap Continue — no need to scan again."}
             </p>
+            <div style={styles.stack}>
+              <label style={styles.label}>
+                {t.setupPasswordLabel || "Set device password"}
+                <input
+                  type="password"
+                  value={setupPassword}
+                  onChange={(e) => setSetupPassword(e.target.value)}
+                  style={styles.input}
+                  placeholder={t.setupPasswordPlaceholder || "At least 6 characters"}
+                  autoComplete="new-password"
+                />
+              </label>
+              <label style={styles.label}>
+                {t.setupPasswordConfirmLabel || "Confirm password"}
+                <input
+                  type="password"
+                  value={setupConfirm}
+                  onChange={(e) => setSetupConfirm(e.target.value)}
+                  style={styles.input}
+                  placeholder={t.setupPasswordConfirmPlaceholder || "Type again"}
+                  autoComplete="new-password"
+                />
+              </label>
+              {setupError ? <p style={styles.error}>{setupError}</p> : null}
+              <button
+                type="button"
+                onClick={() => void setupSecurityAndContinue()}
+                disabled={setupBusy}
+                style={styles.primaryBtn}
+              >
+                {setupBusy
+                  ? t.setupSecurityWorking || "Setting up..."
+                  : t.setupSecurityCta || "Set password & continue"}
+              </button>
+              {setupRecoveryCode ? (
+                <p style={styles.hint}>
+                  {(t.setupRecoveryHint || "Recovery code:") + " "}
+                  <strong>{setupRecoveryCode}</strong>
+                </p>
+              ) : null}
+            </div>
             {stepNote ? <p style={styles.statusLine}>{stepNote}</p> : null}
             <div style={styles.actions}>
               <button
