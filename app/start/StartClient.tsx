@@ -379,9 +379,10 @@ export default function StartClient() {
   }, [sealWaitMode]);
 
   const hideFtuxOAuthDuringSealTouch =
-    nfcFlow &&
-    (sdmState.kind === "resolving" ||
-      (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
+    sealWaitMode ||
+    (nfcFlow &&
+      (sdmState.kind === "resolving" ||
+        (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation")));
 
   function confirmLeaveWithoutRing() {
     if (typeof window === "undefined") return;
@@ -871,6 +872,7 @@ export default function StartClient() {
                   <strong>{formatSealCountdown(sealRemainingMs)}</strong>
                 </p>
               ) : null}
+              <p style={styles.sealWaitSignedInNote}>{START_PAGE_EN.sealWaitSignedInNote}</p>
               {sealWaitNfcBusy ? (
                 <p style={styles.subtitle}>{sealFlow.sealScanRingBusy}</p>
               ) : null}
@@ -1102,7 +1104,7 @@ export default function StartClient() {
             </>
           ) : null}
 
-          {!nfcFlow && platformReady && !isStandaloneDisplayMode() && platform !== "other" ? (
+          {!nfcFlow && !sealWaitMode && platformReady && !isStandaloneDisplayMode() && platform !== "other" ? (
             <section
               style={{
                 ...styles.tipCard,
@@ -1418,6 +1420,13 @@ const styles: Record<string, CSSProperties> = {
     width: "100%",
     maxWidth: 280,
     justifySelf: "center",
+  },
+  sealWaitSignedInNote: {
+    margin: "10px 0 0",
+    fontSize: 14,
+    lineHeight: 1.45,
+    color: "rgba(196, 220, 196, 0.92)",
+    maxWidth: 360,
   },
   sealGuideInlineLink: {
     border: "none",

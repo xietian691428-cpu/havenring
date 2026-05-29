@@ -489,6 +489,7 @@ export const START_PAGE_EN = {
   sealWaitBody:
     "Hold your Haven ring on the back of your phone. This page will update when the tap is read.",
   sealWaitBackToEdit: "Back to edit memory",
+  sealWaitSignedInNote: "You are signed in. Touch your ring to finish — then we will open your memories.",
 } as const;
 
 /** Minimal Seal-with-Ring copy — details live in Help Center. */
