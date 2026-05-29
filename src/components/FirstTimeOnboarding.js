@@ -21,6 +21,7 @@ export function FirstTimeOnboarding({
   const [showNfcGuide, setShowNfcGuide] = useState(false);
   const onboardingEventLocale = locale;
   const openedTrackedRef = useRef(false);
+  const stepResetForOpenRef = useRef(false);
 
   const isV2 = t.version === "v2";
   const step = t.steps[stepIndex];
@@ -37,8 +38,12 @@ export function FirstTimeOnboarding({
   }, [open, onboardingEventLocale, platform]);
 
   useEffect(() => {
-    if (!open) return;
-    // Reset step when the sheet opens (remount would be ideal; microtask avoids sync setState in render).
+    if (!open) {
+      stepResetForOpenRef.current = false;
+      return;
+    }
+    if (stepResetForOpenRef.current) return;
+    stepResetForOpenRef.current = true;
     queueMicrotask(() => {
       setStepIndex(0);
     });

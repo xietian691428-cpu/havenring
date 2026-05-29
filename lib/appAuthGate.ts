@@ -11,6 +11,24 @@ type DeferredPayload = { path: string; savedAt: number };
 /** Legacy FTUX flag — kept so `/start` OAuth can still clear it; gate no longer depends on it. */
 export const FTUX_STARTED_KEY = "haven.ftux.started.v1";
 
+/** OAuth return from FTUX “Sign in with Google/Apple” on `/app`. */
+export const ONBOARDING_AUTH_QUERY = "onboarding_auth";
+
+export function consumeOnboardingAuthReturn(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get(ONBOARDING_AUTH_QUERY) !== "1") return false;
+    u.searchParams.delete(ONBOARDING_AUTH_QUERY);
+    const next = `${u.pathname}${u.search}${u.hash}`;
+    window.history.replaceState({}, "", next);
+    scrubSupabaseAuthArtifactsFromEntryPages();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isPermanentSupabaseSession(session: Session | null): session is Session {
   if (!session) return false;
   return (

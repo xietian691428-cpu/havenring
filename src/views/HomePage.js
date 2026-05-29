@@ -9,6 +9,7 @@ import {
   initializeSecurity,
   verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
+import { consumeOnboardingAuthReturn } from "@/lib/appAuthGate";
 import {
   isFirstMemoryCompleted,
   ONBOARDING_DONE_KEY,
@@ -57,6 +58,7 @@ export function HomePage({
   const [securityError, setSecurityError] = useState("");
   const [installedStandalone, setInstalledStandalone] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const onboardingAutoOpenRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -142,14 +144,6 @@ export function HomePage({
     setPlatformSignInProvider("apple");
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!hasSession) return;
-    const done = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
-    setIsFirstRun(!done || !isFirstMemoryCompleted());
-    if (!done) setOnboardingOpen(true);
-  }, [hasSession]);
-
   function markOnboardingDone(detail = {}) {
     if (typeof window !== "undefined") {
       try {
@@ -172,6 +166,34 @@ export function HomePage({
     setIsFirstRun(!isFirstMemoryCompleted());
     onAfterOnboarding?.(detail);
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!hasSession) {
+      onboardingAutoOpenRef.current = false;
+      return;
+    }
+    const done = window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1";
+    if (consumeOnboardingAuthReturn()) {
+      if (!done) {
+        markOnboardingDone({ outcome: "signed_in_oauth" });
+      } else {
+        setOnboardingOpen(false);
+        setOnboardingDone(true);
+      }
+      void onOpenTimeline?.();
+      return;
+    }
+    setIsFirstRun(!done || !isFirstMemoryCompleted());
+    if (done) {
+      setOnboardingOpen(false);
+      return;
+    }
+    if (!onboardingAutoOpenRef.current) {
+      onboardingAutoOpenRef.current = true;
+      setOnboardingOpen(true);
+    }
+  }, [hasSession]);
 
   async function continueAfterSecurity() {
     if (!ringSignIn.token) return;

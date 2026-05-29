@@ -217,6 +217,11 @@ export function NewMemoryPage({
   const handleSaveRef = useRef(null);
   const autoArmBusyRef = useRef(false);
 
+  function redirectToSealWaitIfArmed() {
+    if (!isSealFlowArmed()) return;
+    navigateToSealWaitPage();
+  }
+
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
@@ -335,6 +340,12 @@ export function NewMemoryPage({
       window.clearInterval(pollId);
     };
   }, [sealPromptOpen, sealFlow.sealCompletedElsewhere]);
+
+  useEffect(() => {
+    if (sealPromptOpen) {
+      redirectToSealWaitIfArmed();
+    }
+  }, [sealPromptOpen]);
 
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
@@ -708,10 +719,7 @@ export function NewMemoryPage({
         !saving &&
         isSealFlowArmed()
       ) {
-        startTransition(() => {
-          setSealPromptOpen(true);
-          setFeedback(sealFlow.readyTitle);
-        });
+        redirectToSealWaitIfArmed();
       }
     };
     window.addEventListener("pagehide", onPageHide);
@@ -736,7 +744,7 @@ export function NewMemoryPage({
         return;
       }
       if (isSealFlowArmed()) {
-        startTransition(() => setSealPromptOpen(true));
+        redirectToSealWaitIfArmed();
       }
     }, 2000);
     return () => window.clearInterval(id);

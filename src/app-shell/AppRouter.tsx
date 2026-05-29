@@ -313,7 +313,7 @@ export function AppRouter() {
       const origin = canonicalAuthOriginFromLocation();
       const redirectTo = token
         ? `${origin}/hub?token=${encodeURIComponent(token)}`
-        : `${origin}/app`;
+        : `${origin}/app?onboarding_auth=1`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo },
