@@ -20,11 +20,15 @@ import {
   clearComposerSnapshot,
   clearSealPrepState,
   gateSealWithRingAccess,
+  getSealArmedRemainingMs,
   isSealFlowArmed,
+  normalizeRingTapToStartHref,
   primeSealPrepAfterDraftPersisted,
   readComposerSnapshotTextOnly,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
+import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
+import { readNfcScanFull } from "../services/nfcRingService";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
@@ -198,6 +202,9 @@ export function NewMemoryPage({
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [sealPreparingOverlay, setSealPreparingOverlay] = useState(false);
   const [sealFinalizeError, setSealFinalizeError] = useState("");
+  const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
+  const webNfcAvailable =
+    typeof window !== "undefined" && "NDEFReader" in window;
   const sealArmHadTimeRef = useRef(false);
   const { remainingMs: sealRemainingMs, remainingLabel: sealRemainingLabel } =
     useSealArmCountdown(sealPromptOpen);
@@ -306,6 +313,28 @@ export function NewMemoryPage({
     });
     return undefined;
   }, [sealPromptOpen, sealRemainingMs, t.sealArmExpired]);
+
+  useEffect(() => {
+    if (!sealPromptOpen) return undefined;
+    const syncSealFinishedElsewhere = () => {
+      if (isSealFlowArmed()) return;
+      if (!sealArmHadTimeRef.current) return;
+      sealArmHadTimeRef.current = false;
+      startTransition(() => {
+        setSealPromptOpen(false);
+        setFeedback(sealFlow.sealCompletedElsewhere);
+      });
+    };
+    const onStorage = (event) => {
+      if (event.key === SEAL_ARMED_KEY) syncSealFinishedElsewhere();
+    };
+    window.addEventListener("storage", onStorage);
+    const pollId = window.setInterval(syncSealFinishedElsewhere, 2500);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.clearInterval(pollId);
+    };
+  }, [sealPromptOpen, sealFlow.sealCompletedElsewhere]);
 
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
@@ -632,6 +661,12 @@ export function NewMemoryPage({
     try {
       const savedDraft = await persistDraftForSealPrep();
       primeSealPrepAfterDraftPersisted(savedDraft.id);
+      // eslint-disable-next-line no-console
+      console.log("[seal] armed for ring tap", {
+        draftId: savedDraft.id,
+        remainingMs: getSealArmedRemainingMs(),
+        origin: typeof window !== "undefined" ? window.location.origin : "",
+      });
       startTransition(() => {
         setEditingDraftId(savedDraft.id);
         setSealPromptOpen(true);
@@ -722,6 +757,37 @@ export function NewMemoryPage({
     setRingTapError("");
     setFeedback("");
     setSealPreparingOverlay(false);
+    setNfcSealScanBusy(false);
+  }
+
+  async function handleSealRingScan() {
+    if (!webNfcAvailable || nfcSealScanBusy) return;
+    setRingTapError("");
+    setNfcSealScanBusy(true);
+    try {
+      const scan = await readNfcScanFull();
+      if (!scan?.text) {
+        throw new Error("No URL found on ring. Use Settings to verify the ring link.");
+      }
+      const target = normalizeRingTapToStartHref(
+        scan.text,
+        window.location.origin
+      );
+      if (!target) {
+        throw new Error(
+          "Ring link is missing seal parameters. It should open havenring.me/start with a dynamic tap."
+        );
+      }
+      // eslint-disable-next-line no-console
+      console.log("[seal] NFC scan → navigate", target);
+      window.location.assign(target);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not read the ring.";
+      setRingTapError(message);
+    } finally {
+      setNfcSealScanBusy(false);
+    }
   }
 
   function handleHeroPrimaryClick() {
@@ -838,8 +904,24 @@ export function NewMemoryPage({
               {sealFlow.readyTitle}
             </h2>
             <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
+            <p style={styles.sealWaitingStep}>{sealFlow.sealWaitingStep2}</p>
+            {sealRemainingMs > 0 ? (
+              <p style={styles.sealCountdownLine} aria-live="polite">
+                {sealFlow.sealWaitingCountdownPrefix} {sealRemainingLabel}
+              </p>
+            ) : null}
             {!networkOnline ? (
               <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
+            ) : null}
+            {webNfcAvailable ? (
+              <button
+                type="button"
+                onClick={() => void handleSealRingScan()}
+                disabled={nfcSealScanBusy}
+                style={styles.sealScanRingBtn}
+              >
+                {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
+              </button>
             ) : null}
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
             {sealFinalizeError ? (
@@ -1441,6 +1523,32 @@ const styles = {
     color: "rgba(255, 255, 255, 0.65)",
     maxWidth: 360,
     justifySelf: "center",
+  },
+  sealWaitingStep: {
+    margin: "12px 0 0",
+    fontSize: 14,
+    lineHeight: 1.45,
+    color: "rgba(232, 216, 206, 0.88)",
+    maxWidth: 340,
+    justifySelf: "center",
+  },
+  sealCountdownLine: {
+    margin: "8px 0 0",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#e6b48d",
+  },
+  sealScanRingBtn: {
+    marginTop: 14,
+    alignSelf: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(217, 166, 122, 0.65)",
+    background: "rgba(217, 166, 122, 0.12)",
+    color: "#f8efe7",
+    padding: "10px 18px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
   },
   sealReadyMeta: {
     margin: "8px 0 0",

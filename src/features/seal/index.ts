@@ -59,3 +59,4 @@ export {
   readComposerSnapshotTextOnly,
   writeComposerSnapshotTextOnly,
 } from "./composerSnapshotSafe";
+export { normalizeRingTapToStartHref } from "./parseRingTapUrl";

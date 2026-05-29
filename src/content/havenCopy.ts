@@ -505,6 +505,13 @@ export const SEAL_FLOW_EN = {
   successSealAnotherCta: "Seal another",
   autoSaving: "Saving…",
   sealArmFailedCta: "Open",
+  sealWaitingStep2:
+    "Keep this screen open, then touch your ring to the back of your phone. Chrome may open a new tab — switch to it if sealing continues there.",
+  sealWaitingCountdownPrefix: "Time left to seal:",
+  sealScanRingCta: "Scan ring on this phone",
+  sealScanRingBusy: "Hold ring near phone…",
+  sealCompletedElsewhere:
+    "Ring step finished in another tab. Check Memories for your sealed entry, or tap Seal again.",
 } as const;
 
 export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {
