@@ -1,9 +1,9 @@
 import { readNfcScanFull } from "../../services/nfcRingService";
-import { normalizeRingTapToStartHref } from "./parseRingTapUrl";
+import { isStaticStartRingUrl, normalizeRingTapToStartHref } from "./parseRingTapUrl";
 
 export type SealRingListenResult =
   | { ok: true; target: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; kind?: "static_start" | "other" };
 
 export async function listenForSealRingTapOnce(
   origin: string
@@ -24,10 +24,19 @@ export async function listenForSealRingTapOnce(
   }
   const target = normalizeRingTapToStartHref(text, origin);
   if (!target) {
+    if (isStaticStartRingUrl(text, origin)) {
+      return {
+        ok: false,
+        kind: "static_start",
+        message:
+          "We read your ring, but the security code only appears when Chrome opens the tap. Hold the ring on the back until the page refreshes or a new tab opens—do not use in-page NFC scan here.",
+      };
+    }
     return {
       ok: false,
+      kind: "other",
       message:
-        "Ring link is missing dynamic seal parameters. Factory URL should be /start with SDM enabled.",
+        "Ring link is missing dynamic seal parameters. The ring must be programmed to havenring.me/start with SDM enabled—contact support if this keeps happening.",
     };
   }
   return { ok: true, target };

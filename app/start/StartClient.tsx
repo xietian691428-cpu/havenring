@@ -26,11 +26,12 @@ import {
   hasRecoverableComposerContent,
   isSealFlowArmed,
   isSealWaitSearch,
-  listenForSealRingTapOnce,
+  recordSealNfcTapHref,
+  readFreshSealNfcTapHref,
+  SEAL_NFC_TAP_STORAGE_KEY,
   forceArmSealForCurrentUser,
   tryRecoverSealPrepFromComposerSnapshot,
 } from "@/src/features/seal";
-import { forceClearNfcLock } from "@/src/services/nfcLockService";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 import {
   consumeDeferredAppEntry,
@@ -234,8 +235,6 @@ export default function StartClient() {
       isSealWaitSearch(window.location.search) &&
       isSealFlowArmed()
   );
-  const [sealWaitNfcBusy, setSealWaitNfcBusy] = useState(false);
-  const [sealWaitError, setSealWaitError] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -329,52 +328,46 @@ export default function StartClient() {
   }, [sealWaitMode, isDailySelfOwner, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isSealNfcLaunchSearch(window.location.search)) return;
+    recordSealNfcTapHref(window.location.href);
+  }, []);
+
+  useEffect(() => {
     if (!sealWaitMode || typeof window === "undefined") return undefined;
     setSealLeaveGuard(true);
     pendingSealTapRef.current = true;
-    const poll = window.setInterval(() => {
+
+    const followSealTap = () => {
       if (isSealNfcLaunchSearch(window.location.search)) {
         const u = new URL(window.location.href);
         u.searchParams.delete("seal_wait");
         window.location.replace(`${u.pathname}${u.search}${u.hash}`);
+        return true;
       }
-    }, 400);
-    return () => window.clearInterval(poll);
-  }, [sealWaitMode]);
-
-  useEffect(() => {
-    if (!sealWaitMode || typeof window === "undefined") return undefined;
-    if (!("NDEFReader" in window)) return undefined;
-    let cancelled = false;
-    const run = async () => {
-      while (!cancelled && sealWaitMode) {
-        try {
-          setSealWaitNfcBusy(true);
-          setSealWaitError("");
-          const result = await listenForSealRingTapOnce(window.location.origin);
-          if (cancelled) return;
-          if (result.ok) {
-            window.location.assign(result.target);
-            return;
-          }
-          setSealWaitError(result.message);
-        } catch (error) {
-          if (cancelled) return;
-          const msg = error instanceof Error ? error.message : "NFC read failed";
-          if (!/connection lost|timeout|lost while reading/i.test(msg)) {
-            setSealWaitError(msg);
-          }
-        } finally {
-          if (!cancelled) setSealWaitNfcBusy(false);
-        }
-        await new Promise((r) => setTimeout(r, 400));
+      const relay = readFreshSealNfcTapHref();
+      if (relay) {
+        window.location.assign(relay);
+        return true;
       }
+      return false;
     };
-    void run();
+
+    const poll = window.setInterval(followSealTap, 400);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SEAL_NFC_TAP_STORAGE_KEY) followSealTap();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") followSealTap();
+    };
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    followSealTap();
+
     return () => {
-      cancelled = true;
-      forceClearNfcLock();
-      setSealWaitNfcBusy(false);
+      window.clearInterval(poll);
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [sealWaitMode]);
 
@@ -873,14 +866,16 @@ export default function StartClient() {
                 </p>
               ) : null}
               <p style={styles.sealWaitSignedInNote}>{START_PAGE_EN.sealWaitSignedInNote}</p>
-              {sealWaitNfcBusy ? (
-                <p style={styles.subtitle}>{sealFlow.sealScanRingBusy}</p>
-              ) : null}
-              {sealWaitError ? (
-                <p style={{ ...styles.subtitle, color: "#ffb4a8" }} role="alert">
-                  {sealWaitError}
-                </p>
-              ) : null}
+              <p style={styles.sealWaitTapHint}>
+                {platform === "android"
+                  ? START_PAGE_EN.sealWaitTapHintAndroid
+                  : platform === "ios"
+                    ? START_PAGE_EN.sealWaitTapHintIos
+                    : START_PAGE_EN.sealWaitTapHintOther}
+              </p>
+              <p style={styles.subtitle} aria-live="polite">
+                {sealFlow.sealScanRingBusy}
+              </p>
               <NfcPhoneHint platform={platform} />
               <button
                 type="button"
@@ -1427,6 +1422,13 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 1.45,
     color: "rgba(196, 220, 196, 0.92)",
     maxWidth: 360,
+  },
+  sealWaitTapHint: {
+    margin: "12px 0 0",
+    fontSize: 14,
+    lineHeight: 1.5,
+    color: "rgba(220, 210, 180, 0.95)",
+    maxWidth: 380,
   },
   sealGuideInlineLink: {
     border: "none",

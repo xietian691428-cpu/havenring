@@ -490,6 +490,12 @@ export const START_PAGE_EN = {
     "Hold your Haven ring on the back of your phone. This page will update when the tap is read.",
   sealWaitBackToEdit: "Back to edit memory",
   sealWaitSignedInNote: "You are signed in. Touch your ring to finish — then we will open your memories.",
+  sealWaitTapHintAndroid:
+    "Hold your ring on the back of the phone. Chrome may open a new tab with the tap—switch to it if you see one. Keep this tab open until sealing finishes.",
+  sealWaitTapHintIos:
+    "Hold your ring on the top back of your iPhone until Safari updates or opens Haven with a longer address bar (cmac=…).",
+  sealWaitTapHintOther:
+    "Hold your ring on the phone until the browser address bar shows cmac=… or a new Haven tab opens.",
 } as const;
 
 /** Minimal Seal-with-Ring copy — details live in Help Center. */

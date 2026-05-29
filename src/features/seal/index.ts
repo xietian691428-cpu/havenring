@@ -59,6 +59,15 @@ export {
   readComposerSnapshotTextOnly,
   writeComposerSnapshotTextOnly,
 } from "./composerSnapshotSafe";
-export { normalizeRingTapToStartHref } from "./parseRingTapUrl";
+export {
+  hasSdmInUrlSearch,
+  isStaticStartRingUrl,
+  normalizeRingTapToStartHref,
+} from "./parseRingTapUrl";
+export {
+  SEAL_NFC_TAP_STORAGE_KEY,
+  recordSealNfcTapHref,
+  readFreshSealNfcTapHref,
+} from "./sealNfcTapRelay";
 export { isSealWaitSearch, navigateToSealWaitPage, SEAL_WAIT_QUERY } from "./sealNavigate";
 export { listenForSealRingTapOnce } from "./sealRingNfcListen";
