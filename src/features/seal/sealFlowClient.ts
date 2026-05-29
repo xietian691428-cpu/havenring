@@ -34,6 +34,7 @@ export {
   getArmedSealDraftIds,
   isSealFlowArmed,
   getSealArmedRemainingMs,
+  clearSealFlowArmIfExpired,
   readActiveSealArmedPayload,
 } from "../../../lib/seal-flow";
 

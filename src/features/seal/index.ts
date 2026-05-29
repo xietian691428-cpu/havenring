@@ -26,6 +26,7 @@ export {
   getArmedSealDraftIds,
   isSealFlowArmed,
   getSealArmedRemainingMs,
+  clearSealFlowArmIfExpired,
   readActiveSealArmedPayload,
   readPendingSealDraftIds,
   writePendingSealDraftIds,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getSealArmedRemainingMs } from "../features/seal";
+import { clearSealFlowArmIfExpired, getSealArmedRemainingMs } from "../features/seal";
 
 function formatSealCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -18,7 +18,10 @@ export function useSealArmCountdown(active: boolean): {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!active) return undefined;
-    const id = window.setInterval(() => setTick((n) => n + 1), 1000);
+    const id = window.setInterval(() => {
+      clearSealFlowArmIfExpired();
+      setTick((n) => n + 1);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [active]);
 

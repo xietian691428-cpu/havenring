@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { saveDraftItem } from "../services/draftBoxService";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
@@ -260,8 +267,7 @@ export function NewMemoryPage({
   );
 
   function setFeedbackNotice(message) {
-    setFeedback("");
-    window.setTimeout(() => setFeedback(message), 0);
+    setFeedback(message);
   }
 
   useEffect(() => {
@@ -293,38 +299,13 @@ export function NewMemoryPage({
     if (sealRemainingMs > 0) return undefined;
     if (!sealArmHadTimeRef.current) return undefined;
     sealArmHadTimeRef.current = false;
-    clearSealPrepState();
-    setSealPromptOpen(false);
-    setFeedbackNotice(t.sealArmExpired);
+    startTransition(() => {
+      clearSealPrepState();
+      setSealPromptOpen(false);
+      setFeedback(t.sealArmExpired);
+    });
     return undefined;
   }, [sealPromptOpen, sealRemainingMs, t.sealArmExpired]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-    const id = "haven-nfc-pulse-keyframes";
-    if (document.getElementById(id)) return undefined;
-    const el = document.createElement("style");
-    el.id = id;
-    el.textContent = `
-@keyframes havenNfcPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 166, 122, 0.45), 0 10px 28px rgba(0,0,0,0.35); }
-  50% { box-shadow: 0 0 0 10px rgba(217, 166, 122, 0), 0 12px 32px rgba(0,0,0,0.4); }
-}
-@keyframes havenSealBtnSpin {
-  to { transform: rotate(360deg); }
-}
-@keyframes havenSealReadyPulse {
-  0%, 100% { transform: scale(1); opacity: 0.82; }
-  50% { transform: scale(1.06); opacity: 1; }
-}
-@keyframes havenSealReadyHalo {
-  0% { transform: scale(0.92); opacity: 0.55; }
-  70% { transform: scale(1.35); opacity: 0; }
-  100% { transform: scale(1.35); opacity: 0; }
-}`;
-    document.head.appendChild(el);
-    return undefined;
-  }, []);
 
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
@@ -566,8 +547,10 @@ export function NewMemoryPage({
       }
       if (openSealPromptOnSuccess) {
         primeSealPrepAfterDraftPersisted(savedDraft.id);
-        setSealPromptOpen(true);
-        setFeedbackNotice(t.feedbackReadyToSeal);
+        startTransition(() => {
+          setSealPromptOpen(true);
+          setFeedback(t.feedbackReadyToSeal);
+        });
       } else if (typeof onSaveMemory === "function") {
         setFeedback("");
         setSecureSaveToast(true);
@@ -589,12 +572,14 @@ export function NewMemoryPage({
       if (!openSealPromptOnSuccess) {
         clearDraftSnapshot();
       }
-      triggerSuccessFeedback({
-        soundEnabled,
-        hapticEnabled,
-        allowSound:
-          soundScope === "all_success" || soundScope === "save_only",
-      });
+      if (!openSealPromptOnSuccess) {
+        triggerSuccessFeedback({
+          soundEnabled,
+          hapticEnabled,
+          allowSound:
+            soundScope === "all_success" || soundScope === "save_only",
+        });
+      }
       if (!openSealPromptOnSuccess) {
         onSaved?.();
         if (isFirstMemoryMode) {
@@ -646,10 +631,12 @@ export function NewMemoryPage({
     setSealPreparingOverlay(true);
     try {
       const savedDraft = await persistDraftForSealPrep();
-      setEditingDraftId(savedDraft.id);
       primeSealPrepAfterDraftPersisted(savedDraft.id);
-      setSealPromptOpen(true);
-      setFeedbackNotice(t.feedbackReadyToSeal);
+      startTransition(() => {
+        setEditingDraftId(savedDraft.id);
+        setSealPromptOpen(true);
+        setFeedback(t.feedbackReadyToSeal);
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : t.feedbackSaveFailed;
@@ -691,8 +678,10 @@ export function NewMemoryPage({
         !saving &&
         isSealFlowArmed()
       ) {
-        setSealPromptOpen(true);
-        setFeedbackNotice(sealFlow.readyTitle);
+        startTransition(() => {
+          setSealPromptOpen(true);
+          setFeedback(sealFlow.readyTitle);
+        });
       }
     };
     window.addEventListener("pagehide", onPageHide);
@@ -713,13 +702,15 @@ export function NewMemoryPage({
     if (!canSealWithRing || !hasDraftContent) return undefined;
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      if (sealPromptOpen || saving || autoArmBusyRef.current) return;
+      if (sealPromptOpen || saving || autoArmBusyRef.current || sealPreparingOverlay) {
+        return;
+      }
       if (isSealFlowArmed()) {
-        setSealPromptOpen(true);
+        startTransition(() => setSealPromptOpen(true));
       }
     }, 2000);
     return () => window.clearInterval(id);
-  }, [canSealWithRing, hasDraftContent, sealPromptOpen, saving]);
+  }, [canSealWithRing, hasDraftContent, sealPromptOpen, saving, sealPreparingOverlay]);
 
   async function handleSaveSecurelyFallback() {
     await handleSave({ openSealPromptOnSuccess: false });
@@ -827,42 +818,47 @@ export function NewMemoryPage({
           aria-labelledby={sealPromptOpen ? "haven-seal-ready-title" : "haven-hero-seal-title"}
         >
           {ringReady ? <RingReadyBadge ready /> : null}
-          {sealPromptOpen ? (
-            <div style={styles.sealReadyPanel} role="status" aria-live="polite">
-              <div style={styles.sealReadyPulseWrap} aria-hidden>
-                <span style={styles.sealReadyHalo} />
-                <span style={styles.sealReadyHaloOuter} />
-                <span style={styles.sealReadyRingMark} title="Haven Ring">
-                  ◎
-                </span>
-              </div>
-              <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
-                {sealFlow.readyTitle}
-              </h2>
-              <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
-              {!networkOnline ? (
-                <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
-              ) : null}
-              {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-              {sealFinalizeError ? (
-                <p style={styles.error}>{sealFinalizeError}</p>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleCancelSeal}
-                style={{ ...styles.cancelSealBtn, alignSelf: "center", marginTop: 12 }}
-              >
-                {pageCopy.cancelSealFlow}
-              </button>
+          <div
+            style={{
+              ...styles.sealReadyPanel,
+              display: sealPromptOpen ? "grid" : "none",
+            }}
+            role="status"
+            aria-live="polite"
+            aria-hidden={!sealPromptOpen}
+          >
+            <div style={styles.sealReadyPulseWrap} aria-hidden>
+              <span style={styles.sealReadyHalo} />
+              <span style={styles.sealReadyHaloOuter} />
+              <span style={styles.sealReadyRingMark} title="Haven Ring">
+                ◎
+              </span>
             </div>
-          ) : (
-            <>
-              <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
-                {pageCopy.heroTitle}
-              </h2>
-              <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
-            </>
-          )}
+            <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
+              {sealFlow.readyTitle}
+            </h2>
+            <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
+            {!networkOnline ? (
+              <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
+            ) : null}
+            {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
+            {sealFinalizeError ? (
+              <p style={styles.error}>{sealFinalizeError}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleCancelSeal}
+              style={{ ...styles.cancelSealBtn, alignSelf: "center", marginTop: 12 }}
+            >
+              {pageCopy.cancelSealFlow}
+            </button>
+          </div>
+          <div style={{ display: sealPromptOpen ? "none" : "block" }} aria-hidden={sealPromptOpen}>
+            <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
+              {pageCopy.heroTitle}
+            </h2>
+            <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
+          </div>
           {secureSaveToast ? (
             <div style={styles.secureToastStack} role="status" aria-live="polite">
               <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>

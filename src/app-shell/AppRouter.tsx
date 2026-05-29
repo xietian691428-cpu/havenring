@@ -27,6 +27,7 @@ import { ExplorePage } from "../views/ExplorePage";
 import { HelpCenterPage } from "../views/HelpCenterPage";
 import { HomePage } from "../views/HomePage";
 import { MemoryDetailPage } from "../views/MemoryDetailPage";
+import { MemoryComposerErrorBoundary } from "../components/MemoryComposerErrorBoundary";
 import { NewMemoryPage } from "../views/NewMemoryPage";
 import { RingsPage } from "../views/RingsPage";
 import { PricingPage } from "../views/PricingPage";
@@ -677,27 +678,30 @@ export function AppRouter() {
   } else if (route.name === "new") {
     mainContent = (
       <FadePage pageKey={`new-${route.memoryId ?? "create"}`} direction={transitionDirection}>
-        <NewMemoryPage
-          locale={locale}
-          userEntitlements={entitlements}
-          autoSealMode={Boolean(route.autoSeal)}
-          initialEditMemory={
-            route.memoryId
-              ? ((memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ?? null)
-              : null
-          }
-          onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-          onSaveMemory={persistComposerMemory}
-          onSaved={async () => {
-            await refresh();
-          }}
-          onOpenHelp={() =>
-            navigateTo({ name: "help", memoryId: null }, "forward")
-          }
-          onOpenSettings={() =>
-            navigateTo({ name: "settings", memoryId: null }, "forward")
-          }
-        />
+        <MemoryComposerErrorBoundary>
+          <NewMemoryPage
+            locale={locale}
+            userEntitlements={entitlements}
+            autoSealMode={Boolean(route.autoSeal)}
+            initialEditMemory={
+              route.memoryId
+                ? ((memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ??
+                  null)
+                : null
+            }
+            onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
+            onSaveMemory={persistComposerMemory}
+            onSaved={async () => {
+              await refresh();
+            }}
+            onOpenHelp={() =>
+              navigateTo({ name: "help", memoryId: null }, "forward")
+            }
+            onOpenSettings={() =>
+              navigateTo({ name: "settings", memoryId: null }, "forward")
+            }
+          />
+        </MemoryComposerErrorBoundary>
       </FadePage>
     );
   } else if (route.name === "detail") {

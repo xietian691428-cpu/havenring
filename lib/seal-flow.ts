@@ -159,9 +159,14 @@ export function getSealArmedRemainingMs(): number {
   const payload = readActiveSealArmedPayload();
   if (!payload) return 0;
   const left = payload.expiresAt - Date.now();
-  if (left <= 0) {
-    clearSealFlowArm();
-    return 0;
-  }
-  return left;
+  return left > 0 ? left : 0;
+}
+
+/** Clears arm storage when the countdown has elapsed (call from effects, not render). */
+export function clearSealFlowArmIfExpired(): boolean {
+  const payload = readActiveSealArmedPayload();
+  if (!payload) return false;
+  if (payload.expiresAt - Date.now() > 0) return false;
+  clearSealFlowArm();
+  return true;
 }
