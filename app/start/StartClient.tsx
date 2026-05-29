@@ -20,7 +20,7 @@ import {
 } from "@/src/content/havenCopy";
 import {
   abandonInProgressSealOnStartPage,
-  finalizeSealChainFromSdmResponse,
+  finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
   hasRecoverableComposerContent,
@@ -462,11 +462,14 @@ export default function StartClient() {
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
           setNotice("Ring confirmed. Completing the seal...");
-          await finalizeSealChainFromSdmResponse({
+          const finalizeResult = await finalizeSealChainFromSdmResponseSafe({
             sealTicket: String(data.sealTicket),
             draftIds: pendingSealDraftIds,
             accessToken,
           });
+          if (!finalizeResult.ok) {
+            throw new Error(finalizeResult.message);
+          }
         }
       } catch (error) {
         // eslint-disable-next-line no-console

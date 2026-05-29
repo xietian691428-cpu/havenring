@@ -90,6 +90,38 @@ export function clearSealPrepState() {
   clearSealFlowArm();
 }
 
+const MAX_SEAL_PAYLOAD_BYTES = 4 * 1024 * 1024;
+
+function estimateJsonBytes(value: unknown): number {
+  try {
+    return new Blob([JSON.stringify(value)]).size;
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+function slimMediaForSealFinalize(items: unknown[]): unknown[] {
+  if (!Array.isArray(items)) return [];
+  const slim: unknown[] = [];
+  let budget = MAX_SEAL_PAYLOAD_BYTES;
+  for (const row of items) {
+    if (!row || typeof row !== "object") continue;
+    const obj = row as Record<string, unknown>;
+    const candidate = {
+      id: obj.id,
+      name: obj.name,
+      mimeType: obj.mimeType,
+      size: obj.size,
+      dataUrl: typeof obj.dataUrl === "string" ? obj.dataUrl : undefined,
+    };
+    const bytes = estimateJsonBytes(candidate);
+    if (bytes > budget) break;
+    budget -= bytes;
+    slim.push(candidate);
+  }
+  return slim;
+}
+
 export async function collectDraftPayloadsForSeal(
   draftIds: string[]
 ): Promise<SealDraftFinalizePayload[]> {
@@ -97,12 +129,18 @@ export async function collectDraftPayloadsForSeal(
   for (const id of draftIds) {
     const item = await getDraftItem(id);
     if (!item) continue;
+    const photo = slimMediaForSealFinalize(
+      Array.isArray(item.photo) ? item.photo : []
+    );
+    const attachments = slimMediaForSealFinalize(
+      Array.isArray(item.attachments) ? item.attachments : []
+    );
     payloads.push({
       id,
       title: String(item.title || "Untitled memory"),
       story: String(item.story || ""),
-      photo: Array.isArray(item.photo) ? item.photo : [],
-      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+      photo,
+      attachments,
       releaseAt: Number(item.releaseAt || 0) || 0,
     });
   }

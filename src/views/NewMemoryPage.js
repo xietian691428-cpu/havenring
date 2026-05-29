@@ -10,10 +10,13 @@ import {
   trackFirstRunEvent,
 } from "../services/firstRunTelemetryService";
 import {
+  clearComposerSnapshot,
   clearSealPrepState,
   gateSealWithRingAccess,
   isSealFlowArmed,
   primeSealPrepAfterDraftPersisted,
+  readComposerSnapshotTextOnly,
+  writeComposerSnapshotTextOnly,
 } from "../features/seal";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
@@ -27,7 +30,6 @@ const MAX_VIDEOS = 6;
 const MAX_FILE_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 10;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
-const DRAFT_STORAGE_KEY = "haven.new_memory_draft";
 const STORY_SOFT_MAX = 8000;
 const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
 
@@ -42,8 +44,7 @@ function countVideoAttachments(items) {
 }
 
 function clearDraftSnapshot() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+  clearComposerSnapshot();
 }
 
 /**
@@ -189,6 +190,7 @@ export function NewMemoryPage({
   );
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [sealPreparingOverlay, setSealPreparingOverlay] = useState(false);
+  const [sealFinalizeError, setSealFinalizeError] = useState("");
   const sealArmHadTimeRef = useRef(false);
   const { remainingMs: sealRemainingMs, remainingLabel: sealRemainingLabel } =
     useSealArmCountdown(sealPromptOpen);
@@ -334,47 +336,26 @@ export function NewMemoryPage({
 
   useEffect(() => {
     if (initialEditMemory?.id) return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      queueMicrotask(() => {
-        if (draft?.title) setTitle(String(draft.title));
-        if (draft?.story) setStory(String(draft.story));
-        if (draft?.releaseAtInput) setReleaseAtInput(String(draft.releaseAtInput));
-        if (Array.isArray(draft?.photos)) setPhotos(draft.photos);
-        if (
-          draft?.title ||
-          draft?.story ||
-          (Array.isArray(draft?.photos) && draft.photos.length)
-        ) {
-          setFeedbackNotice(t.feedbackDraftRestored);
-        }
-      });
-    } catch {
-      // Ignore malformed draft snapshots.
-    }
+    const draft = readComposerSnapshotTextOnly();
+    if (!draft) return;
+    queueMicrotask(() => {
+      if (draft.title) setTitle(String(draft.title));
+      if (draft.story) setStory(String(draft.story));
+      if (draft.releaseAtInput) setReleaseAtInput(String(draft.releaseAtInput));
+      if (draft.title || draft.story || draft.releaseAtInput) {
+        setFeedbackNotice(t.feedbackDraftRestored);
+      }
+    });
   }, [t.feedbackDraftRestored, initialEditMemory?.id]);
 
   useEffect(() => {
+    if (sealPromptOpen) return;
     if (!hasDraftContent) {
       clearDraftSnapshot();
       return;
     }
-    try {
-      // Keep draft snapshots small and resilient.
-      // Attachments can be large binary payloads and must NOT be written to localStorage.
-      const payload = JSON.stringify({
-        title,
-        story,
-        releaseAtInput,
-        photos,
-      });
-      window.localStorage.setItem(DRAFT_STORAGE_KEY, payload);
-    } catch {
-      // Quota exceeded or serialization issue should not break editing flow.
-    }
-  }, [title, story, releaseAtInput, photos, hasDraftContent]);
+    writeComposerSnapshotTextOnly({ title, story, releaseAtInput });
+  }, [title, story, releaseAtInput, hasDraftContent, sealPromptOpen]);
 
   useEffect(() => {
     const onBeforeUnload = (event) => {
@@ -519,6 +500,25 @@ export function NewMemoryPage({
     }
   }
 
+  async function persistDraftForSealPrep() {
+    const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
+    const sealPhotos = photos
+      .map((p) => ({
+        id: p.id,
+        mimeType: p.mimeType,
+        dataUrl: typeof p.dataUrl === "string" ? p.dataUrl : "",
+      }))
+      .filter((p) => p.dataUrl);
+    return saveDraftItem({
+      id: editingDraftId || undefined,
+      title: title.trim() || t.untitled,
+      story: story.trim(),
+      photo: sealPhotos,
+      attachments: [],
+      releaseAt,
+    });
+  }
+
   async function handleSave(options = {}) {
     const { openSealPromptOnSuccess = false } = options;
     if (
@@ -536,16 +536,21 @@ export function NewMemoryPage({
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
     setSecureSaveToast(false);
     try {
-      const draftAttachments = await prepareAttachmentsForSave(attachments, t);
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-      const savedDraft = await saveDraftItem({
-        id: editingDraftId || undefined,
-        title: title.trim() || t.untitled,
-        story: story.trim(),
-        photo: photos,
-        attachments: draftAttachments,
-        releaseAt,
-      });
+      let draftAttachments = [];
+      const savedDraft = openSealPromptOnSuccess
+        ? await persistDraftForSealPrep()
+        : await (async () => {
+            draftAttachments = await prepareAttachmentsForSave(attachments, t);
+            return saveDraftItem({
+              id: editingDraftId || undefined,
+              title: title.trim() || t.untitled,
+              story: story.trim(),
+              photo: photos,
+              attachments: draftAttachments,
+              releaseAt,
+            });
+          })();
       setEditingDraftId(savedDraft.id);
       if (!openSealPromptOnSuccess && typeof onSaveMemory === "function") {
         setFeedback(t.feedbackSavingTimeline);
@@ -637,9 +642,20 @@ export function NewMemoryPage({
     }
     setRingTapError("");
     setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSealFinalizeError("");
     setSealPreparingOverlay(true);
     try {
-      await handleSave({ openSealPromptOnSuccess: true });
+      const savedDraft = await persistDraftForSealPrep();
+      setEditingDraftId(savedDraft.id);
+      primeSealPrepAfterDraftPersisted(savedDraft.id);
+      setSealPromptOpen(true);
+      setFeedbackNotice(t.feedbackReadyToSeal);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : t.feedbackSaveFailed;
+      setSealFinalizeError(message);
+      setFeedback(message);
+      setSaveDialog({ open: true, status: "error", errorMessage: message });
     } finally {
       setSealPreparingOverlay(false);
     }
@@ -828,6 +844,9 @@ export function NewMemoryPage({
                 <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
               ) : null}
               {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
+              {sealFinalizeError ? (
+                <p style={styles.error}>{sealFinalizeError}</p>
+              ) : null}
               <button
                 type="button"
                 onClick={handleCancelSeal}
@@ -1236,19 +1255,24 @@ function formatAttachmentSize(size = 0) {
 
 async function prepareAttachmentsForSave(attachments, t) {
   const prepared = [];
-  for (const item of attachments) {
+  for (const item of attachments || []) {
     if (item?.dataUrl) {
       prepared.push(item);
       continue;
     }
     if (!item?.file) continue;
-    prepared.push({
-      id: item.id,
-      name: item.name,
-      mimeType: item.mimeType,
-      size: item.size,
-      dataUrl: await blobToDataUrl(item.file, t),
-    });
+    try {
+      prepared.push({
+        id: item.id,
+        name: item.name,
+        mimeType: item.mimeType,
+        size: item.size,
+        dataUrl: await blobToDataUrl(item.file, t),
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[NewMemory] attachment blob skipped", item?.name, error);
+    }
   }
   return prepared;
 }

@@ -40,6 +40,10 @@ export {
   finalizeSealChainFromSdmResponse,
 } from "./sealFlowClient";
 export {
+  finalizeSealChainFromSdmResponseSafe,
+  clearSealFlowAndReturnToApp,
+} from "./sealFinalizeSafe";
+export {
   COMPOSER_SNAPSHOT_KEY,
   composerSnapshotHasContent,
   hasRecoverableComposerContent,
@@ -48,3 +52,9 @@ export {
   tryRecoverSealPrepFromComposerSnapshot,
   forceArmSealForCurrentUser,
 } from "./sealComposerRecovery";
+export {
+  clearComposerSnapshot,
+  composerSnapshotHasTextContent,
+  readComposerSnapshotTextOnly,
+  writeComposerSnapshotTextOnly,
+} from "./composerSnapshotSafe";

@@ -1,6 +1,6 @@
 /**
  * Recover in-progress composer content when the user taps their ring before
- * explicitly pressing Seal (localStorage snapshot → idb draft + seal arm).
+ * explicitly pressing Seal (text-only localStorage snapshot → idb draft + seal arm).
  */
 
 import { saveDraftItem } from "../memories/draftBoxStore";
@@ -9,48 +9,38 @@ import {
   primeSealPrepAfterDraftPersisted,
   readPendingSealDraftIds,
 } from "./sealFlowClient";
+import {
+  COMPOSER_SNAPSHOT_KEY,
+  composerSnapshotHasTextContent,
+  readComposerSnapshotTextOnly,
+  type ComposerSnapshotText,
+} from "./composerSnapshotSafe";
 
-export const COMPOSER_SNAPSHOT_KEY = "haven.new_memory_draft";
+export { COMPOSER_SNAPSHOT_KEY };
 
-export type ComposerSnapshot = {
-  title?: string;
-  story?: string;
-  releaseAtInput?: string;
-  photos?: unknown[];
-};
+export type ComposerSnapshot = ComposerSnapshotText;
 
-export function readComposerSnapshot(): ComposerSnapshot | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(COMPOSER_SNAPSHOT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as ComposerSnapshot;
-  } catch {
-    return null;
-  }
+export function readComposerSnapshot(): ComposerSnapshotText | null {
+  return readComposerSnapshotTextOnly();
 }
 
 export function composerSnapshotHasContent(
-  snapshot: ComposerSnapshot | null = readComposerSnapshot()
+  snapshot: ComposerSnapshotText | null = readComposerSnapshotTextOnly()
 ): boolean {
-  if (!snapshot) return false;
-  if (String(snapshot.title || "").trim()) return true;
-  if (String(snapshot.story || "").trim()) return true;
-  if (Array.isArray(snapshot.photos) && snapshot.photos.length > 0) return true;
-  return false;
+  return composerSnapshotHasTextContent(snapshot);
 }
 
 export function hasRecoverableComposerContent(): boolean {
   if (readPendingSealDraftIds().length > 0) return true;
-  return composerSnapshotHasContent();
+  return composerSnapshotHasTextContent();
 }
 
-/** Persist composer snapshot to idb; returns draft id or null if nothing to save. */
+/** Persist text snapshot to idb; photos stay in idb drafts from explicit Seal saves. */
 export async function recoverComposerSnapshotToDraft(
   preferredId?: string
 ): Promise<string | null> {
-  const snapshot = readComposerSnapshot();
-  if (!composerSnapshotHasContent(snapshot)) return null;
+  const snapshot = readComposerSnapshotTextOnly();
+  if (!composerSnapshotHasTextContent(snapshot)) return null;
 
   const releaseAt = snapshot?.releaseAtInput
     ? Date.parse(String(snapshot.releaseAtInput))
@@ -60,7 +50,7 @@ export async function recoverComposerSnapshotToDraft(
     id: preferredId || readPendingSealDraftIds()[0] || undefined,
     title: String(snapshot?.title || "").trim() || "Untitled memory",
     story: String(snapshot?.story || "").trim(),
-    photo: Array.isArray(snapshot?.photos) ? snapshot.photos : [],
+    photo: [],
     attachments: [],
     releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
   });
@@ -96,8 +86,7 @@ export async function forceArmSealForCurrentUser(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (isSealFlowArmed()) return true;
 
-  // Prefer saving live composer snapshot → draft + arm (highest success on ring tap).
-  if (composerSnapshotHasContent()) {
+  if (composerSnapshotHasTextContent()) {
     const fromSnapshot = await recoverComposerSnapshotToDraft();
     if (fromSnapshot) {
       primeSealPrepAfterDraftPersisted(fromSnapshot);
