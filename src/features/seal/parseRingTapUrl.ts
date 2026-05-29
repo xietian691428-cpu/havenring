@@ -20,6 +20,7 @@ export function normalizeRingTapToStartHref(
     const uid = url.searchParams.get("uid") || "";
     const ctr = url.searchParams.get("ctr") || "";
     const hasSdm = Boolean(cmac) && (Boolean(picc) || (Boolean(uid) && Boolean(ctr)));
+    if (url.pathname.includes("/hub")) return null;
     if (!hasSdm) return null;
 
     const start = new URL("/start", base);

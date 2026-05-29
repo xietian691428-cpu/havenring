@@ -236,8 +236,13 @@ export function primeSealPrepAfterDraftPersisted(draftId: string) {
 /** SDM resolver body fields on `/start` when the seal arm window is active (cross-tab safe). */
 export function getSealSdmContextPayload(): SealSdmContextPayload {
   if (!isSealFlowArmed()) {
-    syncSealPrepWithSessionArm();
-    return { context: "", draft_ids: [] };
+    const pendingOnly = readPendingSealDraftIds();
+    if (pendingOnly.length) {
+      armSealFlowWithPersistence(pendingOnly);
+    } else {
+      syncSealPrepWithSessionArm();
+      return { context: "", draft_ids: [] };
+    }
   }
   const fromArm = getArmedSealDraftIds();
   const pending = fromArm.length ? fromArm : readPendingSealDraftIds();

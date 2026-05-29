@@ -434,6 +434,11 @@ export default function StartClient() {
           );
         }
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
+        if (scene === "daily_access" && pendingSealTapRef.current) {
+          throw new Error(
+            "Ring tap was read, but seal mode was not active. Open Capture, tap Seal, then touch your ring again within 5 minutes."
+          );
+        }
         const viewerUserId = sessionData.session?.user?.id ?? null;
         setSdmState({
           kind: "ready",
