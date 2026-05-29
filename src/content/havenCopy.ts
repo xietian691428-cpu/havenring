@@ -485,6 +485,10 @@ export const START_PAGE_EN = {
   footerSecurityReminder:
     "Haven encrypts your memories on your device. Leaving this screen during a seal only pauses the ritual — nothing is published without your confirmation.",
   sealCountdownPrefix: "Time left to seal:",
+  sealWaitTitle: "Touch your ring to seal",
+  sealWaitBody:
+    "Hold your Haven ring on the back of your phone. This page will update when the tap is read.",
+  sealWaitBackToEdit: "Back to edit memory",
 } as const;
 
 /** Minimal Seal-with-Ring copy — details live in Help Center. */

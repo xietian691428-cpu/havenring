@@ -60,3 +60,5 @@ export {
   writeComposerSnapshotTextOnly,
 } from "./composerSnapshotSafe";
 export { normalizeRingTapToStartHref } from "./parseRingTapUrl";
+export { isSealWaitSearch, navigateToSealWaitPage, SEAL_WAIT_QUERY } from "./sealNavigate";
+export { listenForSealRingTapOnce } from "./sealRingNfcListen";

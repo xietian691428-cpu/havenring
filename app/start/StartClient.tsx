@@ -25,9 +25,12 @@ import {
   getSealSdmContextPayload,
   hasRecoverableComposerContent,
   isSealFlowArmed,
+  isSealWaitSearch,
+  listenForSealRingTapOnce,
   forceArmSealForCurrentUser,
   tryRecoverSealPrepFromComposerSnapshot,
 } from "@/src/features/seal";
+import { forceClearNfcLock } from "@/src/services/nfcLockService";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 import {
   consumeDeferredAppEntry,
@@ -225,6 +228,14 @@ export default function StartClient() {
   const [nfcSealBootstrapping, setNfcSealBootstrapping] = useState(() =>
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
   );
+  const [sealWaitMode, setSealWaitMode] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      isSealWaitSearch(window.location.search) &&
+      isSealFlowArmed()
+  );
+  const [sealWaitNfcBusy, setSealWaitNfcBusy] = useState(false);
+  const [sealWaitError, setSealWaitError] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -260,15 +271,15 @@ export default function StartClient() {
 
   const [sealClockTick, setSealClockTick] = useState(0);
   useEffect(() => {
-    if (!showSealCountdown) return;
+    if (!showSealCountdown && !sealWaitMode) return;
     const id = window.setInterval(() => setSealClockTick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
-  }, [showSealCountdown]);
+  }, [showSealCountdown, sealWaitMode]);
 
   const sealRemainingMs = useMemo(() => {
     void sealClockTick;
     return getSealArmedRemainingMs();
-  }, [sealClockTick, showSealCountdown]);
+  }, [sealClockTick, showSealCountdown, sealWaitMode]);
 
   const isDailySelfOwner =
     sdmState.kind === "ready" &&
@@ -308,13 +319,64 @@ export default function StartClient() {
     (sdmState.kind === "resolving" || nfcSealBootstrapping);
 
   useEffect(() => {
+    if (sealWaitMode) return;
     if (!isDailySelfOwner || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
       return;
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, 2000);
     return () => window.clearTimeout(t);
-  }, [isDailySelfOwner, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
+  }, [sealWaitMode, isDailySelfOwner, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
+
+  useEffect(() => {
+    if (!sealWaitMode || typeof window === "undefined") return undefined;
+    setSealLeaveGuard(true);
+    pendingSealTapRef.current = true;
+    const poll = window.setInterval(() => {
+      if (isSealNfcLaunchSearch(window.location.search)) {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("seal_wait");
+        window.location.replace(`${u.pathname}${u.search}${u.hash}`);
+      }
+    }, 400);
+    return () => window.clearInterval(poll);
+  }, [sealWaitMode]);
+
+  useEffect(() => {
+    if (!sealWaitMode || typeof window === "undefined") return undefined;
+    if (!("NDEFReader" in window)) return undefined;
+    let cancelled = false;
+    const run = async () => {
+      while (!cancelled && sealWaitMode) {
+        try {
+          setSealWaitNfcBusy(true);
+          setSealWaitError("");
+          const result = await listenForSealRingTapOnce(window.location.origin);
+          if (cancelled) return;
+          if (result.ok) {
+            window.location.assign(result.target);
+            return;
+          }
+          setSealWaitError(result.message);
+        } catch (error) {
+          if (cancelled) return;
+          const msg = error instanceof Error ? error.message : "NFC read failed";
+          if (!/connection lost|timeout|lost while reading/i.test(msg)) {
+            setSealWaitError(msg);
+          }
+        } finally {
+          if (!cancelled) setSealWaitNfcBusy(false);
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+      forceClearNfcLock();
+      setSealWaitNfcBusy(false);
+    };
+  }, [sealWaitMode]);
 
   const hideFtuxOAuthDuringSealTouch =
     nfcFlow &&
@@ -795,7 +857,40 @@ export default function StartClient() {
 
           <StartRingGlyphPulse />
 
-          {!nfcFlow ? (
+          {!nfcFlow && sealWaitMode ? (
+            <>
+              <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
+                {START_PAGE_EN.sealWaitTitle}
+              </h1>
+              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
+                {START_PAGE_EN.sealWaitBody}
+              </p>
+              {sealRemainingMs > 0 ? (
+                <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
+                  {START_PAGE_EN.sealCountdownPrefix}{" "}
+                  <strong>{formatSealCountdown(sealRemainingMs)}</strong>
+                </p>
+              ) : null}
+              {sealWaitNfcBusy ? (
+                <p style={styles.subtitle}>{sealFlow.sealScanRingBusy}</p>
+              ) : null}
+              {sealWaitError ? (
+                <p style={{ ...styles.subtitle, color: "#ffb4a8" }} role="alert">
+                  {sealWaitError}
+                </p>
+              ) : null}
+              <NfcPhoneHint platform={platform} />
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.assign("/app?open=new");
+                }}
+                style={styles.sealGuideInlineLink}
+              >
+                {START_PAGE_EN.sealWaitBackToEdit}
+              </button>
+            </>
+          ) : !nfcFlow ? (
             <>
               <p style={styles.kicker}>Haven Ring</p>
               <h1 style={styles.title}>{idleHero.title}</h1>

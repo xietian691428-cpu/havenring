@@ -18,6 +18,96 @@ function ensureNdefSupport() {
   }
 }
 
+/** NDEF Well Known Type URI record prefix codes (see NFC Forum URI Record). */
+const NDEF_URI_PREFIXES = [
+  "",
+  "http://www.",
+  "https://www.",
+  "http://",
+  "https://",
+  "tel:",
+  "mailto:",
+  "ftp://anonymous:anonymous@",
+  "ftp://ftp.",
+  "ftps://",
+  "sftp://",
+  "smb://",
+  "nfs://",
+  "ftp://",
+  "dav://",
+  "news:",
+  "telnet://",
+  "imap:",
+  "rtsp://",
+  "urn:",
+  "pop:",
+  "sip:",
+  "sips:",
+  "tftp:",
+  "btspp://",
+  "btl2cap://",
+  "btgoep://",
+  "tcpobex://",
+  "irdaobex://",
+  "file://",
+  "urn:epc:id:",
+  "urn:epc:tag:",
+  "urn:epc:pat:",
+  "urn:epc:raw:",
+  "urn:epc:",
+  "urn:nfc:",
+];
+
+function bytesFromRecordData(data) {
+  if (!data) return new Uint8Array(0);
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return new Uint8Array(0);
+}
+
+function decodeNdefUrlRecord(data) {
+  const bytes = bytesFromRecordData(data);
+  if (!bytes.length) return "";
+  const prefix = NDEF_URI_PREFIXES[bytes[0]] ?? "";
+  const rest = new TextDecoder().decode(bytes.subarray(1));
+  return `${prefix}${rest}`.trim();
+}
+
+function decodeNdefTextRecord(data, encoding) {
+  const bytes = bytesFromRecordData(data);
+  if (!bytes.length) return "";
+  const langLen = bytes[0] & 0x3f;
+  const textStart = 1 + langLen;
+  if (textStart >= bytes.length) return "";
+  return new TextDecoder(encoding || "utf-8").decode(bytes.subarray(textStart));
+}
+
+export function ndefRecordToPayloadText(record) {
+  if (!record) return "";
+  const type = String(record.recordType || "").toLowerCase();
+  if (type === "url") return decodeNdefUrlRecord(record.data);
+  if (type === "text") return decodeNdefTextRecord(record.data, record.encoding);
+  try {
+    return new TextDecoder(record.encoding || "utf-8").decode(record.data);
+  } catch {
+    return "";
+  }
+}
+
+function pickBestUrlFromNdefMessage(message) {
+  const records = message?.records || [];
+  let fallback = "";
+  for (const record of records) {
+    const text = ndefRecordToPayloadText(record);
+    if (!text) continue;
+    if (!fallback) fallback = text;
+    if (/^https?:\/\//i.test(text) || text.includes("/start") || text.includes("cmac=")) {
+      return text;
+    }
+  }
+  return fallback;
+}
+
 function pushNfcErrorLog(error, context = "unknown") {
   if (typeof window === "undefined") return;
   try {
@@ -61,14 +151,8 @@ export async function readNfcScanFull() {
     window.clearTimeout(timeout);
     try {
       event?.stopImmediatePropagation?.();
-      const record = event.message.records?.[0];
-      let text = "";
-      let recordType = "";
-      if (record) {
-        recordType = record.recordType || "";
-        const decoder = new TextDecoder(record.encoding || "utf-8");
-        text = decoder.decode(record.data);
-      }
+      const text = pickBestUrlFromNdefMessage(event.message);
+      const recordType = event.message?.records?.[0]?.recordType || "";
       const serialNumber =
         typeof event.serialNumber === "string" && event.serialNumber.trim()
           ? event.serialNumber.trim()
@@ -86,8 +170,9 @@ export async function readNfcScanFull() {
   try {
     ensureNdefSupport();
     if (!lock.ok) {
-      console.log("NFC reader already active", lock.owner);
-      return null;
+      throw new Error(
+        `NFC is busy (${lock.owner || "another scan"}). Wait a moment and try again.`
+      );
     }
 
     const reader = new window.NDEFReader();

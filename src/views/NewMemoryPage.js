@@ -22,14 +22,13 @@ import {
   gateSealWithRingAccess,
   getSealArmedRemainingMs,
   isSealFlowArmed,
-  normalizeRingTapToStartHref,
+  navigateToSealWaitPage,
+  listenForSealRingTapOnce,
   primeSealPrepAfterDraftPersisted,
   readComposerSnapshotTextOnly,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
 import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
-import { readNfcScanFull } from "../services/nfcRingService";
-import { forceClearNfcLock } from "../services/nfcLockService";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
@@ -338,62 +337,6 @@ export function NewMemoryPage({
   }, [sealPromptOpen, sealFlow.sealCompletedElsewhere]);
 
   useEffect(() => {
-    if (!sealPromptOpen || !webNfcAvailable) return undefined;
-    let cancelled = false;
-
-    const listenForRingTap = async () => {
-      // eslint-disable-next-line no-console
-      console.log("[seal] Web NFC listen started (tap ring on back of phone)");
-      while (!cancelled) {
-        try {
-          setNfcSealScanBusy(true);
-          const scan = await readNfcScanFull();
-          if (cancelled) return;
-          const text = String(scan?.text || "").trim();
-          if (!text) {
-            setRingTapError("Could not read a URL from the ring. Try again.");
-            continue;
-          }
-          if (/\/hub(\?|$)/i.test(text)) {
-            setRingTapError(
-              "Ring still points to /hub. In Haven Settings, program it to open /start for sealing."
-            );
-            continue;
-          }
-          const target = normalizeRingTapToStartHref(text, window.location.origin);
-          if (!target) {
-            setRingTapError(
-              "Ring link is missing seal parameters. It must open /start with a dynamic tap."
-            );
-            continue;
-          }
-          // eslint-disable-next-line no-console
-          console.log("[seal] NFC read OK →", target);
-          window.location.assign(target);
-          return;
-        } catch (error) {
-          if (cancelled) return;
-          const msg = error instanceof Error ? error.message : "";
-          if (/already active/i.test(msg)) {
-            await new Promise((r) => setTimeout(r, 500));
-            continue;
-          }
-          if (!/connection lost|timeout|lost while reading/i.test(msg)) {
-            setRingTapError(msg || "Could not read the ring.");
-          }
-        }
-      }
-    };
-
-    void listenForRingTap();
-    return () => {
-      cancelled = true;
-      forceClearNfcLock();
-      setNfcSealScanBusy(false);
-    };
-  }, [sealPromptOpen, webNfcAvailable]);
-
-  useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
     const timer = window.setTimeout(() => {
       setIsFirstMemoryMode(!firstDone);
@@ -633,10 +576,8 @@ export function NewMemoryPage({
       }
       if (openSealPromptOnSuccess) {
         primeSealPrepAfterDraftPersisted(savedDraft.id);
-        startTransition(() => {
-          setSealPromptOpen(true);
-          setFeedback(t.feedbackReadyToSeal);
-        });
+        navigateToSealWaitPage();
+        return;
       } else if (typeof onSaveMemory === "function") {
         setFeedback("");
         setSecureSaveToast(true);
@@ -724,11 +665,8 @@ export function NewMemoryPage({
         remainingMs: getSealArmedRemainingMs(),
         origin: typeof window !== "undefined" ? window.location.origin : "",
       });
-      startTransition(() => {
-        setEditingDraftId(savedDraft.id);
-        setSealPromptOpen(true);
-        setFeedback(t.feedbackReadyToSeal);
-      });
+      setEditingDraftId(savedDraft.id);
+      navigateToSealWaitPage();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : t.feedbackSaveFailed;
@@ -822,26 +760,16 @@ export function NewMemoryPage({
     setRingTapError("");
     setNfcSealScanBusy(true);
     try {
-      const scan = await readNfcScanFull();
-      if (!scan?.text) {
-        throw new Error("No URL found on ring. Use Settings to verify the ring link.");
+      const result = await listenForSealRingTapOnce(window.location.origin);
+      if (!result.ok) {
+        setRingTapError(result.message);
+        return;
       }
-      const target = normalizeRingTapToStartHref(
-        scan.text,
-        window.location.origin
-      );
-      if (!target) {
-        throw new Error(
-          "Ring link is missing seal parameters. It should open havenring.me/start with a dynamic tap."
-        );
-      }
-      // eslint-disable-next-line no-console
-      console.log("[seal] NFC scan → navigate", target);
-      window.location.assign(target);
+      window.location.assign(result.target);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Could not read the ring.";
-      setRingTapError(message);
+      setRingTapError(
+        error instanceof Error ? error.message : "Could not read the ring."
+      );
     } finally {
       setNfcSealScanBusy(false);
     }
