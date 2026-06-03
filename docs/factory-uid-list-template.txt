@@ -1,0 +1,10 @@
+# Haven Ring — UID list for key generation (Phase 2)
+# 第二阶段：工厂填写 UID，发回 Haven 生成密钥表
+#
+# Format: one UID per line (with or without colons)
+# Example:
+# 04:42:45:3A:50:23:80
+# 0453A53A502390
+#
+# --- Paste UIDs below ---
+
