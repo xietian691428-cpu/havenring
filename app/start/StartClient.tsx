@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
-import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
+import { hasSdmSearch } from "@/lib/nfc-intent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { usePlatform } from "@/src/hooks/usePlatform";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
@@ -24,6 +24,8 @@ import {
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
   hasRecoverableComposerContent,
+  isAuxiliarySealTapTab,
+  isPrimarySealWaitPage,
   isSealFlowArmed,
   isSealWaitSearch,
   recordSealNfcTapHref,
@@ -225,15 +227,20 @@ export default function StartClient() {
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
   );
   const [sealWaitMode, setSealWaitMode] = useState(false);
+  const [auxiliaryRelayOnly, setAuxiliaryRelayOnly] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const search = window.location.search;
     queueMicrotask(() => {
-      setSealWaitMode(
-        isSealWaitSearch(search) &&
-          (readNfcIntent(search) === "seal" || isSealFlowArmed())
-      );
+      if (isAuxiliarySealTapTab(search)) {
+        recordSealNfcTapHref(window.location.href);
+        setAuxiliaryRelayOnly(true);
+        setNotice("请回到等待页");
+        setSealWaitMode(false);
+        return;
+      }
+      setSealWaitMode(isPrimarySealWaitPage(search));
     });
   }, []);
 
@@ -373,11 +380,26 @@ export default function StartClient() {
     };
   }, [sealWaitMode]);
 
-  const hideFtuxOAuthDuringSealTouch =
+  const sealContextActive =
     sealWaitMode ||
+    auxiliaryRelayOnly ||
+    isSealFlowArmed() ||
+    hasRecoverableComposerContent();
+
+  const hideFtuxOAuthDuringSealTouch =
+    sealContextActive ||
     (nfcFlow &&
       (sdmState.kind === "resolving" ||
+        sdmState.kind === "failed" ||
         (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation")));
+
+  const showStartOAuth =
+    !hideFtuxOAuthDuringSealTouch &&
+    (Boolean(claimToken) ||
+      (nfcFlow &&
+        sdmState.kind === "ready" &&
+        sdmState.scene === "new_ring_binding" &&
+        !sealContextActive));
 
   function confirmLeaveWithoutRing() {
     if (typeof window === "undefined") return;
@@ -408,7 +430,9 @@ export default function StartClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
+    const search = window.location.search || "";
+    if (isAuxiliarySealTapTab(search)) return;
+    const params = new URLSearchParams(search);
     const uid = params.get("uid") || "";
     const ctr = params.get("ctr") || "";
     const cmac = params.get("cmac") || "";
@@ -448,12 +472,27 @@ export default function StartClient() {
           Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
         setSealLeaveGuard(pendingSealTapRef.current);
 
+        try {
+          await supabase.auth.initialize();
+        } catch {
+          /* offline */
+        }
         const { data: sessionData } = await supabase.auth.getSession();
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
 
         const accessToken = sessionData.session?.access_token || "";
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+        if (
+          !accessToken &&
+          pendingSealTapRef.current &&
+          !isPermanentSupabaseSession(sessionData.session ?? null)
+        ) {
+          const next = `${window.location.pathname}${window.location.search}`;
+          window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+          return;
+        }
 
         let res: Response;
         try {
@@ -846,7 +885,16 @@ export default function StartClient() {
 
           <StartRingGlyphPulse />
 
-          {!nfcFlow && sealWaitMode ? (
+          {auxiliaryRelayOnly ? (
+            <>
+              <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
+                已读取戒指
+              </h1>
+              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
+                请回到等待页完成封印
+              </p>
+            </>
+          ) : !nfcFlow && sealWaitMode ? (
             <>
               <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
                 {START_PAGE_EN.sealWaitTitle}
@@ -1038,7 +1086,7 @@ export default function StartClient() {
             </footer>
           ) : null}
 
-          {!hideFtuxOAuthDuringSealTouch && (nfcFlow || claimToken) ? (
+          {showStartOAuth ? (
             <>
               <button
                 type="button"

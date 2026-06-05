@@ -4,7 +4,11 @@
  */
 import assert from "node:assert/strict";
 import { hasSdmSearch, readNfcIntent } from "../lib/nfc-intent";
-import { isSealWaitSearch } from "../src/features/seal/sealNavigate";
+import {
+  isAuxiliarySealTapTab,
+  isPrimarySealWaitPage,
+  isSealWaitSearch,
+} from "../src/features/seal/sealNavigate";
 import { STORAGE_KEYS } from "../lib/storage-keys";
 import { SEAL_ARMED_KEY } from "../lib/seal-flow";
 import { PENDING_SEAL_DRAFT_IDS_KEY } from "../src/features/seal/sealTypes";
@@ -30,6 +34,11 @@ check("seal wait URL intent=seal", () => {
   const q = "?seal_wait=1&intent=seal";
   assert.equal(isSealWaitSearch(q), true);
   assert.equal(readNfcIntent(q), "seal");
+});
+
+check("seal navigate helpers exported", () => {
+  assert.equal(typeof isPrimarySealWaitPage, "function");
+  assert.equal(typeof isAuxiliarySealTapTab, "function");
 });
 
 check("claim param maps to claim intent", () => {

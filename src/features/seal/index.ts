@@ -69,5 +69,11 @@ export {
   recordSealNfcTapHref,
   readFreshSealNfcTapHref,
 } from "./sealNfcTapRelay";
-export { isSealWaitSearch, navigateToSealWaitPage, SEAL_WAIT_QUERY } from "./sealNavigate";
+export {
+  isAuxiliarySealTapTab,
+  isPrimarySealWaitPage,
+  isSealWaitSearch,
+  navigateToSealWaitPage,
+  SEAL_WAIT_QUERY,
+} from "./sealNavigate";
 export { listenForSealRingTapOnce } from "./sealRingNfcListen";
