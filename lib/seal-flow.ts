@@ -3,6 +3,7 @@ import { STORAGE_KEYS } from "./storage-keys";
 
 /** Dual-storage arm window for Seal-with-Ring (session + local for cross-tab NFC). */
 export const SEAL_ARMED_KEY = STORAGE_KEYS.sealArmed;
+const SEAL_ARMED_COOKIE = "haven_seal_armed_v1";
 
 /** Keep consistent with server ticket TTL defaults (`lib/seal-shared.ts`). */
 export const SEAL_ARM_TTL_MS = 5 * 60 * 1000;
@@ -52,6 +53,63 @@ function parseArmedPayload(raw: string | null): SealArmedPayload | null {
   }
 }
 
+function cookieOptions(maxAgeSeconds: number): string {
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  return `Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const parts = document.cookie ? document.cookie.split(";") : [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix)) {
+      return trimmed.slice(prefix.length);
+    }
+  }
+  return null;
+}
+
+function getFromCookie(): SealArmedPayload | null {
+  try {
+    const raw = readCookie(SEAL_ARMED_COOKIE);
+    if (!raw) return null;
+    const data = parseArmedPayload(decodeURIComponent(raw));
+    if (!data || isExpired(data)) {
+      clearArmedCookie();
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function writeArmedCookie(data: SealArmedPayload) {
+  if (typeof document === "undefined") return;
+  try {
+    const maxAgeSeconds = Math.max(1, Math.ceil((data.expiresAt - Date.now()) / 1000));
+    document.cookie = `${SEAL_ARMED_COOKIE}=${encodeURIComponent(
+      JSON.stringify(data)
+    )}; ${cookieOptions(maxAgeSeconds)}`;
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearArmedCookie() {
+  if (typeof document === "undefined") return;
+  try {
+    document.cookie = `${SEAL_ARMED_COOKIE}=; ${cookieOptions(0)}`;
+  } catch {
+    /* ignore */
+  }
+}
+
 function getFromStorage(type: StorageKind): SealArmedPayload | null {
   if (typeof window === "undefined") return null;
   const key = SEAL_ARMED_KEY;
@@ -90,6 +148,7 @@ function writeArmedPayload(data: SealArmedPayload) {
   } catch {
     /* quota / private mode */
   }
+  writeArmedCookie(data);
 }
 
 function clearArmedStorage() {
@@ -104,6 +163,7 @@ function clearArmedStorage() {
   } catch {
     /* ignore */
   }
+  clearArmedCookie();
 }
 
 /** Active non-expired arm payload (session first, then local with session rehydrate). */
@@ -114,6 +174,12 @@ export function readActiveSealArmedPayload(): SealArmedPayload | null {
   if (data && !isExpired(data)) return data;
 
   data = getFromStorage("localStorage");
+  if (data && !isExpired(data)) {
+    writeArmedPayload(data);
+    return data;
+  }
+
+  data = getFromCookie();
   if (data && !isExpired(data)) {
     writeArmedPayload(data);
     return data;

@@ -33,6 +33,8 @@ import {
 } from "./sealCrossTab";
 import { clearSealNfcTapHref } from "./sealNfcTapRelay";
 
+const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
+
 export {
   armSealFlow,
   armSealFlowWithPersistence,
@@ -44,12 +46,30 @@ export {
   readActiveSealArmedPayload,
 } from "../../../lib/seal-flow";
 
-export function readPendingSealDraftIds(): string[] {
-  if (typeof window === "undefined") return [];
+function sealCookieOptions(maxAgeSeconds: number): string {
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  return `Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const parts = document.cookie ? document.cookie.split(";") : [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length);
+  }
+  return null;
+}
+
+function readPendingSealDraftIdsCookie(): string[] {
   try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(PENDING_SEAL_DRAFT_IDS_KEY) || "[]"
-    );
+    const raw = readCookie(PENDING_SEAL_DRAFT_IDS_COOKIE);
+    if (!raw) return [];
+    const parsed = JSON.parse(decodeURIComponent(raw));
     return Array.isArray(parsed)
       ? parsed
           .map((id) => String(id || "").trim())
@@ -61,10 +81,45 @@ export function readPendingSealDraftIds(): string[] {
   }
 }
 
+function writePendingSealDraftIdsCookie(ids: string[]) {
+  if (typeof document === "undefined") return;
+  try {
+    if (!ids.length) {
+      document.cookie = `${PENDING_SEAL_DRAFT_IDS_COOKIE}=; ${sealCookieOptions(0)}`;
+      return;
+    }
+    document.cookie = `${PENDING_SEAL_DRAFT_IDS_COOKIE}=${encodeURIComponent(
+      JSON.stringify(ids)
+    )}; ${sealCookieOptions(5 * 60)}`;
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readPendingSealDraftIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(PENDING_SEAL_DRAFT_IDS_KEY) || "[]"
+    );
+    const ids = Array.isArray(parsed)
+      ? parsed
+          .map((id) => String(id || "").trim())
+          .filter(Boolean)
+          .slice(0, MAX_SEAL_DRAFT_IDS)
+      : [];
+    if (ids.length) return ids;
+  } catch {
+    /* fall through to cookie */
+  }
+  return readPendingSealDraftIdsCookie();
+}
+
 export function writePendingSealDraftIds(ids: string[] = []) {
   if (typeof window === "undefined") return;
   if (!ids.length) {
     window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
+    writePendingSealDraftIdsCookie([]);
     return;
   }
   const normalized = ids
@@ -75,11 +130,13 @@ export function writePendingSealDraftIds(ids: string[] = []) {
     PENDING_SEAL_DRAFT_IDS_KEY,
     JSON.stringify(normalized)
   );
+  writePendingSealDraftIdsCookie(normalized);
 }
 
 export function clearPendingSealDraftIds() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
+  writePendingSealDraftIdsCookie([]);
 }
 
 /**

@@ -69,4 +69,9 @@ check("storage keys aligned for seal flow", () => {
   assert.equal(typeof STORAGE_KEYS.sealWaitTabActive, "string");
 });
 
+check("seal prep has cross-tab persistence keys", () => {
+  assert.equal(STORAGE_KEYS.sealArmed, "haven.seal.armed.v1");
+  assert.equal(STORAGE_KEYS.pendingSealDraftIds, "haven.pending_seal_draft_ids.v1");
+});
+
 console.log("\nAll flow contract checks passed.");
