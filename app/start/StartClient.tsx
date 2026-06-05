@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
+import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { isStandaloneDisplayMode, usePlatform } from "@/src/hooks/usePlatform";
-import { getInstallGuideCopy } from "@/src/content/installGuideContent";
+import { usePlatform } from "@/src/hooks/usePlatform";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
@@ -42,12 +42,7 @@ import {
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
 
 function isSealNfcLaunchSearch(search: string): boolean {
-  const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const cmac = sp.get("cmac") || "";
-  const picc = sp.get("picc") || sp.get("picc_data") || "";
-  const uid = sp.get("uid") || "";
-  const ctr = sp.get("ctr") || "";
-  return Boolean(cmac) && (Boolean(picc) || (Boolean(uid) && Boolean(ctr)));
+  return hasSdmSearch(search);
 }
 
 /** OAuth return URL: reads the live `/start` query so redirects never miss NFC params if the user signs in immediately. */
@@ -229,12 +224,18 @@ export default function StartClient() {
   const [nfcSealBootstrapping, setNfcSealBootstrapping] = useState(() =>
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
   );
-  const [sealWaitMode, setSealWaitMode] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      isSealWaitSearch(window.location.search) &&
-      isSealFlowArmed()
-  );
+  const [sealWaitMode, setSealWaitMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const search = window.location.search;
+    queueMicrotask(() => {
+      setSealWaitMode(
+        isSealWaitSearch(search) &&
+          (readNfcIntent(search) === "seal" || isSealFlowArmed())
+      );
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -335,13 +336,14 @@ export default function StartClient() {
 
   useEffect(() => {
     if (!sealWaitMode || typeof window === "undefined") return undefined;
-    setSealLeaveGuard(true);
+    queueMicrotask(() => setSealLeaveGuard(true));
     pendingSealTapRef.current = true;
 
     const followSealTap = () => {
       if (isSealNfcLaunchSearch(window.location.search)) {
         const u = new URL(window.location.href);
         u.searchParams.delete("seal_wait");
+        u.searchParams.delete("intent");
         window.location.replace(`${u.pathname}${u.search}${u.hash}`);
         return true;
       }
@@ -469,9 +471,7 @@ export default function StartClient() {
             }),
           });
         } catch {
-          throw new Error(
-            "Could not reach Haven to verify this tap. Check your connection and try again — your draft stays on this device."
-          );
+          throw new Error("贴戒指失败，请重试");
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
@@ -491,9 +491,7 @@ export default function StartClient() {
         }
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         if (scene === "daily_access" && pendingSealTapRef.current) {
-          throw new Error(
-            "Ring tap was read, but seal mode was not active. Open Capture, tap Seal, then touch your ring again within 5 minutes."
-          );
+          throw new Error("请从编辑页封印");
         }
         const viewerUserId = sessionData.session?.user?.id ?? null;
         setSdmState({
@@ -505,24 +503,24 @@ export default function StartClient() {
         });
         setNotice(
           scene === "new_ring_binding"
-            ? "Status: not linked — you can connect this ring to one Haven account."
+            ? "请绑定戒指"
             : scene === "seal_confirmation"
-              ? "Ring confirmed. Sealing your memory."
+              ? "封印中"
               : viewerUserId && data.ownerId && viewerUserId === data.ownerId
-                ? "Status: already linked to your account."
+                ? "已识别"
                 : viewerUserId && data.ownerId && viewerUserId !== data.ownerId
-                  ? "Status: linked to another account — unlink there first to move it."
-                  : "Status: already linked — sign in if this ring is yours."
+                  ? "戒指已绑定"
+                  : "请登录"
         );
         if (scene === "seal_confirmation") {
           if (!accessToken) {
-            throw new Error("Please sign in, then touch your ring again to finish sealing.");
+            throw new Error("请先登录");
           }
           if (!data.sealTicket) {
-            throw new Error("Ring confirmed. Return to your memory and tap Seal with Ring again.");
+            throw new Error("请重试");
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
-          setNotice("Ring confirmed. Completing the seal...");
+          setNotice("封印中");
           const finalizeResult = await finalizeSealChainFromSdmResponseSafe({
             sealTicket: String(data.sealTicket),
             draftIds: pendingSealDraftIds,
@@ -538,13 +536,10 @@ export default function StartClient() {
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (controller.signal.aborted) return;
         const baseMsg =
-          error instanceof Error ? error.message : "This ring could not be verified.";
-        const sealHint = pendingSealTapRef.current
-          ? " Sign in if needed, then open Capture again and touch your ring to retry sealing."
-          : "";
+          error instanceof Error ? error.message : "贴戒指失败，请重试";
         setSdmState({
           kind: "failed",
-          message: `${baseMsg}${sealHint}`,
+          message: baseMsg,
         });
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       } finally {
@@ -571,13 +566,13 @@ export default function StartClient() {
         const desc = hp.get("error_description") || hp.get("error") || "";
         const readable = desc
           ? decodeURIComponent(desc.replace(/\+/g, " "))
-          : "Sign-in did not complete. Please try again.";
-        setNotice(readable);
+          : "登录失败";
+        queueMicrotask(() => setNotice(readable));
         const u = new URL(window.location.href);
         u.hash = "";
         window.history.replaceState({}, "", `${u.pathname}${u.search}`);
       } catch {
-        setNotice("Sign-in did not complete. Please try again.");
+        queueMicrotask(() => setNotice("登录失败"));
       }
     }
   }, []);
@@ -622,7 +617,7 @@ export default function StartClient() {
     const timer = window.setTimeout(() => {
       setClaimToken(normalized);
       setClaimState("waiting_signin");
-      setNotice("Connecting your ring to your account…");
+      setNotice("绑定中");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -632,7 +627,7 @@ export default function StartClient() {
     if (typeof window === "undefined") return;
     const timer = window.setTimeout(() => {
       setClaimToken("");
-      setNotice("30-Day Haven Plus activated! You can now try Seal with Ring.");
+      setNotice("已绑定");
       window.location.assign("/app");
     }, 1200);
     return () => window.clearTimeout(timer);
@@ -645,7 +640,7 @@ export default function StartClient() {
       claimAttemptedRef.current = false;
       setClaimState("failed");
       setNotice(
-        "Ring setup is taking too long. You can retry now, or continue without ring for now."
+        "绑定失败，请重试"
       );
     }, 12_000);
     return () => window.clearTimeout(timer);
@@ -655,7 +650,7 @@ export default function StartClient() {
     if (!claimToken || claimAttemptedRef.current) return;
     claimAttemptedRef.current = true;
     setClaimState("claiming");
-    setNotice("Connecting your ring to your account…");
+    setNotice("绑定中");
     try {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), CLAIM_REQUEST_TIMEOUT_MS);
@@ -686,14 +681,14 @@ export default function StartClient() {
       setClaimState("claimed");
       setNotice(
         data?.plusTrialActivated
-          ? "30-Day Haven Plus activated! You can now try Seal with Ring."
-          : "Ring successfully linked! Welcome to your sanctuary."
+          ? "已绑定"
+          : "已绑定"
       );
     } catch {
       claimAttemptedRef.current = false;
       setClaimState("failed");
       setNotice(
-        "Ring setup timed out. You can retry now, or continue without ring for now."
+        "绑定失败，请重试"
       );
     }
   }, [claimToken]);
@@ -740,7 +735,7 @@ export default function StartClient() {
       if (!active || bindRingRedirectDoneRef.current) return;
       if (!session?.access_token) return;
       bindRingRedirectDoneRef.current = true;
-      setNotice("Connecting your ring to your account…");
+      setNotice("绑定中");
       window.location.assign(`/bind-ring?uid=${encodeURIComponent(uid)}`);
     }
 
@@ -768,9 +763,9 @@ export default function StartClient() {
   function getFriendlyAuthError(message: string, provider: "apple" | "google") {
     if (isOAuthProviderNotEnabledMessage(message)) {
       if (provider === "apple") {
-        return "Apple Sign In is not ready yet. Please continue with Google.";
+        return "Apple 不可用";
       }
-      return "Google Sign In is not ready yet. Please try Apple Sign In.";
+      return "Google 不可用";
     }
     const detail = String(message || "").trim();
     if (detail) {
@@ -797,7 +792,7 @@ export default function StartClient() {
           isOAuthProviderNotEnabledMessage(String(error.message || ""))
         ) {
           setAppleProviderReady(false);
-          setNotice("Apple Sign In is not ready yet. Redirecting to Google Sign In...");
+          setNotice("Apple 不可用，打开 Google");
           window.setTimeout(() => {
             void signInWith("google");
           }, 250);
@@ -865,14 +860,6 @@ export default function StartClient() {
                   <strong>{formatSealCountdown(sealRemainingMs)}</strong>
                 </p>
               ) : null}
-              <p style={styles.sealWaitSignedInNote}>{START_PAGE_EN.sealWaitSignedInNote}</p>
-              <p style={styles.sealWaitTapHint}>
-                {platform === "android"
-                  ? START_PAGE_EN.sealWaitTapHintAndroid
-                  : platform === "ios"
-                    ? START_PAGE_EN.sealWaitTapHintIos
-                    : START_PAGE_EN.sealWaitTapHintOther}
-              </p>
               <p style={styles.subtitle} aria-live="polite">
                 {sealFlow.sealScanRingBusy}
               </p>
@@ -889,9 +876,7 @@ export default function StartClient() {
             </>
           ) : !nfcFlow ? (
             <>
-              <p style={styles.kicker}>Haven Ring</p>
               <h1 style={styles.title}>{idleHero.title}</h1>
-              <p style={{ ...styles.subtitle, whiteSpace: "pre-line" }}>{idleHero.subtitle}</p>
             </>
           ) : showSealArmFailedGuide || showSealPrepGuide ? (
             <p
@@ -918,7 +903,7 @@ export default function StartClient() {
             <>
               <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>{sdmCopy.title}</h1>
               <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                {sdmCopy.placementHint || START_PAGE_EN.heroSubtitleFallback}
+                {sdmState.kind === "resolving" ? START_PAGE_EN.readingRingStatus : ""}
               </p>
             </>
           ) : null}
@@ -948,8 +933,8 @@ export default function StartClient() {
                   ✓
                 </p>
               ) : null}
-              <p style={styles.sdmEyebrow}>{sdmCopy.eyebrow}</p>
-              <p style={styles.sdmBody}>{sdmCopy.body}</p>
+              {sdmCopy.eyebrow ? <p style={styles.sdmEyebrow}>{sdmCopy.eyebrow}</p> : null}
+              {sdmCopy.body ? <p style={styles.sdmBody}>{sdmCopy.body}</p> : null}
               {nfcFlow &&
               sdmCopy &&
               (sdmState.kind === "resolving" ||
@@ -963,10 +948,6 @@ export default function StartClient() {
               {sdmCopy.placementHint && nfcFlow ? (
                 <p style={styles.sdmHint}>{sdmCopy.placementHint}</p>
               ) : null}
-              <div style={styles.sdmNextStep}>
-                <span style={styles.sdmNextLabel}>Next</span>
-                <span>{sdmCopy.nextLine}</span>
-              </div>
               {sdmState.kind === "failed" ? (
                 <div style={styles.sdmActions}>
                   <button type="button" onClick={retrySdmTouch} style={styles.sdmPrimaryAction}>
@@ -979,13 +960,13 @@ export default function StartClient() {
 
           {claimToken ? (
             <section style={styles.claimCard}>
-              <p style={styles.claimTitle}>Ring setup in progress</p>
+              <p style={styles.claimTitle}>绑定中</p>
               <p style={styles.claimBody}>
                 {claimState === "claimed"
-                  ? "Ring successfully linked! Welcome to your sanctuary."
+                  ? "已绑定"
                   : claimState === "waiting_signin"
-                    ? "Connecting your ring to your account. Please sign in, then we will finish linking automatically."
-                    : "Connecting your ring to your account…"}
+                    ? "请登录"
+                    : "绑定中"}
               </p>
               {claimState === "failed" ? (
                 <button
@@ -997,17 +978,17 @@ export default function StartClient() {
                       if (data.session?.access_token) {
                         void claimRingWithToken(data.session.access_token);
                       } else {
-                        setNotice("Please sign in first, then retry ring setup.");
+                        setNotice("请先登录");
                         setClaimState("waiting_signin");
                       }
                     } catch {
-                      setNotice("Please sign in first, then retry ring setup.");
+                      setNotice("请先登录");
                       setClaimState("waiting_signin");
                     }
                   }}
                   style={styles.secondaryButton}
                 >
-                  Retry ring setup
+                  重试
                 </button>
               ) : null}
               {claimState !== "claimed" ? (
@@ -1016,12 +997,12 @@ export default function StartClient() {
                   onClick={() => {
                     setClaimState("skipped");
                     setClaimToken("");
-                    setNotice("You can continue now and connect a ring later in My Rings.");
+                    setNotice("");
                     window.location.assign("/app");
                   }}
                   style={styles.secondaryButton}
                 >
-                  Continue without ring for now
+                  跳过
                 </button>
               ) : null}
             </section>
@@ -1029,7 +1010,6 @@ export default function StartClient() {
 
           {nfcFlow && !claimToken ? (
             <footer style={styles.sealFooter}>
-              <p style={styles.sealFooterSecurity}>{START_PAGE_EN.footerSecurityReminder}</p>
               {needsSealLeaveDouble && sealLeaveAck ? (
                 <>
                   <p style={styles.sdmLeaveWarn}>{START_PAGE_EN.leaveSealWarning}</p>
@@ -1058,7 +1038,7 @@ export default function StartClient() {
             </footer>
           ) : null}
 
-          {!hideFtuxOAuthDuringSealTouch ? (
+          {!hideFtuxOAuthDuringSealTouch && (nfcFlow || claimToken) ? (
             <>
               <button
                 type="button"
@@ -1067,10 +1047,10 @@ export default function StartClient() {
                 style={styles.primaryButton}
               >
                 {busyProvider === "apple"
-                  ? "Opening Apple Sign In..."
+                  ? "打开中"
                   : appleProviderReady
-                    ? "Continue with Apple"
-                    : "Apple Sign In coming soon"}
+                    ? "Apple 登录"
+                    : "Apple 不可用"}
               </button>
 
               <button
@@ -1080,48 +1060,10 @@ export default function StartClient() {
                 style={styles.secondaryButton}
               >
                 {busyProvider === "google"
-                  ? "Opening Google Sign In..."
-                  : "Continue with Google"}
+                  ? "打开中"
+                  : "Google 登录"}
               </button>
-              <p style={styles.linkLine}>
-                Already have an account?{" "}
-                <Link href="/app" style={styles.link}>
-                  Sign in
-                </Link>
-              </p>
-              <p style={styles.complianceLine}>
-                By continuing, you agree to our{" "}
-                <a href="/privacy-policy" style={styles.link}>
-                  Privacy Policy
-                </a>
-                .
-              </p>
             </>
-          ) : null}
-
-          {!nfcFlow && !sealWaitMode && platformReady && !isStandaloneDisplayMode() && platform !== "other" ? (
-            <section
-              style={{
-                ...styles.tipCard,
-                ...(platform === "ios" ? styles.tipCardIosStrong : {}),
-              }}
-            >
-              <p style={styles.tipTitle}>
-                {platform === "ios" ? "Install on iPhone" : "Install on Android"}
-              </p>
-              <p style={styles.tipBody}>{getInstallGuideCopy(platform).lead}</p>
-              <Link
-                href="/setup?return=%2Fstart"
-                style={{
-                  ...styles.link,
-                  display: "inline-block",
-                  marginTop: 8,
-                  fontWeight: 600,
-                }}
-              >
-                Open install guide →
-              </Link>
-            </section>
           ) : null}
 
           <p style={styles.notice}>{notice || "\u00A0"}</p>

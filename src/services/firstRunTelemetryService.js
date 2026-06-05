@@ -1,13 +1,16 @@
-export const FIRST_MEMORY_DONE_KEY = "haven.first_memory.completed.v1";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+export const FIRST_MEMORY_DONE_KEY = STORAGE_KEYS.firstMemoryCompleted;
 
 /** Set when the first-run carousel is dismissed (any path). */
-export const ONBOARDING_DONE_KEY = "haven.onboarding.completed.v1";
+export const ONBOARDING_DONE_KEY = STORAGE_KEYS.onboardingCompleted;
 
 /** `bind_ring` | `face_only` | `skipped` | `completed` — used for post-FTUX routing. */
-export const ONBOARDING_OUTCOME_KEY = "haven.onboarding.outcome.v1";
+export const ONBOARDING_OUTCOME_KEY = STORAGE_KEYS.onboardingOutcome;
 
 /** User dismissed the gentle “try sealing” strip on Timeline. */
-export const TIMELINE_TRY_SEAL_HINT_DISMISSED_KEY = "haven.timeline.trySealHintDismissed.v1";
+export const TIMELINE_TRY_SEAL_HINT_DISMISSED_KEY =
+  STORAGE_KEYS.timelineTrySealHintDismissed;
 
 function detectPlatform() {
   if (typeof navigator === "undefined") return "other";

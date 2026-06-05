@@ -1,0 +1,24 @@
+export const STORAGE_KEYS = {
+  deferredAppEntry: "haven.deferredAppEntry.v1",
+  ftuxStarted: "haven.ftux.started.v1",
+  onboardingCompleted: "haven.onboarding.completed.v1",
+  onboardingOutcome: "haven.onboarding.outcome.v1",
+  firstMemoryCompleted: "haven.first_memory.completed.v1",
+  timelineTrySealHintDismissed: "haven.timeline.trySealHintDismissed.v1",
+  ringRegistry: "haven.ring.registry.v1",
+  activeRingUidKey: "haven.ring.active.uidKey.v1",
+  ringSetupDismissed: "haven.ring.setup.dismissed.v1",
+  ringSetupInstallSuppress: "haven.install.confirm.suppress.v1",
+  ringSetupPendingScan: "haven.ring.setup.pending_scan.v1",
+  ringSetupPendingScanCompat: "pendingNfcScan",
+  securityProfile: "haven.security.profile.v1",
+  deviceId: "haven.device.id.v1",
+  keepSignedIn: "haven.auth.keepSignedIn.v1",
+  ringAccessGrantPrefix: "haven.ring.access.grant.",
+  sealArmed: "haven.seal.armed.v1",
+  pendingSealDraftIds: "haven.pending_seal_draft_ids.v1",
+  composerSnapshot: "haven.new_memory_draft",
+  sealNfcTapRelay: "haven.seal.last_nfc_tap.v1",
+} as const;
+
+export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

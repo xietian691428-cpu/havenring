@@ -1,7 +1,8 @@
 import { MAX_SEAL_DRAFT_IDS } from "./seal-shared";
+import { STORAGE_KEYS } from "./storage-keys";
 
 /** Dual-storage arm window for Seal-with-Ring (session + local for cross-tab NFC). */
-export const SEAL_ARMED_KEY = "haven.seal.armed.v1";
+export const SEAL_ARMED_KEY = STORAGE_KEYS.sealArmed;
 
 /** Keep consistent with server ticket TTL defaults (`lib/seal-shared.ts`). */
 export const SEAL_ARM_TTL_MS = 5 * 60 * 1000;

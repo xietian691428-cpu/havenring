@@ -1,15 +1,16 @@
 import type { Session } from "@supabase/supabase-js";
+import { STORAGE_KEYS } from "./storage-keys";
 import { urlLooksLikeSupabaseAuthReturn } from "./supabaseAuthUrlSignal";
 
 /** Where `/app` stores a return path when the shell requires sign-in first. */
-export const DEFERRED_APP_ENTRY_KEY = "haven.deferredAppEntry.v1";
+export const DEFERRED_APP_ENTRY_KEY = STORAGE_KEYS.deferredAppEntry;
 
 const DEFERRED_ENTRY_MAX_AGE_MS = 60 * 60 * 1000;
 
 type DeferredPayload = { path: string; savedAt: number };
 
 /** Legacy FTUX flag — kept so `/start` OAuth can still clear it; gate no longer depends on it. */
-export const FTUX_STARTED_KEY = "haven.ftux.started.v1";
+export const FTUX_STARTED_KEY = STORAGE_KEYS.ftuxStarted;
 
 /** OAuth return from FTUX “Sign in with Google/Apple” on `/app`. */
 export const ONBOARDING_AUTH_QUERY = "onboarding_auth";

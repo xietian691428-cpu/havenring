@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
@@ -10,7 +10,6 @@ import {
 } from "@/lib/appAuthGate";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { APP_ENTRY_PATH, MARKETING_LOGIN_PATH } from "@/lib/site";
-import { resolvePlatformTarget } from "@/src/hooks/usePlatformTarget";
 
 function readSafeNextPath(): string {
   if (typeof window === "undefined") return "/";
@@ -19,7 +18,7 @@ function readSafeNextPath(): string {
   try {
     const abs = new URL(raw, window.location.origin);
     if (abs.origin !== window.location.origin) return "/";
-    if (/^\/(app|login|hub)(\/|$)/i.test(abs.pathname)) return "/";
+    if (/^\/(login|hub)(\/|$)/i.test(abs.pathname)) return "/";
     return abs.pathname + abs.search;
   } catch {
     return "/";
@@ -48,11 +47,11 @@ function isOAuthProviderNotEnabledMessage(message: string): boolean {
 function friendlyOAuthError(message: string, provider: "apple" | "google"): string {
   if (isOAuthProviderNotEnabledMessage(message)) {
     if (provider === "apple") {
-      return "Apple Sign In is not available yet. Please use Google.";
+      return "Apple 不可用";
     }
-    return "Google Sign In is not available yet. Please try Apple.";
+    return "Google 不可用";
   }
-  return "Sign-in could not start. Please try again in a moment.";
+  return "登录失败";
 }
 
 export function MarketingLoginClient() {
@@ -60,12 +59,9 @@ export function MarketingLoginClient() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [appleReady, setAppleReady] = useState(true);
-  const [nextHref, setNextHref] = useState("/");
-
-  const platform = useMemo(() => resolvePlatformTarget(), []);
+  const [nextHref] = useState(() => readSafeNextPath());
 
   useEffect(() => {
-    setNextHref(readSafeNextPath());
     if (typeof window === "undefined") return;
     const supabase = getSupabaseBrowserClient();
     let cancelled = false;
@@ -78,7 +74,7 @@ export function MarketingLoginClient() {
         const { data } = await supabase.auth.getSession();
         if (!cancelled) setSession(data.session ?? null);
       } catch {
-        if (!cancelled) setNotice("Could not reach sign-in services. Check your connection.");
+        if (!cancelled) setNotice("登录失败");
       }
     })();
 
@@ -96,14 +92,19 @@ export function MarketingLoginClient() {
 
   const signedIn = isPermanentSupabaseSession(session);
 
-  const signOut = useCallback(async () => {
+  useEffect(() => {
+    if (!signedIn || !nextHref.startsWith(APP_ENTRY_PATH)) return;
+    window.location.replace(nextHref);
+  }, [signedIn, nextHref]);
+
+  async function signOut() {
     setNotice("");
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
     setSession(null);
-  }, []);
+  }
 
-  const signInWith = useCallback(async (provider: "apple" | "google") => {
+  async function signInWith(provider: "apple" | "google") {
     setBusy(provider);
     setNotice("");
     try {
@@ -112,7 +113,7 @@ export function MarketingLoginClient() {
         /iphone|ipad|ipod/.test(ua) ||
         (ua.includes("macintosh") && "ontouchend" in window);
       if (provider === "apple" && !isAppleDevice) {
-        setNotice("Apple Sign In is only available on Apple devices. Please use Google.");
+        setNotice("Apple 不可用");
         return;
       }
       const supabase = getSupabaseBrowserClient();
@@ -127,7 +128,7 @@ export function MarketingLoginClient() {
           isOAuthProviderNotEnabledMessage(String(error.message || ""))
         ) {
           setAppleReady(false);
-          setNotice("Apple Sign In is not ready yet. Opening Google…");
+          setNotice("Apple 不可用，打开 Google");
           window.setTimeout(() => void signInWith("google"), 280);
           return;
         }
@@ -136,19 +137,17 @@ export function MarketingLoginClient() {
     } finally {
       setBusy("");
     }
-  }, []);
+  }
 
   return (
     <main className="min-h-[100svh] bg-[#0a0908] px-5 pb-16 pt-[calc(5.5rem+env(safe-area-inset-top))] text-[#f8efe7] sm:px-8">
       <div className="mx-auto max-w-md">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-amber-200/55">HavenRing website</p>
+        <p className="text-[10px] uppercase tracking-[0.28em] text-amber-200/55">Haven</p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-          {signedIn ? "You are signed in" : "Sign in to the website"}
+          {signedIn ? "已登录" : "登录"}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-white/58">
-          {signedIn
-            ? "Use the same account when you open the memory app. This page is for browsing the brand site, orders, and updates."
-            : "For strangers and guests: sign in here to follow up on orders, the waitlist, and news. Your private memory sanctuary opens separately in the app."}
+          {signedIn ? "正在进入" : "继续使用 Haven"}
         </p>
 
         {signedIn ? (
@@ -157,20 +156,20 @@ export function MarketingLoginClient() {
               href={nextHref}
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-gradient-to-b from-[#e6b48d] to-[#c99562] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1209]"
             >
-              Continue browsing
+              继续
             </Link>
             <Link
               href={APP_ENTRY_PATH}
               className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/18 bg-white/[0.04] px-6 text-xs font-medium uppercase tracking-[0.18em] text-white/88 hover:border-amber-400/35"
             >
-              Open memory app
+              打开 App
             </Link>
             <button
               type="button"
               onClick={() => void signOut()}
               className="mt-2 text-center text-[13px] text-white/45 underline-offset-4 hover:text-white/70 hover:underline"
             >
-              Sign out
+              退出
             </button>
           </div>
         ) : (
@@ -181,11 +180,7 @@ export function MarketingLoginClient() {
               onClick={() => void signInWith("apple")}
               className="min-h-12 rounded-full border border-amber-400/40 bg-amber-400/[0.12] px-6 text-xs font-semibold uppercase tracking-[0.16em] text-amber-50/95 enabled:hover:border-amber-300/55 disabled:opacity-55"
             >
-              {busy === "apple"
-                ? "Opening Apple…"
-                : appleReady
-                  ? "Continue with Apple"
-                  : "Apple unavailable"}
+              {busy === "apple" ? "打开中" : appleReady ? "Apple 登录" : "Apple 不可用"}
             </button>
             <button
               type="button"
@@ -193,30 +188,12 @@ export function MarketingLoginClient() {
               onClick={() => void signInWith("google")}
               className="min-h-12 rounded-full border border-white/18 bg-white/[0.04] px-6 text-xs font-medium uppercase tracking-[0.16em] text-white/88 hover:border-amber-400/35 disabled:opacity-55"
             >
-              {busy === "google" ? "Opening Google…" : "Continue with Google"}
+              {busy === "google" ? "打开中" : "Google 登录"}
             </button>
           </div>
         )}
 
-        {platform === "android" && !signedIn ? (
-          <p className="mt-6 text-xs leading-relaxed text-white/38">
-            On Android, Google is usually the smoothest option for website sign-in.
-          </p>
-        ) : null}
-
         {notice ? <p className="mt-6 text-sm text-amber-100/85">{notice}</p> : null}
-
-        <p className="mt-10 text-xs leading-relaxed text-white/35">
-          Memory app sign-in (rings, sealing) uses{" "}
-          <Link href="/start" className="text-amber-200/80 underline-offset-2 hover:underline">
-            /start
-          </Link>{" "}
-          or{" "}
-          <Link href={APP_ENTRY_PATH} className="text-amber-200/80 underline-offset-2 hover:underline">
-            Open App
-          </Link>
-          — separate entry, same Haven account.
-        </p>
 
         <p className="mt-6">
           <Link href="/" className="text-[13px] text-white/50 underline-offset-4 hover:text-white/75 hover:underline">

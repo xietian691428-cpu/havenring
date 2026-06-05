@@ -3,8 +3,10 @@
  * Server-side claim stays authoritative for tokens; this stores UX metadata + uid fingerprint.
  */
 
-const STORAGE_KEY = "haven.ring.registry.v1";
-const ACTIVE_RING_KEY = "haven.ring.active.uidKey.v1";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+const STORAGE_KEY = STORAGE_KEYS.ringRegistry;
+const ACTIVE_RING_KEY = STORAGE_KEYS.activeRingUidKey;
 
 export const MAX_BOUND_RINGS = 5;
 

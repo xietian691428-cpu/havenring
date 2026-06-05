@@ -295,19 +295,16 @@ export type StartSdmCardCopy = {
 
 const HAVEN_START_IDLE_HERO: Record<HavenPlatform, { title: string; subtitle: string }> = {
   ios: {
-    title: "Welcome to Haven",
-    subtitle:
-      "Your private memory sanctuary.\nAdd Haven to your Home Screen for the smoothest ring and NFC flow.",
+    title: "请贴上戒指",
+    subtitle: "",
   },
   android: {
-    title: "Welcome to Haven",
-    subtitle:
-      "Your private memory sanctuary.\nYour Haven ring can open the app in one tap on supported Android phones.",
+    title: "请贴上戒指",
+    subtitle: "",
   },
   other: {
-    title: "Welcome to Haven",
-    subtitle:
-      "Your private memory sanctuary.\nLink a ring when you are ready for quick access and the Seal with Ring ritual.",
+    title: "请贴上戒指",
+    subtitle: "",
   },
 };
 
@@ -315,75 +312,72 @@ type StartCardFields = Pick<StartSdmCardCopy, "eyebrow" | "title" | "body" | "pl
 
 const HAVEN_START_SEAL_CONFIRMATION: Record<HavenPlatform, StartCardFields> = {
   ios: {
-    eyebrow: "Seal in progress",
-    title: "Complete the seal ritual",
-    body: "Bring your Haven ring close to the top of your iPhone to finish sealing this memory.",
-    nextLine: "Next: stay on this screen while Haven completes the seal.",
-    placementHint: "Hold for 1–2 seconds. iOS may show an NFC sheet — that is expected.",
+    eyebrow: "",
+    title: "封印中",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   android: {
-    eyebrow: "Seal in progress",
-    title: "Touch your ring to seal",
-    body: "Hold your Haven ring against the NFC zone on the back of your phone to finish sealing.",
-    nextLine: "Next: stay on this screen while Haven completes the seal.",
-    placementHint: "A light tap is often enough. NFC is usually near the camera on the back.",
+    eyebrow: "",
+    title: "封印中",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   other: {
-    eyebrow: "Seal in progress",
-    title: "Confirm with your ring",
-    body: "Hold your Haven ring near your device’s NFC reader to finish sealing this memory.",
-    nextLine: "Next: stay on this screen while Haven completes the seal.",
-    placementHint:
-      "Tip: hold the ring near your device’s NFC reader until this step finishes.",
+    eyebrow: "",
+    title: "封印中",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
 };
 
 const HAVEN_START_NEW_RING_BINDING: Record<HavenPlatform, StartCardFields> = {
   ios: {
-    eyebrow: "New ring",
-    title: "Link your first ring",
-    body: "This ring is not linked yet. Sign in below, then connect it once — each ring belongs to a single Haven account at a time.",
-    nextLine: "Next: sign in, then finish linking from the guided screen.",
-    placementHint: "Hold your ring near the top of your iPhone to finish binding.",
+    eyebrow: "",
+    title: "绑定戒指",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   android: {
-    eyebrow: "New ring",
-    title: "Link your first ring",
-    body: "This ring is not linked yet. Sign in below, then connect it — NFC linking is quick once you are signed in.",
-    nextLine: "Next: sign in, then finish linking from the guided screen.",
-    placementHint: "Hold your ring against the NFC area on the back of your phone to finish binding.",
+    eyebrow: "",
+    title: "绑定戒指",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   other: {
-    eyebrow: "New ring",
-    title: "Link your first ring",
-    body: "This ring is not linked yet. Sign in below, then connect it to your account when you are ready.",
-    nextLine: "Next: sign in, then finish linking from the guided screen.",
+    eyebrow: "",
+    title: "绑定戒指",
+    body: "",
+    nextLine: "",
     placementHint: null,
   },
 };
 
 const HAVEN_START_DAILY_ACCESS_SELF: Record<HavenPlatform, StartCardFields> = {
   ios: {
-    eyebrow: "Your ring",
-    title: "Ring recognized",
-    body: "Welcome back — we are opening Haven for you.",
-    nextLine: "Next: continuing to Memories.",
-    placementHint:
-      "Tip: for daily access, touch your ring to the top of your iPhone, or open Haven from your Home Screen first.",
+    eyebrow: "",
+    title: "已识别",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   android: {
-    eyebrow: "Your ring",
-    title: "Ring recognized",
-    body: "Welcome back — we are opening Haven for you.",
-    nextLine: "Next: continuing to Memories.",
-    placementHint:
-      "Tip: for daily access, touch your ring to the NFC area on the back — usually near the camera.",
+    eyebrow: "",
+    title: "已识别",
+    body: "",
+    nextLine: "",
+    placementHint: null,
   },
   other: {
-    eyebrow: "Your ring",
-    title: "Ring recognized",
-    body: "Welcome back — we are opening Haven for you.",
-    nextLine: "Next: continuing to Memories.",
+    eyebrow: "",
+    title: "已识别",
+    body: "",
+    nextLine: "",
     placementHint: null,
   },
 };
@@ -453,49 +447,43 @@ export function getStartSdmCardCopy(
 
   if (self && owner && self !== owner) {
     return {
-      eyebrow: "Different owner",
-      title: "This ring already belongs to another Haven account",
-      body: "The current owner must unlink it in My Rings before you can link it here. One active link per ring.",
-      nextLine: "Next: sign in with the account that owns this ring, or use a different ring.",
+      eyebrow: "",
+      title: "戒指已绑定",
+      body: "",
+      nextLine: "",
       placementHint: null,
     };
   }
 
   return {
-    eyebrow: "Linked ring",
-    title: "This ring is already on a Haven account",
-    body: "Sign in if this ring is yours. If it is on someone else’s account, that owner needs to unlink it first.",
-    nextLine: "Next: sign in or continue to browse Haven.",
+    eyebrow: "",
+    title: "戒指已绑定",
+    body: "",
+    nextLine: "",
     placementHint: null,
   };
 }
 
 export const START_PAGE_EN = {
-  heroSubtitleFallback: "See the guided card below for the full step.",
-  backToHaven: "Back to Haven",
-  continueWithoutRing: "Continue without ring",
-  keepSealing: "Keep sealing",
-  leaveSealWarning:
-    "Leave now? Your draft is safe on this device — you can resume sealing from Capture when you are ready.",
-  leaveSealConfirmCta: "Leave anyway",
+  heroSubtitleFallback: "请贴上戒指",
+  backToHaven: "返回",
+  continueWithoutRing: "退出",
+  keepSealing: "继续",
+  leaveSealWarning: "退出封印？",
+  leaveSealConfirmCta: "退出",
   retryRingTap: "Try again",
-  readingRingStatus: "Reading your ring…",
+  readingRingStatus: "读戒指中…",
   preparingMemory: "Sealing…",
-  ringVerifyFailedNotice: "We could not verify that tap. Try again, or check your connection.",
-  footerSecurityReminder:
-    "Haven encrypts your memories on your device. Leaving this screen during a seal only pauses the ritual — nothing is published without your confirmation.",
-  sealCountdownPrefix: "Time left to seal:",
-  sealWaitTitle: "Touch your ring to seal",
-  sealWaitBody:
-    "Hold your Haven ring on the back of your phone. This page will update when the tap is read.",
-  sealWaitBackToEdit: "Back to edit memory",
-  sealWaitSignedInNote: "You are signed in. Touch your ring to finish — then we will open your memories.",
-  sealWaitTapHintAndroid:
-    "Hold your ring on the back of the phone. Chrome may open a new tab with the tap—switch to it if you see one. Keep this tab open until sealing finishes.",
-  sealWaitTapHintIos:
-    "Hold your ring on the top back of your iPhone until Safari updates or opens Haven with a longer address bar (cmac=…).",
-  sealWaitTapHintOther:
-    "Hold your ring on the phone until the browser address bar shows cmac=… or a new Haven tab opens.",
+  ringVerifyFailedNotice: "贴戒指失败，请重试",
+  footerSecurityReminder: "",
+  sealCountdownPrefix: "剩余",
+  sealWaitTitle: "请贴上戒指",
+  sealWaitBody: "贴上戒指即可封印",
+  sealWaitBackToEdit: "返回编辑",
+  sealWaitSignedInNote: "",
+  sealWaitTapHintAndroid: "",
+  sealWaitTapHintIos: "",
+  sealWaitTapHintOther: "",
 } as const;
 
 /** Minimal Seal-with-Ring copy — details live in Help Center. */
@@ -507,22 +495,20 @@ export const SEAL_FLOW_EN = {
   readySubtitleIos: "Near top of phone",
   readySubtitleAndroid: "On back of phone",
   readySubtitleOther: "Near NFC reader",
-  autoSealHint: "Write something meaningful, then tap your ring.",
+  autoSealHint: "写完后贴戒指",
   sealingLabel: "Sealing…",
-  sealNotReadyLine: "Almost ready — please tap Seal first.",
-  successTitle: "Sealed.",
-  successMessage: "Beautiful moment.",
-  successViewMemoriesCta: "Memories",
-  successSealAnotherCta: "Seal another",
+  sealNotReadyLine: "请先点封印",
+  successTitle: "记忆已封印",
+  successMessage: "",
+  successViewMemoriesCta: "继续",
+  successSealAnotherCta: "再写一条",
   autoSaving: "Saving…",
   sealArmFailedCta: "Open",
-  sealWaitingStep2:
-    "Keep this screen open, then touch your ring to the back of your phone. Chrome may open a new tab — switch to it if sealing continues there.",
-  sealWaitingCountdownPrefix: "Time left to seal:",
+  sealWaitingStep2: "请贴上戒指",
+  sealWaitingCountdownPrefix: "剩余",
   sealScanRingCta: "Scan ring on this phone",
   sealScanRingBusy: "Listening for ring…",
-  sealCompletedElsewhere:
-    "Ring step finished in another tab. Check Memories for your sealed entry, or tap Seal again.",
+  sealCompletedElsewhere: "记忆已封印",
 } as const;
 
 export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {

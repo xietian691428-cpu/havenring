@@ -91,14 +91,16 @@ export function SealCeremony() {
         >
           {sealFlow.successTitle}
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.1, duration: 1.2, ease: "easeOut" }}
-          className="text-lg text-white/70"
-        >
-          {sealFlow.successMessage}
-        </motion.p>
+        {sealFlow.successMessage ? (
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.1, duration: 1.2, ease: "easeOut" }}
+            className="text-lg text-white/70"
+          >
+            {sealFlow.successMessage}
+          </motion.p>
+        ) : null}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

@@ -1,7 +1,9 @@
-const SECURITY_KEY = "haven.security.profile.v1";
-const DEVICE_ID_KEY = "haven.device.id.v1";
-const KEEP_SIGNED_IN_KEY = "haven.auth.keepSignedIn.v1";
-const ACCESS_GRANT_PREFIX = "haven.ring.access.grant.";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+const SECURITY_KEY = STORAGE_KEYS.securityProfile;
+const DEVICE_ID_KEY = STORAGE_KEYS.deviceId;
+const KEEP_SIGNED_IN_KEY = STORAGE_KEYS.keepSignedIn;
+const ACCESS_GRANT_PREFIX = STORAGE_KEYS.ringAccessGrantPrefix;
 /** Default hub-token ring grant when “stay signed in” is off — aligns with NFC session. */
 const DEFAULT_ACCESS_GRANT_TTL_MS =
   readPublicEnvMs("NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS", 90);

@@ -4,7 +4,9 @@
  * hit quota / memory limits and can crash the WebView during JSON.stringify/parse.
  */
 
-export const COMPOSER_SNAPSHOT_KEY = "haven.new_memory_draft";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
+
+export const COMPOSER_SNAPSHOT_KEY = STORAGE_KEYS.composerSnapshot;
 
 /** Reject oversized legacy snapshots (often contained photo base64). */
 const MAX_SNAPSHOT_RAW_BYTES = 256 * 1024;

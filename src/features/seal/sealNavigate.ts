@@ -10,5 +10,6 @@ export function navigateToSealWaitPage(): void {
   if (typeof window === "undefined") return;
   const url = new URL("/start", window.location.origin);
   url.searchParams.set(SEAL_WAIT_QUERY, "1");
+  url.searchParams.set("intent", "seal");
   window.location.assign(url.href);
 }

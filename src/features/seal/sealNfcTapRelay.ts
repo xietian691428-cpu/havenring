@@ -1,7 +1,8 @@
 import { hasSdmInUrlSearch } from "./parseRingTapUrl";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 /** Cross-tab: Android often opens a second Chrome tab with SDM query params. */
-export const SEAL_NFC_TAP_STORAGE_KEY = "haven.seal.last_nfc_tap.v1";
+export const SEAL_NFC_TAP_STORAGE_KEY = STORAGE_KEYS.sealNfcTapRelay;
 
 const DEFAULT_MAX_AGE_MS = 120_000;
 

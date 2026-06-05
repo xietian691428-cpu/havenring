@@ -10,6 +10,7 @@ import {
   type PendingMoment,
 } from "@/lib/store";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   clearPendingMomentSnapshot,
   readPendingMomentSnapshot,
@@ -187,7 +188,7 @@ export function HubRouter() {
       const supabase = getSupabaseBrowserClient();
       const effectivePending = pending ?? readPendingMomentSnapshot();
       const hasDraftSnapshot = Boolean(
-        window.localStorage.getItem("haven.new_memory_draft")
+        window.localStorage.getItem(STORAGE_KEYS.composerSnapshot)
       );
       if (hasDraftSnapshot && !isSealFlowArmed()) {
         fallbackToHome("seal_not_ready");

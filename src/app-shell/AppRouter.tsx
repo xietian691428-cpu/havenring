@@ -42,6 +42,7 @@ import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
 import { syncSealPrepWithSessionArm } from "../features/seal";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   isTemporaryDeviceModeEnabled,
   TEMP_DEVICE_MODE_EVENT,
@@ -335,7 +336,7 @@ export function AppRouter() {
   }
 
   useEffect(() => {
-    const done = localStorage.getItem("haven.onboarding.completed.v1") === "1";
+    const done = localStorage.getItem(STORAGE_KEYS.onboardingCompleted) === "1";
     if (done) return;
     queueMicrotask(() => {
       setRoute({ name: "home", memoryId: null });
@@ -472,7 +473,7 @@ export function AppRouter() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ftuxWelcomeDone =
-      window.localStorage.getItem("haven.onboarding.completed.v1") === "1";
+      window.localStorage.getItem(STORAGE_KEYS.onboardingCompleted) === "1";
     const ftuxFirstMemoryDone =
       window.localStorage.getItem(FIRST_MEMORY_DONE_KEY) === "1";
     dispatchFlow({

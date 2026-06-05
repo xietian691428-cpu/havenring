@@ -25,18 +25,12 @@ import { getInstallGuideCopy } from "../content/installGuideContent";
 import { detectPlatform } from "../hooks/usePlatform";
 import { getPlatformGuidance } from "../utils/platformGuidance";
 import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 
-function privacyPolicyHref() {
-  if (typeof window === "undefined") return "/privacy-policy";
-  const override = process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL;
-  if (override && /^https?:\/\//i.test(override)) return override;
-  return `${window.location.origin}/privacy-policy`;
-}
-
-export const RING_SETUP_DISMISSED_KEY = "haven.ring.setup.dismissed.v1";
-const INSTALL_CONFIRM_SUPPRESS_KEY = "haven.install.confirm.suppress.v1";
-const PENDING_RING_SCAN_KEY = "haven.ring.setup.pending_scan.v1";
-const PENDING_RING_SCAN_COMPAT_KEY = "pendingNfcScan";
+export const RING_SETUP_DISMISSED_KEY = STORAGE_KEYS.ringSetupDismissed;
+const INSTALL_CONFIRM_SUPPRESS_KEY = STORAGE_KEYS.ringSetupInstallSuppress;
+const PENDING_RING_SCAN_KEY = STORAGE_KEYS.ringSetupPendingScan;
+const PENDING_RING_SCAN_COMPAT_KEY = STORAGE_KEYS.ringSetupPendingScanCompat;
 
 function isIosLike() {
   if (typeof navigator === "undefined") return false;
@@ -46,14 +40,6 @@ function isIosLike() {
 
 function hasWebNfc() {
   return typeof window !== "undefined" && "NDEFReader" in window;
-}
-
-function isStandalonePwa() {
-  if (typeof window === "undefined") return false;
-  const standaloneDisplay = window.matchMedia?.("(display-mode: standalone)")
-    ?.matches;
-  const iosStandalone = window.navigator?.standalone === true;
-  return Boolean(standaloneDisplay || iosStandalone);
 }
 
 function uidFromAnyUrlText(raw) {
@@ -551,14 +537,6 @@ export function RingSetupWizard({
     }
   }
 
-  function onInstallEntryClick() {
-    if (suppressInstallConfirm) {
-      void installPwaNow();
-      return;
-    }
-    setInstallConsentOpen(true);
-  }
-
   function openIosInstallGuide() {
     setIosInstallGuideOpen(true);
   }
@@ -583,22 +561,8 @@ export function RingSetupWizard({
   return (
     <div style={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="ring-setup-title">
       <section style={styles.modal}>
-        <div style={styles.progressWrap} aria-label="Ring binding progress">
-          <div style={styles.progressHeader}>
-            <span style={styles.progressTitle}>Step {progressIndex} of 4</span>
-          </div>
-          <div style={styles.progressTrack}>
-            <span style={{ ...styles.progressFill, width: `${(progressIndex / 4) * 100}%` }} />
-          </div>
-          <p style={styles.progressLabel}>
-            {progressIndex === 1
-              ? "Step 1: Scan ring"
-              : progressIndex === 2
-                ? "Step 2: Device security"
-                : progressIndex === 3
-                  ? "Step 3: Name and bind"
-                  : "Step 4: Done"}
-          </p>
+        <div style={styles.progressTrack} aria-hidden>
+          <span style={{ ...styles.progressFill, width: `${(progressIndex / 4) * 100}%` }} />
         </div>
         {step === "intro" ? (
           <>
@@ -607,13 +571,6 @@ export function RingSetupWizard({
               {t.title}
             </h2>
             <p style={styles.body}>{t.introBody}</p>
-            <p style={styles.hint}>{platformGuidance.ringClaimLine}</p>
-            <p style={styles.privacyFine}>
-              {t.privacyBindNotice}{" "}
-              <a href={privacyPolicyHref()} target="_blank" rel="noreferrer" style={styles.privacyLink}>
-                {t.privacyPolicyLink}
-              </a>
-            </p>
             {atLimit ? (
               <>
                 <p style={styles.warn}>{t.limitBody}</p>
@@ -623,15 +580,6 @@ export function RingSetupWizard({
               </>
             ) : (
               <div style={styles.actions}>
-                {!isStandalonePwa() ? (
-                  <button
-                    type="button"
-                    onClick={onInstallEntryClick}
-                    style={styles.secondaryBtn}
-                  >
-                    {t.installNowCta}
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -652,12 +600,6 @@ export function RingSetupWizard({
               </div>
             )}
             {stepNote ? <p style={styles.hint}>{stepNote}</p> : null}
-            <div style={styles.statusBox}>
-              <p style={styles.statusLine}>
-                {t.installOptionalLater ||
-                  "Install is optional now. You can do it later in Settings."}
-              </p>
-            </div>
             {installConsentOpen ? (
               <div style={styles.noticeBox}>
                 <p style={styles.noticeTitle}>{t.installConsentTitle}</p>

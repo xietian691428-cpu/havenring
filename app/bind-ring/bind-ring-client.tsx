@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
+import { isPermanentSupabaseSession } from "@/lib/appAuthGate";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
 import {
   addBoundRing,
@@ -49,14 +50,6 @@ interface BindRingClientProps {
   initialUid: string;
 }
 
-function isPermanentSession(session: Session | null): session is Session {
-  if (!session) return false;
-  return (
-    session.user.is_anonymous !== true &&
-    session.user.app_metadata?.provider !== "anonymous"
-  );
-}
-
 function redirectUrlFor(uid: string) {
   const params = new URLSearchParams();
   params.set("uid", uid);
@@ -82,15 +75,17 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
 
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      setSession(data.session ?? null);
-      setAuthState(data.session ? "ready" : "signed_out");
+      const next = data.session ?? null;
+      setSession(next);
+      setAuthState(isPermanentSupabaseSession(next) ? "ready" : "signed_out");
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-      setAuthState(nextSession ? "ready" : "signed_out");
+      const next = nextSession ?? null;
+      setSession(next);
+      setAuthState(isPermanentSupabaseSession(next) ? "ready" : "signed_out");
     });
 
     return () => {
@@ -110,7 +105,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       try {
         const headers: Record<string, string> = {};
         const s = session;
-        if (isPermanentSession(s)) {
+        if (isPermanentSupabaseSession(s)) {
           headers.Authorization = `Bearer ${s.access_token}`;
         }
         const res = await fetch(`/api/nfc/uid-status?uid=${encodeURIComponent(uid)}`, {
@@ -157,7 +152,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         options: { redirectTo: redirectUrlFor(uid) },
       });
       if (error) {
-        setMessage("Sign-in could not start. Please try again.");
+        setMessage("登录失败");
       }
     } finally {
       setBusyProvider("");
@@ -202,18 +197,16 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       return;
     }
     const activeSession = session;
-    if (!isPermanentSession(activeSession)) {
+    if (!isPermanentSupabaseSession(activeSession)) {
       setAuthState("signed_out");
-        setMessage("Sign in with your Haven account before linking this ring.");
+      setMessage("请先登录");
       return;
     }
 
     const security = getSecuritySummary();
     if (!security.initialized) {
       setBindState("error");
-      setMessage(
-        "Device protection is required before linking a ring. Open Haven first and finish device protection setup."
-      );
+      setMessage("请先完成设备验证");
       return;
     }
 
@@ -240,10 +233,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       if (!response.ok) {
         setBindState("error");
         setMessage(
-          payload.error ||
-            (response.status === 409
-              ? "This ring cannot be linked right now. See the note above or try again."
-              : "Ring binding failed. Please try again.")
+          payload.error || (response.status === 409 ? "戒指已绑定" : "绑定失败，请重试")
         );
         return;
       }
@@ -259,7 +249,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       }, 400);
     } catch {
       setBindState("error");
-      setMessage("Verification or binding failed. Check your password or recovery code and try again.");
+      setMessage("绑定失败，请重试");
     }
   }
 
@@ -267,36 +257,33 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
     return (
       <main style={styles.page}>
         <section style={styles.card}>
-          <p style={styles.kicker}>Ring setup</p>
-          <h1 style={styles.title}>Missing ring ID</h1>
-          <p style={styles.body}>Tap your Haven Ring again to restart setup.</p>
+          <p style={styles.kicker}>绑定</p>
+          <h1 style={styles.title}>请重试</h1>
+          <p style={styles.body}>请重新贴戒指</p>
           <button type="button" onClick={() => window.history.back()} style={styles.secondaryButton}>
-            Go back
+            返回
           </button>
         </section>
       </main>
     );
   }
 
-  const signedOut = authState === "signed_out" || !isPermanentSession(session);
+  const signedOut = authState === "signed_out" || !isPermanentSupabaseSession(session);
   const blockNewBind = uidLink === "yours" || uidLink === "other" || uidLink === "checking";
 
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.kicker}>New ring binding</p>
-        <h1 style={styles.title}>Link this Haven Ring</h1>
-        <p style={styles.body}>
-          This ring was verified by Haven. Sign in, confirm it is you, then link it
-          to your account for quick access and sealing.
-        </p>
+        <p style={styles.kicker}>绑定</p>
+        <h1 style={styles.title}>绑定戒指</h1>
+        <p style={styles.body}>请确认</p>
         <div style={styles.uidBox}>
-          <span style={styles.uidLabel}>Ring ID</span>
+          <span style={styles.uidLabel}>UID</span>
           <span style={styles.uidValue}>{uid}</span>
         </div>
 
         {uidLink === "checking" ? (
-          <p style={styles.muted}>Checking whether this ring is already linked to a Haven account…</p>
+          <p style={styles.muted}>检查中</p>
         ) : null}
         {uidLink !== "idle" && uidLink !== "checking" ? (
           <div
@@ -311,23 +298,23 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
             role="status"
           >
             {uidLink === "unlinked"
-              ? "Not linked: this ring is not on any Haven account yet. You can link it below (one active account per ring)."
+              ? "可绑定"
               : uidLink === "yours"
-                ? "Already linked to you: this ring is on your account. To re-link elsewhere, open My Rings in the app and unlink it first."
+                ? "已绑定"
                 : uidLink === "other"
-                  ? "Linked to someone else: this ring is on another Haven account. That owner must unlink it in My Rings before you can link it here."
+                  ? "戒指已绑定"
                   : uidLink === "linked_unknown"
-                    ? "May already be linked: sign in to see if this ring is yours. If it is, use My Rings — do not link again until you have unlinked."
-                    : "Could not verify link status. If this is a brand-new ring, you can still try linking after sign-in."}
+                    ? "请登录"
+                    : "检查失败"}
           </div>
         ) : null}
 
         {authState === "checking" ? (
-          <p style={styles.muted}>Checking sign-in...</p>
+          <p style={styles.muted}>检查中</p>
         ) : signedOut ? (
           <div style={styles.stack}>
             <p style={styles.notice}>
-              Sign in with your Haven account before this ring can be linked.
+              请先登录
             </p>
             <button
               type="button"
@@ -335,7 +322,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
               disabled={Boolean(busyProvider)}
               style={styles.primaryButton}
             >
-              {busyProvider === "apple" ? "Opening Apple Sign In..." : "Continue with Apple"}
+              {busyProvider === "apple" ? "打开中" : "Apple 登录"}
             </button>
             <button
               type="button"
@@ -343,23 +330,23 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
               disabled={Boolean(busyProvider)}
               style={styles.secondaryButton}
             >
-              {busyProvider === "google" ? "Opening Google Sign In..." : "Continue with Google"}
+              {busyProvider === "google" ? "打开中" : "Google 登录"}
             </button>
           </div>
         ) : (
           <div style={styles.stack}>
             <label style={styles.label}>
-              Ring name
+              名称
               <input
                 type="text"
                 value={nickname}
                 onChange={(event) => setNickname(event.target.value)}
                 style={styles.input}
-                placeholder="Daily ring"
+                placeholder="Ring"
               />
             </label>
             <label style={styles.label}>
-              Device password
+              设备密码
               <input
                 type="password"
                 value={password}
@@ -369,26 +356,22 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
               />
             </label>
             <label style={styles.label}>
-              Recovery code
+              恢复码
               <input
                 type="text"
                 value={recoveryCode}
                 onChange={(event) => setRecoveryCode(event.target.value)}
                 style={styles.input}
-                placeholder="Optional if password is entered"
+                placeholder="可选"
               />
             </label>
-            <p style={styles.muted}>
-              Haven asks for this confirmation because a ring tap alone should not
-              add hardware to your account.
-            </p>
             <button
               type="button"
               onClick={() => void handleBind()}
               disabled={bindState === "binding" || blockNewBind}
               style={styles.primaryButton}
             >
-              {bindState === "binding" ? "Linking ring..." : "Confirm and link ring"}
+              {bindState === "binding" ? "绑定中" : "确认绑定"}
             </button>
           </div>
         )}

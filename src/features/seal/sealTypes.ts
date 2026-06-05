@@ -1,11 +1,12 @@
 import type { UserEntitlements } from "../subscription/subscriptionTypes";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 /**
  * Client Seal constants — MUST stay aligned with `lib/seal-shared.ts` draft limits where applicable.
  */
 export const MAX_SEAL_DRAFT_IDS = 20;
 
-export const PENDING_SEAL_DRAFT_IDS_KEY = "haven.pending_seal_draft_ids.v1";
+export const PENDING_SEAL_DRAFT_IDS_KEY = STORAGE_KEYS.pendingSealDraftIds;
 
 /** `context` passed to `POST /api/rings/sdm/resolve` for Seal with Ring completion. */
 export const SEAL_SDM_CONTEXT = "seal_confirmation" as const;
