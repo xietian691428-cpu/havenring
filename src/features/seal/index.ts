@@ -72,8 +72,16 @@ export {
 export {
   isAuxiliarySealTapTab,
   isPrimarySealWaitPage,
+  isRingTapSealLandingPage,
   isSealWaitSearch,
   navigateToSealWaitPage,
   SEAL_WAIT_QUERY,
 } from "./sealNavigate";
+export {
+  broadcastSealComplete,
+  releaseSealResolveLock,
+  SEAL_COMPLETE_STORAGE_KEY,
+  tryAcquireSealResolveLock,
+  wasSealRecentlyCompleted,
+} from "./sealCrossTab";
 export { listenForSealRingTapOnce } from "./sealRingNfcListen";

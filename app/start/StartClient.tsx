@@ -24,15 +24,20 @@ import {
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
   hasRecoverableComposerContent,
-  isAuxiliarySealTapTab,
   isPrimarySealWaitPage,
+  isRingTapSealLandingPage,
   isSealFlowArmed,
   isSealWaitSearch,
   recordSealNfcTapHref,
   readFreshSealNfcTapHref,
+  releaseSealResolveLock,
+  SEAL_COMPLETE_STORAGE_KEY,
   SEAL_NFC_TAP_STORAGE_KEY,
+  SEAL_SUCCESS_PATH,
   forceArmSealForCurrentUser,
+  tryAcquireSealResolveLock,
   tryRecoverSealPrepFromComposerSnapshot,
+  wasSealRecentlyCompleted,
 } from "@/src/features/seal";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 import {
@@ -227,20 +232,15 @@ export default function StartClient() {
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
   );
   const [sealWaitMode, setSealWaitMode] = useState(false);
-  const [auxiliaryRelayOnly, setAuxiliaryRelayOnly] = useState(false);
+  const [sealRemoteFinishing, setSealRemoteFinishing] = useState(false);
+  const [ringTapSealLanding, setRingTapSealLanding] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const search = window.location.search;
     queueMicrotask(() => {
-      if (isAuxiliarySealTapTab(search)) {
-        recordSealNfcTapHref(window.location.href);
-        setAuxiliaryRelayOnly(true);
-        setNotice("请回到等待页");
-        setSealWaitMode(false);
-        return;
-      }
       setSealWaitMode(isPrimarySealWaitPage(search));
+      setRingTapSealLanding(isRingTapSealLandingPage(search));
     });
   }, []);
 
@@ -346,7 +346,15 @@ export default function StartClient() {
     queueMicrotask(() => setSealLeaveGuard(true));
     pendingSealTapRef.current = true;
 
+    const goSuccess = () => {
+      window.location.assign(SEAL_SUCCESS_PATH);
+      return true;
+    };
+
     const followSealTap = () => {
+      if (wasSealRecentlyCompleted()) {
+        return goSuccess();
+      }
       if (isSealNfcLaunchSearch(window.location.search)) {
         const u = new URL(window.location.href);
         u.searchParams.delete("seal_wait");
@@ -356,7 +364,8 @@ export default function StartClient() {
       }
       const relay = readFreshSealNfcTapHref();
       if (relay) {
-        window.location.assign(relay);
+        setSealRemoteFinishing(true);
+        setNotice(START_PAGE_EN.sealWaitFinishingTitle);
         return true;
       }
       return false;
@@ -365,6 +374,9 @@ export default function StartClient() {
     const poll = window.setInterval(followSealTap, 400);
     const onStorage = (event: StorageEvent) => {
       if (event.key === SEAL_NFC_TAP_STORAGE_KEY) followSealTap();
+      if (event.key === SEAL_COMPLETE_STORAGE_KEY && wasSealRecentlyCompleted()) {
+        goSuccess();
+      }
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") followSealTap();
@@ -382,7 +394,8 @@ export default function StartClient() {
 
   const sealContextActive =
     sealWaitMode ||
-    auxiliaryRelayOnly ||
+    sealRemoteFinishing ||
+    ringTapSealLanding ||
     isSealFlowArmed() ||
     hasRecoverableComposerContent();
 
@@ -431,7 +444,6 @@ export default function StartClient() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const search = window.location.search || "";
-    if (isAuxiliarySealTapTab(search)) return;
     const params = new URLSearchParams(search);
     const uid = params.get("uid") || "";
     const ctr = params.get("ctr") || "";
@@ -446,6 +458,8 @@ export default function StartClient() {
 
     const controller = new AbortController();
     const supabase = getSupabaseBrowserClient();
+    let sealLockId: string | null = null;
+    let completePollId: number | null = null;
 
     void (async () => {
       setNfcSealBootstrapping(true);
@@ -471,6 +485,23 @@ export default function StartClient() {
         pendingSealTapRef.current =
           Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
         setSealLeaveGuard(pendingSealTapRef.current);
+
+        const isSealAttempt =
+          pendingSealTapRef.current || isRingTapSealLandingPage(search);
+        if (isSealAttempt) {
+          sealLockId = tryAcquireSealResolveLock();
+          if (!sealLockId) {
+            setNfcSealBootstrapping(false);
+            setSdmState({ kind: "resolving" });
+            setNotice(START_PAGE_EN.sealWaitFinishingTitle);
+            completePollId = window.setInterval(() => {
+              if (wasSealRecentlyCompleted()) {
+                window.location.assign(SEAL_SUCCESS_PATH);
+              }
+            }, 400);
+            return;
+          }
+        }
 
         try {
           await supabase.auth.initialize();
@@ -582,6 +613,7 @@ export default function StartClient() {
         });
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       } finally {
+        if (sealLockId) releaseSealResolveLock(sealLockId);
         if (myGen === nfcSdmResolveGenerationRef.current) {
           setNfcSealBootstrapping(false);
         }
@@ -590,6 +622,7 @@ export default function StartClient() {
 
     return () => {
       window.clearTimeout(initialStateTimer);
+      if (completePollId) window.clearInterval(completePollId);
       controller.abort();
       setNfcSealBootstrapping(false);
     };
@@ -885,43 +918,47 @@ export default function StartClient() {
 
           <StartRingGlyphPulse />
 
-          {auxiliaryRelayOnly ? (
-            <>
-              <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
-                已读取戒指
-              </h1>
-              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                请回到等待页完成封印
-              </p>
-            </>
-          ) : !nfcFlow && sealWaitMode ? (
-            <>
-              <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
-                {START_PAGE_EN.sealWaitTitle}
-              </h1>
-              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                {START_PAGE_EN.sealWaitBody}
-              </p>
-              {sealRemainingMs > 0 ? (
-                <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
-                  {START_PAGE_EN.sealCountdownPrefix}{" "}
-                  <strong>{formatSealCountdown(sealRemainingMs)}</strong>
+          {!nfcFlow && sealWaitMode ? (
+            sealRemoteFinishing ? (
+              <>
+                <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
+                  {START_PAGE_EN.sealWaitFinishingTitle}
+                </h1>
+                {START_PAGE_EN.sealWaitFinishingBody ? (
+                  <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
+                    {START_PAGE_EN.sealWaitFinishingBody}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
+                  {START_PAGE_EN.sealWaitTitle}
+                </h1>
+                <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
+                  {START_PAGE_EN.sealWaitBody}
                 </p>
-              ) : null}
-              <p style={styles.subtitle} aria-live="polite">
-                {sealFlow.sealScanRingBusy}
-              </p>
-              <NfcPhoneHint platform={platform} />
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.assign("/app?open=new");
-                }}
-                style={styles.sealGuideInlineLink}
-              >
-                {START_PAGE_EN.sealWaitBackToEdit}
-              </button>
-            </>
+                {sealRemainingMs > 0 ? (
+                  <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
+                    {START_PAGE_EN.sealCountdownPrefix}{" "}
+                    <strong>{formatSealCountdown(sealRemainingMs)}</strong>
+                  </p>
+                ) : null}
+                <p style={styles.subtitle} aria-live="polite">
+                  {sealFlow.sealScanRingBusy}
+                </p>
+                <NfcPhoneHint platform={platform} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.assign("/app?open=new");
+                  }}
+                  style={styles.sealGuideInlineLink}
+                >
+                  {START_PAGE_EN.sealWaitBackToEdit}
+                </button>
+              </>
+            )
           ) : !nfcFlow ? (
             <>
               <h1 style={styles.title}>{idleHero.title}</h1>

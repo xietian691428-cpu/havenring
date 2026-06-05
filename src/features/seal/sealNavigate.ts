@@ -23,16 +23,18 @@ export function isPrimarySealWaitPage(search: string = ""): boolean {
 }
 
 /**
- * Android often opens a second tab with SDM params only (no seal_wait).
- * That tab must relay the tap to the primary wait page — not resolve SDM itself.
+ * NFC opened /start with SDM (typical Android new tab). Seal completes on THIS page.
  */
-export function isAuxiliarySealTapTab(search: string = ""): boolean {
+export function isRingTapSealLandingPage(search: string = ""): boolean {
   if (typeof window === "undefined") return false;
   const q = normalizeSearch(search);
   if (!hasSdmSearch(q) || isSealWaitSearch(q)) return false;
   const intent = readNfcIntent(q);
   return isSealFlowArmed() || intent === "seal";
 }
+
+/** @deprecated Use isRingTapSealLandingPage */
+export const isAuxiliarySealTapTab = isRingTapSealLandingPage;
 
 /** After arming seal prep on /app, continue on /start so Android NFC opens the right page. */
 export function navigateToSealWaitPage(): void {

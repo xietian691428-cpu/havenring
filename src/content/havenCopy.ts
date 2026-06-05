@@ -479,6 +479,8 @@ export const START_PAGE_EN = {
   sealCountdownPrefix: "剩余",
   sealWaitTitle: "请贴上戒指",
   sealWaitBody: "贴上戒指即可封印",
+  sealWaitFinishingTitle: "Sealing…",
+  sealWaitFinishingBody: "",
   sealWaitBackToEdit: "返回编辑",
   sealWaitSignedInNote: "",
   sealWaitTapHintAndroid: "",

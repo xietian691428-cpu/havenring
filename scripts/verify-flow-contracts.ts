@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import { hasSdmSearch, readNfcIntent } from "../lib/nfc-intent";
 import {
-  isAuxiliarySealTapTab,
   isPrimarySealWaitPage,
+  isRingTapSealLandingPage,
   isSealWaitSearch,
 } from "../src/features/seal/sealNavigate";
 import { STORAGE_KEYS } from "../lib/storage-keys";
@@ -38,7 +38,7 @@ check("seal wait URL intent=seal", () => {
 
 check("seal navigate helpers exported", () => {
   assert.equal(typeof isPrimarySealWaitPage, "function");
-  assert.equal(typeof isAuxiliarySealTapTab, "function");
+  assert.equal(typeof isRingTapSealLandingPage, "function");
 });
 
 check("claim param maps to claim intent", () => {
