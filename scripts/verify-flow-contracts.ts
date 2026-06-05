@@ -17,6 +17,12 @@ import {
   clearSealNfcTapHref,
   consumeFreshSealNfcTapHref,
 } from "../src/features/seal/sealNfcTapRelay";
+import {
+  FREE_RING_LIMIT,
+  PLUS_RING_LIMIT,
+} from "../src/features/subscription/subscriptionTypes";
+import { MAX_RING_QUANTITY } from "../lib/shop/catalog";
+import { MAX_BOUND_RINGS } from "../src/services/ringRegistryService";
 
 function check(label: string, fn: () => void) {
   try {
@@ -72,6 +78,13 @@ check("storage keys aligned for seal flow", () => {
 check("seal prep has cross-tab persistence keys", () => {
   assert.equal(STORAGE_KEYS.sealArmed, "haven.seal.armed.v1");
   assert.equal(STORAGE_KEYS.pendingSealDraftIds, "haven.pending_seal_draft_ids.v1");
+});
+
+check("ring pair limit is 2 everywhere (not legacy 5-ring family)", () => {
+  assert.equal(FREE_RING_LIMIT, 2);
+  assert.equal(PLUS_RING_LIMIT, 2);
+  assert.equal(MAX_RING_QUANTITY, 2);
+  assert.equal(MAX_BOUND_RINGS, 2);
 });
 
 console.log("\nAll flow contract checks passed.");

@@ -18,7 +18,7 @@ export const HELP_FAQ = {
     },
     {
       q: "Is one ring the \"main\" ring?",
-      a: "No. Every linked ring on your account works the same—tap any of them for quick access. People often add extras as backups, similar to carrying spare hardware keys.",
+      a: "No. Haven supports up to two equal rings for one private pair. Either ring can open Haven and seal new memories; old sealed memories remain unchanged.",
     },
     {
       q: "Does the ring replace my password or account?",

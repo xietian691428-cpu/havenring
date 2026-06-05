@@ -3,7 +3,7 @@ const EN = {
   title: "Privacy-first controls",
   upgradeSectionTitle: "Haven Plus",
   upgradeSectionBody:
-    "Haven Plus unlocks Seal with Ring plus optional end-to-end encrypted cloud backup and multi-device sync. Free plan keeps everything on this device only.",
+    "Haven Plus unlocks Seal with Ring plus optional end-to-end encrypted cloud backup and sync for your private pair. Free plan keeps everything on this device only.",
   upgradeSectionCta: "View plans & pricing",
   back: "Back",
   localSectionTitle: "Local data",
@@ -48,7 +48,7 @@ const EN = {
   verifyActionConfirm: "Verify and continue",
   verifyActionCancel: "Cancel",
   verifyActionFailed: "Verification failed. Please check and try again.",
-  riskOpRingManage: "Add or unbind rings",
+  riskOpRingManage: "Add or unbind pair rings",
   riskOpExportMigrate: "Export or migrate protected data",
   riskOpDeleteSealed: "Delete sealed memories",
   riskOpRemoteRevoke: "Remote revoke lost rings",
@@ -97,7 +97,7 @@ const EN = {
     "Stay signed in after NFC login (uses a longer server session until you sign out or revoke rings).",
   revokeAllNfcTitle: "Cloud-linked NFC rings",
   revokeAllNfcBody:
-    "Revoke every ring binding for your account. Lost rings stop working immediately; sign in from Settings if needed.",
+    "Revoke every ring binding for your Haven pair. Lost rings stop working immediately; sign in from Settings if needed.",
   revokeAllNfcButton: "Revoke all rings on this account",
   confirmRevokeAllNfc:
     "Revoke ALL NFC ring bindings for your cloud account? This cannot be undone from the ring side.",
@@ -120,10 +120,10 @@ const EN = {
   accountCloudOff: "Not signed in for cloud backup.",
   subscriptionSectionTitle: "Subscription",
   subscriptionBody:
-    "Free: local storage only. Plus: local plus optional cloud sync. If you cancel Plus, download cloud data within 30 days — cloud copies are then removed automatically. Manage billing from your device’s subscription settings when available.",
+    "Free: local storage only. Plus: local plus optional cloud sync for your private pair. If you cancel Plus, download cloud data within 30 days — cloud copies are then removed automatically. Manage billing from your device’s subscription settings when available.",
   subscriptionManageCta: "Manage subscription",
   ringsSectionTitle: "Rings",
-  ringsBody: "See linked rings, bind a new one, or revoke access if a ring is lost.",
+  ringsBody: "See up to two linked rings, bind a pair ring, or revoke access if a ring is lost.",
   ringsManageCta: "Manage rings",
   dataPrivacySectionTitle: "Data & privacy",
   legalSectionTitle: "Legal",

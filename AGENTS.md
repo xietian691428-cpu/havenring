@@ -3,3 +3,17 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+## Product: Haven pair ring limit (do not regress to 5)
+
+Haven is positioned as **personal records + a private couple pair**, not multi-ring family sharing.
+
+- **Max active NFC rings per account / Haven pair: 2** (free and Plus use the same cap).
+- **Single source of truth for limits:** `FREE_RING_LIMIT` and `PLUS_RING_LIMIT` in `lib/subscription.ts` and `src/features/subscription/subscriptionTypes.ts`.
+- **Shop checkout cap:** `MAX_RING_QUANTITY` in `lib/shop/catalog.ts`.
+- **PWA local registry cap:** `MAX_BOUND_RINGS` in `src/services/ringRegistryService.js` (must match server `ringLimit`).
+- **Server enforcement:** `POST /api/nfc/bind` reads `subscription.ringLimit` from `getUserSubscriptionStatus`.
+- **Do not** reintroduce copy or gates for “up to 5 rings”, family sharing, or Plus tier ring-count upsell. Plus is for Seal with Ring, cloud backup, and storage — not extra ring slots.
+- **Contract check:** `npx tsx scripts/verify-flow-contracts.ts` asserts all ring-limit constants stay at 2.
+
+See also `docs/architecture-decisions.md` §3.2.

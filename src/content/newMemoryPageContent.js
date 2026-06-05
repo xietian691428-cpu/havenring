@@ -45,13 +45,13 @@ const EN = {
   storyRequiredHint: "Add a few words about this moment — it's required to seal.",
   upgradeModalTitle: "Unlock the Ritual Experience",
   upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional encrypted cloud backup and sync. Free plan keeps memories on this device only. Link your first ring to start a 30-day trial where available.",
+    "Haven Plus unlocks Seal with Ring and optional encrypted backup for one private pair. You can link up to 2 rings; sealed memories stay immutable.",
   upgradeModalDismiss: "Maybe later",
   upgradeSealShort: "Haven Plus unlocks Seal with Ring.",
   upgradeSealCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   title: "Capture this moment",
   freePlanOneLiner:
-    "Free plan: encrypted local storage on this device only. Seal with Ring requires Haven Plus.",
+    "Free plan: encrypted local storage on this device only. Haven is designed for personal records and private couple memories.",
   addPhotosCta: "Add Photos (max 6)",
   addVideoCta: "Add Videos (max 6)",
   addFilesCta: "Add Files (max 5)",
@@ -113,7 +113,7 @@ const EN = {
   sealFabHint: "写完后贴戒指",
   sealFabUpgradeHint: "需要 Haven Plus",
   upgradeSealWithRing:
-    "Unlock Seal with Ring with Haven Plus — 30 days free with your ring. Free users can still Save Securely with Face ID.",
+    "Unlock Seal with Ring for a private pair. Free users can still Save Securely with Face ID.",
   planDualTrackHint:
     "Readable drafts stay in your local Draft Box until you seal. Seal with Ring adds the memory to your encrypted sanctuary timeline.",
   sealNeedsNetworkHint: "需要网络",

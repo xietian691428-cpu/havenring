@@ -54,8 +54,8 @@ export function LandingTheRing() {
                 A key to your sanctuary.
               </h2>
               <p className="text-lg text-[#F5F5F5]/80">
-                Crafted from premium titanium, each HavenRing is lightweight, durable, and designed
-                to be worn every day.
+                Crafted for daily wear, each HavenRing becomes a private key for personal records
+                and couple memories. Link up to two rings to one Haven.
               </p>
             </div>
 

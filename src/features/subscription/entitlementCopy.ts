@@ -19,13 +19,13 @@ export function getSubscriptionSummary(
   entitlements: UserEntitlements | null | undefined
 ): string {
   if (!entitlements || entitlements.tier === "free") {
-    return `Free: ${FREE_STORAGE_GB} GB local-first storage, ${FREE_RING_LIMIT} ring, Save Securely only.`;
+    return `Free: ${FREE_STORAGE_GB} GB local-first storage, up to ${FREE_RING_LIMIT} rings for a private pair, Save Securely only.`;
   }
   if (entitlements.tier === "trial") {
     const d = Math.max(0, entitlements.trialDaysRemaining);
-    return `Haven Plus trial: ${d} day${d === 1 ? "" : "s"} left. ${PLUS_STORAGE_GB} GB storage, up to ${PLUS_RING_LIMIT} rings, Seal with Ring.`;
+    return `Haven Plus trial: ${d} day${d === 1 ? "" : "s"} left. ${PLUS_STORAGE_GB} GB storage, up to ${PLUS_RING_LIMIT} rings for one private pair, Seal with Ring.`;
   }
-  return `Haven Plus: ${PLUS_STORAGE_GB} GB storage, up to ${PLUS_RING_LIMIT} rings, Seal with Ring, family sharing, AI insights, priority support.`;
+  return `Haven Plus: ${PLUS_STORAGE_GB} GB storage, up to ${PLUS_RING_LIMIT} rings for one private pair, Seal with Ring, optional backup, priority support.`;
 }
 
 /** Plan badge line (“Haven Plus” / “Trial” / “Free”). */
@@ -43,7 +43,7 @@ export function getRingSlotLimitUpsellNotice(
 ): string {
   const tier = entitlements?.tier ?? "free";
   if (tier === "free") {
-    return `Free supports ${FREE_RING_LIMIT} ring. Haven Plus supports up to ${PLUS_RING_LIMIT} rings.`;
+    return `Haven supports up to ${PLUS_RING_LIMIT} rings for one private pair. Revoke one ring before adding another.`;
   }
-  return `You have reached your plan's ring limit (Haven Plus: up to ${PLUS_RING_LIMIT} rings).`;
+  return `You have reached Haven's ring limit: up to ${PLUS_RING_LIMIT} rings for one private pair.`;
 }

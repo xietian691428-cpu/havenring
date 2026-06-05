@@ -7,8 +7,8 @@ import { landingEase } from "./LandingMotion";
 const STEPS = [
   {
     num: "1",
-    title: "Capture the Moment",
-    body: "Write your thoughts, add photos or videos of the people and experiences that matter most.",
+    title: "Record the Moment",
+    body: "Write your thoughts, add photos or videos, and keep a private record for yourself or your pair.",
     accent: false,
   },
   {
@@ -19,8 +19,8 @@ const STEPS = [
   },
   {
     num: "3",
-    title: "Yours Forever",
-    body: "Local-first. End-to-end encrypted. Only you control access. No one else can see it.",
+    title: "Shared Quietly",
+    body: "Up to two linked rings can add new memories. Old sealed memories stay unchanged.",
     accent: false,
   },
 ] as const;

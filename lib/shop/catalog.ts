@@ -28,7 +28,7 @@ export const RING_SIZES = [
 
 export type RingSizeId = (typeof RING_SIZES)[number]["id"];
 
-export const MAX_RING_QUANTITY = 5;
+export const MAX_RING_QUANTITY = 2;
 
 export function ringStyleLabel(styleId: string): string {
   return RING_STYLES.find((s) => s.id === styleId)?.label ?? styleId;

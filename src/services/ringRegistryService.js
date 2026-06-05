@@ -4,11 +4,13 @@
  */
 
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { FREE_RING_LIMIT } from "../features/subscription/subscriptionTypes";
 
 const STORAGE_KEY = STORAGE_KEYS.ringRegistry;
 const ACTIVE_RING_KEY = STORAGE_KEYS.activeRingUidKey;
 
-export const MAX_BOUND_RINGS = 5;
+/** Local PWA registry cap — must match server `ringLimit` (`lib/subscription.ts`). */
+export const MAX_BOUND_RINGS = FREE_RING_LIMIT;
 
 function ensureWebCrypto() {
   if (typeof window === "undefined" || !window.crypto?.subtle) {

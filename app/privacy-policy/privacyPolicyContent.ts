@@ -31,7 +31,7 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
       heading: "2. Data Storage",
       bullets: [
         "Free plan: memories stay on your device only, in encrypted local storage (IndexedDB).",
-        "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and multi-device sync where available.",
+        "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync for your private pair where available.",
         "We cannot access your memory content where client-side encryption applies.",
         "Free plan includes about 2 GB of local storage. Plus includes expanded storage and optional cloud capacity where offered.",
         "Cloud features may be limited or in beta while full E2EE sync rolls out.",

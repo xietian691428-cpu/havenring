@@ -11,21 +11,21 @@ const EN = {
   brand: "Haven",
   title: "My Rings",
   subtitle:
-    "Manage your rings and how they work with Face ID. Your ring is a fast ritual key — not the only way to keep your account safe.",
+    "Manage up to two rings for your private pair. Either ring can seal new memories and open your shared Haven.",
   layeredCoreLine: HAVEN_EN_LAYERED_CORE_LINE,
   emptyTitle: "No rings yet",
   emptyBody:
-    "Link a Haven NFC ring to unlock the seal ritual on Haven Plus, or keep using Save Securely without a ring.",
+    "Link one or two Haven NFC rings for personal records and couple memories. New memories can be added by either ring; sealed memories stay immutable.",
   emptyTrialHint:
     "Link your first ring to start a 30-day Haven Plus trial where offered — Seal with Ring is included during the trial.",
   bindFirstRingCta: "Bind New Ring",
-  addAnotherRingSecondary: "Add another ring",
+  addAnotherRingSecondary: "Add second ring",
   howHavenToggleShow: "How your ring works with Face ID",
   howHavenToggleHide: "Hide guide",
   addRing: "Add a ring",
-  maxRings: "Up to five rings per device registry.",
+  maxRings: "Up to two rings per Haven pair.",
   limitReachedHint:
-    "Ring limit reached (5). Revoke one ring before adding another.",
+    "Ring limit reached (2). Revoke one ring before adding another.",
   ringSince: "Added on",
   boundAt: "Bound at",
   lastUsedAt: "Last used",
@@ -64,10 +64,10 @@ const EN = {
   settingsLink: "Privacy & backup",
   ringsFooterTitle: "Lost a ring?",
   ringsFooterBody:
-    "From any signed-in device, open My Rings and revoke the ring after Face ID or your device lock. Your memories stay encrypted in your account.",
+    "From any signed-in device, open My Rings and revoke the ring after Face ID or your device lock. Shared memories stay encrypted in your Haven.",
   ringsFooterHelpCta: "Open full Help guide",
   privacyNote:
-    "Every trusted ring is equal: any one can be used for quick login and sealing. Your account stays the owner of all memories.",
+    "Both trusted rings are equal: either one can open Haven and seal new memories. Old sealed memories cannot be edited.",
   iosUsageHint:
     "Touch your ring to quickly access your sanctuary. Advanced option: ring link rewrite is available on Android devices.",
   androidUsageHint: "You can also rewrite the ring link here when needed.",

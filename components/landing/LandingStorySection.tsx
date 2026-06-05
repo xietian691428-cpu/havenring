@@ -29,8 +29,8 @@ export function LandingStorySection() {
             some moments deserve silence.
           </h2>
           <p className="mx-auto max-w-2xl text-lg text-[#F5F5F5]/70 md:text-xl">
-            HavenRing was created for those who want to protect what truly matters — away from
-            algorithms, clouds, and endless scrolling.
+            HavenRing was created for personal records and couples who want to protect what truly
+            matters — away from algorithms, public feeds, and endless scrolling.
           </p>
         </motion.div>
 
@@ -79,9 +79,8 @@ export function LandingStorySection() {
                 Our Solution
               </h3>
               <p className="text-xl leading-tight text-[#F5F5F5]/90 md:text-2xl">
-                HavenRing gives you a private sanctuary. A physical key that lets you capture,
-                seal, and protect your most meaningful moments — only for you and the people you
-                love.
+                HavenRing gives you a private sanctuary. One or two rings can capture, seal, and
+                protect meaningful moments — only for you and your chosen partner.
               </p>
             </div>
 

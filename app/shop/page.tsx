@@ -11,7 +11,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Shop — Ritual Ring",
-  description: "Order the HavenRing Ritual Ring. PayPal checkout, manual fulfillment with care.",
+  description: "Order one or two HavenRing Ritual Rings for personal records or a private couple Haven.",
 };
 
 export default function ShopPage() {
@@ -38,7 +38,8 @@ export default function ShopPage() {
       </p>
       <p className="mt-6 text-base leading-relaxed text-[#AAAAAA]">
         A matte ceramic body with NFC at the heart — jewelry that unlocks your private sanctuary.
-        Each ring is prepared and shipped by hand after you order.
+        Order one ring for yourself or two rings for a private pair. Each ring is prepared and
+        shipped by hand after you order.
       </p>
 
       <ul className="mt-8 space-y-3 border-t border-white/[0.08] pt-8 text-sm text-[#AAAAAA]">
@@ -68,7 +69,7 @@ export default function ShopPage() {
       </div>
 
       <p className="mt-8 text-center text-xs leading-relaxed text-[#666666]">
-        Free shipping worldwide on direct orders · 30-day ritual guarantee · PayPal secure payment
+        Up to two rings per Haven pair · 30-day ritual guarantee · PayPal secure payment
       </p>
     </ShopChrome>
   );

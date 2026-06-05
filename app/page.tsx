@@ -9,11 +9,11 @@ export const metadata: Metadata = {
     template: "%s — HavenRing",
   },
   description:
-    "A ring. Your moments. Only for you. Capture, seal, and treasure private memories — no feeds, no followers.",
+    "A private memory ring for personal records and couples. Capture, seal, and treasure memories — no feeds, no followers.",
   openGraph: {
     title: "HavenRing — Keep what matters.",
     description:
-      "Capture meaningful moments and seal them with a touch. Private by design.",
+      "Capture personal records and couple memories, then seal them with a touch. Private by design.",
     url: SITE_ORIGIN,
     siteName: "HavenRing",
     locale: "en_US",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "HavenRing — Keep what matters.",
     description:
-      "A ring. Your moments. Only for you. Capture, seal, and treasure private memories.",
+      "A ring for personal records and private couple memories. Capture, seal, and treasure what matters.",
   },
 };
 

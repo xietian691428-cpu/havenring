@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     const subscription = await getUserSubscriptionStatus(supabase, user.id).catch(
       () => null
     );
-    const ringLimit = subscription?.ringLimit ?? 1;
+    const ringLimit = subscription?.ringLimit ?? 2;
 
     const { count, error: countError } = await supabase
       .from("user_nfc_rings")
@@ -133,9 +133,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            ringLimit === 1
-              ? "Free supports 1 active ring. Upgrade to Haven Plus for up to 5 rings."
-              : `Maximum ${ringLimit} active rings per account.`,
+            ringLimit === 2
+              ? "Haven supports up to 2 active rings for one private pair."
+              : `Maximum ${ringLimit} active rings per Haven pair.`,
           code: "RING_LIMIT_REACHED",
           ringLimit,
         },

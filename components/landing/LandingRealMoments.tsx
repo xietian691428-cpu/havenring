@@ -15,7 +15,7 @@ const MOMENTS = [
     image: "/images/moment-wedding.jpg",
     alt: "Wedding memory",
     title: "Vows whispered at sunset",
-    caption: "Sealed in private. Remembered forever.",
+    caption: "A couple memory, sealed in private.",
   },
   {
     image: "/images/moment-solo.jpg",
@@ -48,7 +48,7 @@ export function LandingRealMoments() {
             Sealed with meaning.
           </h2>
           <p className="mx-auto max-w-md text-lg text-[#F5F5F5]/70">
-            HavenRing is for the memories worth protecting
+            HavenRing is for personal records and private couple memories worth protecting.
           </p>
         </motion.div>
 

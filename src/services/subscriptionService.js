@@ -114,8 +114,6 @@ function normalizeEntitlementsPayload(raw) {
         : FREE_STORAGE_GB,
     canSealWithRing: Boolean(raw.canSealWithRing ?? plusLike),
     canUseCloudBackup: Boolean(raw.canUseCloudBackup ?? plusLike),
-    canFamilyShare: Boolean(raw.canFamilyShare ?? plusLike),
-    canAiInsights: Boolean(raw.canAiInsights ?? plusLike),
   };
 }
 

@@ -82,6 +82,7 @@ supabase/migrations/    # DB schema (rings, user_nfc_rings, seal_tickets, entitl
 
 ### 3.2 Ring binding (hardware trust in the account)
 
+- **Pair limit:** Each Haven account supports **at most 2 active NFC rings** (one private pair — personal + couple positioning). **Free and Plus share the same cap** (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` in `lib/subscription.ts`). Enforced in **`POST /api/nfc/bind`** via `subscription.ringLimit`; PWA local registry mirrors this in `ringRegistryService.js` (`MAX_BOUND_RINGS`). Shop checkout uses `MAX_RING_QUANTITY` in `lib/shop/catalog.ts`. **Do not** restore legacy “up to 5 rings” or family-sharing positioning.
 - **Dynamic NFC** payloads are verified server-side: **`POST /api/rings/sdm/resolve`** (canonical). Legacy **`POST /api/sdm/verify`** forwards to the same handler.
 - Replay protection: **`user_nfc_rings.last_sdm_counter`** must **strictly increase** for bound rings.
 - Binding: **`POST /api/nfc/bind`** creates/updates **`user_nfc_rings`** and can activate **Plus trial** (`activatePlusTrialForUser`).

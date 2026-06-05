@@ -274,7 +274,7 @@ export function RingsPage({
           <p style={styles.guideTitle}>{getPlanBadgeLabel(userEntitlements)}</p>
           <p style={styles.guideBody}>{getSubscriptionSummary(userEntitlements)}</p>
           <p style={styles.guideOneLine}>
-            Ring limit: {rings.length} / {userEntitlements?.maxRings ?? 1}
+            Ring limit: {rings.length} / {userEntitlements?.maxRings ?? 2}
           </p>
         </section>
 

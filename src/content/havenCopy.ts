@@ -10,7 +10,7 @@ export type Platform = HavenPlatform;
 
 /** Face ID + ring roles — Rings, Help, marketing */
 export const HAVEN_EN_LAYERED_CORE_LINE =
-  "Your Face ID protects your account. Your ring gives you fast access and a special ritual for your most precious memories.";
+  "Your Face ID protects your account. Your rings give you and your partner fast access and a special ritual for your most precious memories.";
 
 /** @alias */
 export const RING_VS_FACE_ID_SUMMARY_EN = HAVEN_EN_LAYERED_CORE_LINE;
@@ -70,18 +70,18 @@ export const HAVEN_EN_QUICK_GUIDE_ONE_LINE =
 
 /** Short compliance note for Pricing, Settings, upgrade modal, and in-app footers. */
 export const HAVEN_CLOUD_STORAGE_DISCLAIMER_EN =
-  "Free: memories stay on this device only (encrypted local storage). Haven Plus adds optional end-to-end encrypted cloud backup and multi-device sync where available. If you cancel Plus, cloud copies remain available to download for 30 days, then are deleted automatically. We cannot read your memory content where encryption applies. See the Privacy Policy for details.";
+  "Free: memories stay on this device only (encrypted local storage). Haven Plus adds optional end-to-end encrypted cloud backup and sync for your private pair where available. If you cancel Plus, cloud copies remain available to download for 30 days, then are deleted automatically. We cannot read your memory content where encryption applies. See the Privacy Policy for details.";
 
 /** Where we explain local vs cloud storage (settings, upgrade, seal success). */
 export const HAVEN_STORAGE_MODE_EN = {
   freeLocal:
     "Free plan: your sealed memories stay on this device only (encrypted local storage).",
   plusDual:
-    "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync across devices.",
+    "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync for your private pair.",
   cancelPlus:
     "If you cancel Plus, you can download cloud backups for 30 days; after that, cloud copies are removed automatically. Memories on your device are not deleted.",
   sealSuccess:
-    "This memory is saved on this device. Haven Plus adds optional encrypted cloud backup and sync across your devices.",
+    "This memory is saved on this device. Haven Plus adds optional encrypted backup and sync for your private pair.",
 } as const;
 
 export const BIND_SUCCESS_EN = {
@@ -150,7 +150,7 @@ const HAVEN_NEW_MEMORY_SHARED = {
   upgradeCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   upgradeModalTitle: "Unlock the Ritual Experience",
   upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional cloud backup where we offer it — about 50 GB for Plus where available. Link your first ring to start a 30-day trial where available.",
+    "Haven Plus unlocks Seal with Ring and optional cloud backup for one private pair — up to 2 rings where available. Link your first ring to start a 30-day trial where available.",
   upgradeModalCloudDisclaimer: HAVEN_CLOUD_STORAGE_DISCLAIMER_EN,
   upgradeModalDismiss: "Maybe later",
   upgradeModalSubscribe: "Subscribe — $4.90/mo or $49/yr",
@@ -646,7 +646,7 @@ export function getOnboardingFlowEn(platform: HavenPlatform): OnboardingFlowBund
         kind: "ready",
         illustration: "ownership",
         title: "Ready to create your first sealed memory?",
-        body: "Your first 30 days of Haven Plus are on us when you bind a ring — where that offer is available.",
+        body: "Bind your first ring now. You can add one partner ring later; both rings can add new memories, while sealed memories remain unchanged.",
         primaryButton: "Bind my first ring",
         secondaryButton: "Start with Face ID only",
       },
@@ -657,9 +657,9 @@ export function getOnboardingFlowEn(platform: HavenPlatform): OnboardingFlowBund
 /** Pricing / upgrade decision page (EN source of truth). */
 export const HAVEN_PRICING_PAGE_EN = {
   pageTitle: "Haven Plus",
-  heroTitle: "Unlock the full Haven experience",
+  heroTitle: "A private memory space for one person or one pair",
   heroSubtitle:
-    "Seal memories with intention. Keep them safe. You stay in control of how long they live on your devices.",
+    "Seal personal records and couple memories with intention. Either ring can add new memories; sealed memories stay unchanged.",
   trustLine: "Local-first • Strong encryption on supported flows • You choose what leaves your device",
   colFeature: "Feature",
   colFree: "Free",
@@ -671,11 +671,11 @@ export const HAVEN_PRICING_PAGE_EN = {
       free: "2 GB (local)",
       plus: "50 GB (local + optional cloud where offered; see disclaimer below)",
     },
-    { feature: "Number of rings", free: "1", plus: "Up to 5 linked rings" },
+    { feature: "Number of rings", free: "Up to 2", plus: "Up to 2 linked rings for one private pair" },
     {
       feature: "Seal with Ring",
       free: "Not available on Free",
-      plus: "Full ritual experience where offered",
+      plus: "Full ritual experience for either ring where offered",
     },
     {
       feature: "Save securely (Face ID / lock)",
@@ -718,7 +718,7 @@ export const HAVEN_PRICING_PAGE_EN = {
   payMethodsNote:
     "Checkout may offer Apple Pay, Google Pay, or card depending on your device and region.",
   socialProof:
-    "Most people who fall in love with Haven upgrade within the first week after sealing something that truly matters.",
+    "Haven is built for personal records and couples who want a quiet place to remember, not a public feed.",
   faqTitle: "FAQ",
   faqs: [
     {

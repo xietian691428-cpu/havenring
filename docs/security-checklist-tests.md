@@ -4,8 +4,8 @@ Run these before release; automate where possible.
 
 ## Multi-ring
 
-1. **Bind 2–5 rings** for the same user via `POST /api/nfc/bind` (with valid session + `X-Haven-Secondary-Verified: 1`).
-2. **List** returns all rows; **active** count cannot exceed 5.
+1. **Bind 2 rings** for the same user via `POST /api/nfc/bind` (with valid session + `X-Haven-Secondary-Verified: 1`).
+2. **List** returns all rows; **active** count cannot exceed 2.
 3. **Partial unique index**: same UID cannot be active twice; after **revoke**, same UID can be bound again (inactive row remains).
 4. Verify `RingsPage` card fields from cloud/local merge:
    - nickname
@@ -44,14 +44,14 @@ Run these before release; automate where possible.
 5. Bind ring B on Android, then confirm iOS can use ring B without rebinding.
 6. Verify `seal_telemetry_events` captures success/error ratio and key `error_code` values.
 
-## Extreme: five rings in use
+## Extreme: two rings in use
 
-1. Attempt sixth bind → **409** with limit message.
+1. Attempt third bind → **409** with limit message.
 2. Revoke one → bind succeeds again.
 
 ## Cross-device sync / recovery
 
-1. Device A binds 2+ rings and creates offline drafts.
+1. Device A binds 2 rings and creates offline drafts.
 2. Device B signs in to same account and opens timeline/rings pages.
 3. Verify cloud placeholder groups appear by ring and can be expanded/collapsed.
 4. Trigger "Sync active ring" then "Sync all rings" and confirm issue panel clears.

@@ -33,7 +33,7 @@ export function LandingFinalCtaFooter() {
         <p className="text-sm leading-relaxed text-[#AAAAAA]">
           Free shipping • 30-day money-back guarantee
           <br />
-          Made for those who believe some things are too precious to share with the world.
+          Made for personal records and couples who want a quiet place to remember.
         </p>
       </div>
 

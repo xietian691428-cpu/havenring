@@ -4,7 +4,7 @@ import { EXPLORE_PAGE_CONTENT } from "../content/explorePageContent";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
- * Explore — On This Day + future AI insights (placeholder).
+ * Explore — On This Day + quiet review prompts (placeholder).
  */
 export function ExplorePage({
   locale = "en",

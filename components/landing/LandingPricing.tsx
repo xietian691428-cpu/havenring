@@ -45,17 +45,17 @@ export function LandingPricing() {
 
         <LandingFadeIn className="flex flex-col justify-center rounded-[1.35rem] border border-white/[0.08] bg-white/[0.02] p-8 sm:p-10">
           <p className="text-[10px] font-medium uppercase tracking-[0.42em] text-white/40">
-            Haven Plus
+            Private pair
           </p>
           <h2 className="mt-4 text-[clamp(1.65rem,3vw,2.25rem)] font-medium tracking-[0.02em] text-white">
-            When your circle grows — carefully
+            Built for two rings, not a crowd
           </h2>
           <ul className="mt-8 flex flex-col gap-5 text-[14px] leading-[1.75] text-white/52">
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              Room for shared memories — only with people you invite by name, not by suggestion chip.
+              One Haven can hold up to two equal rings for a private pair.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              First access to hardware iterations and the quiet improvements we ship between launches.
+              Either ring can add new memories; old sealed memories remain immutable.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
               Optional cloud backup with your keys still feeling like yours — not a billboard lease.

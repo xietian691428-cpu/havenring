@@ -1,7 +1,7 @@
 -- User subscription and trial entitlements.
 -- Hardware purchase drives acquisition: first successful ring claim/bind grants
--- a 30-day Haven Plus trial. Plus unlocks cloud backup, up to 5 rings, and
--- Seal with Ring. Free remains local-first with one ring and Save Securely.
+-- a 30-day Haven Plus trial. Plus unlocks cloud backup and Seal with Ring.
+-- Haven supports up to 2 active rings for one private pair.
 
 create table if not exists public.user_entitlements (
   user_id uuid primary key references auth.users (id) on delete cascade,

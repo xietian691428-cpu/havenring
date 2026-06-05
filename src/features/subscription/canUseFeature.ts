@@ -27,12 +27,6 @@ export const canUseFeature = (
     case "cloud_sync":
       return Boolean(e.canUseCloudBackup);
 
-    case "family_sharing":
-      return Boolean(e.canFamilyShare);
-
-    case "ai_insights":
-      return Boolean(e.canAiInsights);
-
     case "expand_ring_slots":
     case "add_ring_slot": {
       const limit =

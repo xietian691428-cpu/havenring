@@ -3,8 +3,8 @@ import type { Database } from "./supabase/types";
 
 export const FREE_STORAGE_GB = 2;
 export const PLUS_STORAGE_GB = 50;
-export const FREE_RING_LIMIT = 1;
-export const PLUS_RING_LIMIT = 5;
+export const FREE_RING_LIMIT = 2;
+export const PLUS_RING_LIMIT = 2;
 export const PLUS_TRIAL_DAYS = 30;
 
 type EntitlementRow = Database["public"]["Tables"]["user_entitlements"]["Row"];

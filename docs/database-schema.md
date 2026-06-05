@@ -396,8 +396,8 @@ API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/uid-status`, `/api/nfc
 
 Applied via `supabase/migrations/0013_user_entitlements.sql`:
 
-- Free: 2 GB local-first storage, 1 active ring, Save Securely only.
-- Haven Plus: 50 GB local + cloud storage, up to 5 active rings, Seal with Ring, family sharing up to 4 people, AI insights, priority support, and full backup.
+- Free: 2 GB local-first storage, up to 2 active rings for one private pair, Save Securely only.
+- Haven Plus: 50 GB local + optional cloud storage, up to 2 active rings for one private pair, Seal with Ring, priority support, and full backup.
 - Successful hardware claim or NFC bind grants a one-time 30-day Plus trial via `plus_trial_start` and `plus_trial_end`.
 - After `plus_trial_end`, the app computes the user as Free unless `plus_subscription_status = 'active'`.
 

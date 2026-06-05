@@ -7,8 +7,8 @@
 
 export const FREE_STORAGE_GB = 2;
 export const PLUS_STORAGE_GB = 50;
-export const FREE_RING_LIMIT = 1;
-export const PLUS_RING_LIMIT = 5;
+export const FREE_RING_LIMIT = 2;
+export const PLUS_RING_LIMIT = 2;
 
 export type SubscriptionTier = "free" | "plus" | "trial";
 
@@ -20,8 +20,6 @@ export interface UserEntitlements {
   cloudStorageGB: number;
   canSealWithRing: boolean;
   canUseCloudBackup: boolean;
-  canFamilyShare: boolean;
-  canAiInsights: boolean;
 }
 
 /** Bridge shape aligned with `@/lib/subscription` SubscriptionStatus fields. */
@@ -43,8 +41,6 @@ export function defaultFreeEntitlements(): UserEntitlements {
     cloudStorageGB: FREE_STORAGE_GB,
     canSealWithRing: false,
     canUseCloudBackup: false,
-    canFamilyShare: false,
-    canAiInsights: false,
   };
 }
 
@@ -68,7 +64,5 @@ export function userEntitlementsFromSubscriptionStatus(
     cloudStorageGB: s.storageGb,
     canSealWithRing: Boolean(s.canSealWithRing),
     canUseCloudBackup: isPlus,
-    canFamilyShare: isPlus,
-    canAiInsights: isPlus,
   };
 }

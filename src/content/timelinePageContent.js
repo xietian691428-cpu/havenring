@@ -37,7 +37,7 @@ const EN = {
   welcomeBack: "Welcome back",
   nfcRegionLabel: "Ring sign-in",
   nfcLede:
-    "Any linked ring can quickly open your Haven. You can link up to 5 rings, and all of them work the same way. Your memories stay with your account.",
+    "Either linked ring can open your Haven and add new memories. You can link up to 2 rings for one private pair; sealed memories stay unchanged.",
   nfcCta: "Continue with ring",
   nfcScanning: "Hold your ring near the device…",
   nfcErrGeneric: "Could not sign in with this ring.",
