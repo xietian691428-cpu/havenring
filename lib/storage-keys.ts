@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   sealNfcTapRelay: "haven.seal.last_nfc_tap.v1",
   sealResolveLock: "haven.seal.resolve.lock.v1",
   sealCompleteRelay: "haven.seal.complete.v1",
+  sealWaitTabActive: "haven.seal.wait_tab.v1",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

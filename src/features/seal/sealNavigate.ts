@@ -1,5 +1,7 @@
 import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
 import { isSealFlowArmed } from "@/lib/seal-flow";
+import { isSealWaitTabActive } from "./sealCrossTab";
+import { readPendingSealDraftIds } from "./sealFlowClient";
 
 export const SEAL_WAIT_QUERY = "seal_wait";
 
@@ -14,6 +16,31 @@ export function isSealWaitSearch(search: string = ""): boolean {
 }
 
 /** User opened `/start?seal_wait=1` from composer before tapping the ring. */
+export function hasLocalSealPrep(): boolean {
+  return isSealFlowArmed() || readPendingSealDraftIds().length > 0;
+}
+
+/**
+ * NFC opened a bare /start?sdm tab without draft arm in this context while the wait page
+ * is active — relay only; let the wait tab navigate and resolve with seal prep.
+ */
+export function shouldDeferSdmResolveToOwnerTab(search: string = ""): boolean {
+  const q = normalizeSearch(search);
+  if (!hasSdmSearch(q)) return false;
+  if (hasLocalSealPrep()) return false;
+  if (isSealWaitSearch(q) || readNfcIntent(q) === "seal") return false;
+  return isSealWaitTabActive();
+}
+
+export function sealRelayNavigateHref(relayHref: string): string {
+  if (typeof window === "undefined") return relayHref;
+  const url = new URL(relayHref, window.location.origin);
+  if (hasLocalSealPrep() || isSealWaitTabActive()) {
+    url.searchParams.set("intent", "seal");
+  }
+  return url.href;
+}
+
 export function isPrimarySealWaitPage(search: string = ""): boolean {
   if (typeof window === "undefined") return false;
   const q = normalizeSearch(search);
@@ -28,9 +55,9 @@ export function isPrimarySealWaitPage(search: string = ""): boolean {
 export function isRingTapSealLandingPage(search: string = ""): boolean {
   if (typeof window === "undefined") return false;
   const q = normalizeSearch(search);
-  if (!hasSdmSearch(q) || isSealWaitSearch(q)) return false;
+  if (!hasSdmSearch(q)) return false;
   const intent = readNfcIntent(q);
-  return isSealFlowArmed() || intent === "seal";
+  return hasLocalSealPrep() || intent === "seal";
 }
 
 /** @deprecated Use isRingTapSealLandingPage */

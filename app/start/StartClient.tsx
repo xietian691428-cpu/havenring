@@ -20,6 +20,7 @@ import {
 } from "@/src/content/havenCopy";
 import {
   abandonInProgressSealOnStartPage,
+  clearSealWaitTabActive,
   finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
@@ -28,13 +29,17 @@ import {
   isRingTapSealLandingPage,
   isSealFlowArmed,
   isSealWaitSearch,
+  listenForSealRingTapOnce,
+  markSealWaitTabActive,
   recordSealNfcTapHref,
   readFreshSealNfcTapHref,
   releaseSealResolveLock,
+  sealRelayNavigateHref,
   SEAL_COMPLETE_STORAGE_KEY,
   SEAL_NFC_TAP_STORAGE_KEY,
   SEAL_SUCCESS_PATH,
   forceArmSealForCurrentUser,
+  shouldDeferSdmResolveToOwnerTab,
   tryAcquireSealResolveLock,
   tryRecoverSealPrepFromComposerSnapshot,
   wasSealRecentlyCompleted,
@@ -234,6 +239,10 @@ export default function StartClient() {
   const [sealWaitMode, setSealWaitMode] = useState(false);
   const [sealRemoteFinishing, setSealRemoteFinishing] = useState(false);
   const [ringTapSealLanding, setRingTapSealLanding] = useState(false);
+  const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
+  const [ringTapError, setRingTapError] = useState("");
+  const webNfcAvailable =
+    typeof window !== "undefined" && "NDEFReader" in window;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -257,7 +266,34 @@ export default function StartClient() {
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
+    if (isSealFlowArmed() || isPrimarySealWaitPage(window.location.search)) {
+      const wait = new URL("/start", window.location.origin);
+      wait.searchParams.set("seal_wait", "1");
+      wait.searchParams.set("intent", "seal");
+      window.location.replace(wait.href);
+      return;
+    }
     window.location.reload();
+  }
+
+  async function handleSealWaitRingScan() {
+    if (!webNfcAvailable || nfcSealScanBusy) return;
+    setRingTapError("");
+    setNfcSealScanBusy(true);
+    try {
+      const result = await listenForSealRingTapOnce(window.location.origin);
+      if (!result.ok) {
+        setRingTapError(result.message);
+        return;
+      }
+      window.location.replace(sealRelayNavigateHref(result.target));
+    } catch (error) {
+      setRingTapError(
+        error instanceof Error ? error.message : "Could not read the ring."
+      );
+    } finally {
+      setNfcSealScanBusy(false);
+    }
   }
 
   const needsSealLeaveDouble =
@@ -343,10 +379,12 @@ export default function StartClient() {
 
   useEffect(() => {
     if (!sealWaitMode || typeof window === "undefined") return undefined;
+    markSealWaitTabActive();
     queueMicrotask(() => setSealLeaveGuard(true));
     pendingSealTapRef.current = true;
 
     const goSuccess = () => {
+      clearSealWaitTabActive();
       window.location.assign(SEAL_SUCCESS_PATH);
       return true;
     };
@@ -358,7 +396,9 @@ export default function StartClient() {
       if (isSealNfcLaunchSearch(window.location.search)) {
         const u = new URL(window.location.href);
         u.searchParams.delete("seal_wait");
-        u.searchParams.delete("intent");
+        if (!u.searchParams.get("intent")) {
+          u.searchParams.set("intent", "seal");
+        }
         window.location.replace(`${u.pathname}${u.search}${u.hash}`);
         return true;
       }
@@ -366,6 +406,7 @@ export default function StartClient() {
       if (relay) {
         setSealRemoteFinishing(true);
         setNotice(START_PAGE_EN.sealWaitFinishingTitle);
+        window.location.replace(sealRelayNavigateHref(relay));
         return true;
       }
       return false;
@@ -417,6 +458,7 @@ export default function StartClient() {
   function confirmLeaveWithoutRing() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
+    clearSealWaitTabActive();
     abandonInProgressSealOnStartPage();
     window.location.assign("/app");
   }
@@ -450,6 +492,7 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
+    recordSealNfcTapHref(window.location.href);
     const myGen = ++nfcSdmResolveGenerationRef.current;
 
     const initialStateTimer = window.setTimeout(() => {
@@ -460,6 +503,21 @@ export default function StartClient() {
     const supabase = getSupabaseBrowserClient();
     let sealLockId: string | null = null;
     let completePollId: number | null = null;
+
+    if (shouldDeferSdmResolveToOwnerTab(search)) {
+      setSdmState({ kind: "resolving" });
+      setNotice(START_PAGE_EN.sealWaitFinishingTitle);
+      completePollId = window.setInterval(() => {
+        if (wasSealRecentlyCompleted()) {
+          clearSealWaitTabActive();
+          window.location.assign(SEAL_SUCCESS_PATH);
+        }
+      }, 400);
+      return () => {
+        window.clearTimeout(initialStateTimer);
+        if (completePollId) window.clearInterval(completePollId);
+      };
+    }
 
     void (async () => {
       setNfcSealBootstrapping(true);
@@ -948,6 +1006,21 @@ export default function StartClient() {
                   {sealFlow.sealScanRingBusy}
                 </p>
                 <NfcPhoneHint platform={platform} />
+                {webNfcAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleSealWaitRingScan()}
+                    disabled={nfcSealScanBusy}
+                    style={styles.sealScanRingBtn}
+                  >
+                    {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
+                  </button>
+                ) : null}
+                {ringTapError ? (
+                  <p style={styles.ringTapError} role="alert">
+                    {ringTapError}
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -1467,6 +1540,25 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     textDecoration: "underline",
     cursor: "pointer",
+  },
+  sealScanRingBtn: {
+    marginTop: 14,
+    alignSelf: "center",
+    borderRadius: 999,
+    border: "1px solid rgba(217, 166, 122, 0.65)",
+    background: "rgba(217, 166, 122, 0.12)",
+    color: "#f8efe7",
+    padding: "10px 18px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  ringTapError: {
+    margin: "10px 0 0",
+    fontSize: 14,
+    lineHeight: 1.45,
+    color: "#ffcab5",
+    maxWidth: 360,
   },
   notice: {
     margin: 0,

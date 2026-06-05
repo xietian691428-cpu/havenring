@@ -26,7 +26,7 @@ import {
   sealFinalizeFetchFailedMessage,
 } from "./sealFinalizeMessaging";
 import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestStoragePersistence";
-import { broadcastSealComplete } from "./sealCrossTab";
+import { broadcastSealComplete, clearSealWaitTabActive } from "./sealCrossTab";
 
 export {
   armSealFlow,
@@ -267,6 +267,7 @@ export async function finalizeSealChainFromSdmResponse(
   await finalizeSealWithTicket(opts);
   requestStoragePersistenceFromUserGesture();
   clearSealPrepState();
+  clearSealWaitTabActive();
   broadcastSealComplete();
   if (typeof window !== "undefined") {
     window.location.assign(SEAL_SUCCESS_PATH);

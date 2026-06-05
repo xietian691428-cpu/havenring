@@ -1,5 +1,7 @@
 import { hasSdmInUrlSearch } from "./parseRingTapUrl";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { isSealWaitTabActive } from "./sealCrossTab";
+import { hasLocalSealPrep } from "./sealNavigate";
 
 /** Cross-tab: Android often opens a second Chrome tab with SDM query params. */
 export const SEAL_NFC_TAP_STORAGE_KEY = STORAGE_KEYS.sealNfcTapRelay;
@@ -11,6 +13,9 @@ export function recordSealNfcTapHref(href: string): void {
   try {
     const url = new URL(href, window.location.origin);
     if (!hasSdmInUrlSearch(url.search)) return;
+    if (hasLocalSealPrep() || isSealWaitTabActive()) {
+      url.searchParams.set("intent", "seal");
+    }
     const payload = JSON.stringify({ href: url.href, ts: Date.now() });
     window.sessionStorage.setItem(SEAL_NFC_TAP_STORAGE_KEY, payload);
     window.localStorage.setItem(SEAL_NFC_TAP_STORAGE_KEY, payload);

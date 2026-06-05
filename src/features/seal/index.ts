@@ -70,15 +70,21 @@ export {
   readFreshSealNfcTapHref,
 } from "./sealNfcTapRelay";
 export {
+  hasLocalSealPrep,
   isAuxiliarySealTapTab,
   isPrimarySealWaitPage,
   isRingTapSealLandingPage,
   isSealWaitSearch,
   navigateToSealWaitPage,
+  sealRelayNavigateHref,
+  shouldDeferSdmResolveToOwnerTab,
   SEAL_WAIT_QUERY,
 } from "./sealNavigate";
 export {
   broadcastSealComplete,
+  clearSealWaitTabActive,
+  isSealWaitTabActive,
+  markSealWaitTabActive,
   releaseSealResolveLock,
   SEAL_COMPLETE_STORAGE_KEY,
   tryAcquireSealResolveLock,

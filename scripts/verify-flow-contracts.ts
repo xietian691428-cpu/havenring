@@ -60,6 +60,7 @@ check("storage keys aligned for seal flow", () => {
   assert.equal(SEAL_ARMED_KEY, STORAGE_KEYS.sealArmed);
   assert.equal(PENDING_SEAL_DRAFT_IDS_KEY, STORAGE_KEYS.pendingSealDraftIds);
   assert.equal(COMPOSER_SNAPSHOT_KEY, STORAGE_KEYS.composerSnapshot);
+  assert.equal(typeof STORAGE_KEYS.sealWaitTabActive, "string");
 });
 
 console.log("\nAll flow contract checks passed.");
