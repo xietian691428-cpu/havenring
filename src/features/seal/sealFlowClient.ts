@@ -26,7 +26,12 @@ import {
   sealFinalizeFetchFailedMessage,
 } from "./sealFinalizeMessaging";
 import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestStoragePersistence";
-import { broadcastSealComplete, clearSealWaitTabActive } from "./sealCrossTab";
+import {
+  broadcastSealComplete,
+  clearSealCompleteRelay,
+  clearSealWaitTabActive,
+} from "./sealCrossTab";
+import { clearSealNfcTapHref } from "./sealNfcTapRelay";
 
 export {
   armSealFlow,
@@ -229,6 +234,9 @@ export async function finalizeSealWithTicket(
 export function primeSealPrepAfterDraftPersisted(draftId: string) {
   const id = String(draftId || "").trim();
   if (!id) return;
+  clearSealCompleteRelay();
+  clearSealWaitTabActive();
+  clearSealNfcTapHref();
   const ids = [id];
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids);

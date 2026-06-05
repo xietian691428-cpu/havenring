@@ -13,6 +13,10 @@ import { STORAGE_KEYS } from "../lib/storage-keys";
 import { SEAL_ARMED_KEY } from "../lib/seal-flow";
 import { PENDING_SEAL_DRAFT_IDS_KEY } from "../src/features/seal/sealTypes";
 import { COMPOSER_SNAPSHOT_KEY } from "../src/features/seal/composerSnapshotSafe";
+import {
+  clearSealNfcTapHref,
+  consumeFreshSealNfcTapHref,
+} from "../src/features/seal/sealNfcTapRelay";
 
 function check(label: string, fn: () => void) {
   try {
@@ -39,6 +43,8 @@ check("seal wait URL intent=seal", () => {
 check("seal navigate helpers exported", () => {
   assert.equal(typeof isPrimarySealWaitPage, "function");
   assert.equal(typeof isRingTapSealLandingPage, "function");
+  assert.equal(typeof consumeFreshSealNfcTapHref, "function");
+  assert.equal(typeof clearSealNfcTapHref, "function");
 });
 
 check("claim param maps to claim intent", () => {

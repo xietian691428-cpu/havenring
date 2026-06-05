@@ -65,6 +65,8 @@ export {
   normalizeRingTapToStartHref,
 } from "./parseRingTapUrl";
 export {
+  clearSealNfcTapHref,
+  consumeFreshSealNfcTapHref,
   SEAL_NFC_TAP_STORAGE_KEY,
   recordSealNfcTapHref,
   readFreshSealNfcTapHref,
@@ -82,6 +84,7 @@ export {
 } from "./sealNavigate";
 export {
   broadcastSealComplete,
+  clearSealCompleteRelay,
   clearSealWaitTabActive,
   isSealWaitTabActive,
   markSealWaitTabActive,

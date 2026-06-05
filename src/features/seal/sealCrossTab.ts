@@ -81,6 +81,15 @@ export function wasSealRecentlyCompleted(maxAgeMs = COMPLETE_TTL_MS): boolean {
 
 export const SEAL_COMPLETE_STORAGE_KEY = STORAGE_KEYS.sealCompleteRelay;
 
+export function clearSealCompleteRelay() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.sealCompleteRelay);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Wait page holds seal prep; NFC may open a sibling tab that must not burn SDM. */
 export function markSealWaitTabActive() {
   if (typeof window === "undefined") return;

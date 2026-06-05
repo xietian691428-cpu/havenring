@@ -1,7 +1,4 @@
-import {
-  clearSealPrepState,
-  finalizeSealChainFromSdmResponse,
-} from "./sealFlowClient";
+import { clearSealPrepState, finalizeSealChainFromSdmResponse } from "./sealFlowClient";
 import type { FinalizeSealWithTicketOptions } from "./sealTypes";
 import { SEAL_SUCCESS_PATH } from "./sealTypes";
 
@@ -19,7 +16,6 @@ export async function finalizeSealChainFromSdmResponseSafe(
     await finalizeSealChainFromSdmResponse(opts);
     return { ok: true, kind: "success" };
   } catch (error) {
-    clearSealPrepState();
     const message =
       error instanceof Error
         ? error.message

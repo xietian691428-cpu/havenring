@@ -21,6 +21,8 @@ import {
 import {
   abandonInProgressSealOnStartPage,
   clearSealWaitTabActive,
+  clearSealNfcTapHref,
+  consumeFreshSealNfcTapHref,
   finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
@@ -32,7 +34,6 @@ import {
   listenForSealRingTapOnce,
   markSealWaitTabActive,
   recordSealNfcTapHref,
-  readFreshSealNfcTapHref,
   releaseSealResolveLock,
   sealRelayNavigateHref,
   SEAL_COMPLETE_STORAGE_KEY,
@@ -232,6 +233,7 @@ export default function StartClient() {
   const pendingSealTapRef = useRef(false);
   const bindRingRedirectDoneRef = useRef(false);
   const nfcSdmResolveGenerationRef = useRef(0);
+  const sealWaitStartedAtRef = useRef(0);
   const [sealPrepRevision, setSealPrepRevision] = useState(0);
   const [nfcSealBootstrapping, setNfcSealBootstrapping] = useState(() =>
     typeof window !== "undefined" ? isSealNfcLaunchSearch(window.location.search) : false
@@ -266,6 +268,7 @@ export default function StartClient() {
   function retrySdmTouch() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
+    clearSealNfcTapHref();
     if (isSealFlowArmed() || isPrimarySealWaitPage(window.location.search)) {
       const wait = new URL("/start", window.location.origin);
       wait.searchParams.set("seal_wait", "1");
@@ -379,6 +382,9 @@ export default function StartClient() {
 
   useEffect(() => {
     if (!sealWaitMode || typeof window === "undefined") return undefined;
+    const startedAt = Date.now();
+    sealWaitStartedAtRef.current = startedAt;
+    clearSealNfcTapHref();
     markSealWaitTabActive();
     queueMicrotask(() => setSealLeaveGuard(true));
     pendingSealTapRef.current = true;
@@ -402,7 +408,7 @@ export default function StartClient() {
         window.location.replace(`${u.pathname}${u.search}${u.hash}`);
         return true;
       }
-      const relay = readFreshSealNfcTapHref();
+      const relay = consumeFreshSealNfcTapHref({ sinceTs: startedAt });
       if (relay) {
         setSealRemoteFinishing(true);
         setNotice(START_PAGE_EN.sealWaitFinishingTitle);
