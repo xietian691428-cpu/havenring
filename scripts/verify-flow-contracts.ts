@@ -139,4 +139,11 @@ check("daily access routes by Haven membership", () => {
   assert.doesNotMatch(startClient, /isDailySelfOwner/);
 });
 
+check("seal commit persists memories to local timeline", () => {
+  const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
+  assert.match(sealFlow, /persistSealedDraftsLocally/);
+  assert.match(sealFlow, /await persistSealedDraftsLocally\(draftIds\)/);
+  assert.match(sealFlow, /createMemory/);
+});
+
 console.log("\nAll flow contract checks passed.");

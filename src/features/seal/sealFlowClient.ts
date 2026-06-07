@@ -11,6 +11,14 @@ import {
 } from "../../../lib/seal-flow";
 import { getDraftItem, removeDraftItem } from "../memories/draftBoxStore";
 import {
+  createMemory,
+  getMemoryById,
+  saveMemory,
+} from "../../services/localStorageService";
+import { markFirstMemoryCompleted } from "../../services/firstRunTelemetryService";
+import { clearRingSyncQueue } from "../../services/ringScopedCacheService";
+import { getActiveRingOrFirst } from "../../services/ringRegistryService";
+import {
   MAX_SEAL_DRAFT_IDS,
   PENDING_SEAL_DRAFT_IDS_KEY,
   SEAL_SDM_CONTEXT,
@@ -211,6 +219,38 @@ export async function collectDraftPayloadsForSeal(
   return payloads;
 }
 
+/** Timeline reads local IndexedDB; seal commit only writes Supabase until this runs. */
+async function persistSealedDraftsLocally(draftIds: string[]) {
+  const now = Date.now();
+  for (const id of draftIds) {
+    const item = await getDraftItem(id);
+    if (!item) continue;
+    const payload = {
+      id: item.id,
+      title: String(item.title || "").trim() || "Untitled memory",
+      story: String(item.story || ""),
+      photo: Array.isArray(item.photo) && item.photo.length ? item.photo : null,
+      voice: null,
+      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+      timelineAt: Number(item.updatedAt || item.createdAt || now) || now,
+      releaseAt: Number(item.releaseAt || 0) || 0,
+      createdAt: Number(item.createdAt || now) || now,
+      tags: [] as unknown[],
+    };
+    const existing = await getMemoryById(id);
+    if (existing) {
+      await saveMemory({ ...existing, ...payload });
+    } else {
+      await createMemory(payload);
+    }
+  }
+  markFirstMemoryCompleted();
+  const ring = getActiveRingOrFirst();
+  if (ring?.uidKey && draftIds.length) {
+    await clearRingSyncQueue(ring.uidKey, draftIds);
+  }
+}
+
 /**
  * Bearer-authenticated finalize: `precheck` then `commit` with draft payloads from idb drafts.
  */
@@ -284,6 +324,7 @@ export async function finalizeSealWithTicket(
     );
   }
 
+  await persistSealedDraftsLocally(draftIds);
   await Promise.all(draftIds.map((id) => removeDraftItem(id)));
 }
 

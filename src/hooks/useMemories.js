@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   createMemory,
   deleteMemory,
@@ -367,6 +368,17 @@ export function useMemories() {
     queueMicrotask(() => {
       void refresh();
     });
+  }, [refresh]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onStorage = (event) => {
+      if (event.key === STORAGE_KEYS.sealCompleteRelay) {
+        void refresh();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [refresh]);
 
   useEffect(() => {
