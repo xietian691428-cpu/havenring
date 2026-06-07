@@ -178,8 +178,8 @@ export function CheckoutClient({ paypalClientId }: Props) {
         <p className="text-xs font-medium uppercase tracking-[0.45em] text-[#D4AF37]">Checkout</p>
         <h1 className="mt-3 text-3xl font-light tracking-tighter text-[#F5F5F5]">Complete your order</h1>
         <p className="mt-3 text-sm text-[#AAAAAA]">
-          Order one ring for personal records or two rings for a private pair. We ship manually
-          after payment — you will receive a confirmation email with your order reference.
+          Order one ring for personal records or two rings for a private pair. Each partner keeps
+          their own account and ring. We ship manually after payment — you will receive a confirmation email with your order reference.
         </p>
       </div>
 

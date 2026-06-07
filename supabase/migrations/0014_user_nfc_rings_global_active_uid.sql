@@ -1,5 +1,6 @@
 -- One active NFC UID may belong to at most one Haven account at a time.
--- Re-linking for a different user requires the previous owner to revoke (is_active = false).
+-- Later dual-account policy makes activated rings non-transferable in normal flows;
+-- retiring a credential must not be treated as releasing it for another account.
 -- If this migration fails with a unique violation, two accounts already share the same
 -- active UID hash — resolve in SQL (deactivate one row) before retrying.
 

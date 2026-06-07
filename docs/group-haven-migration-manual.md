@@ -24,7 +24,7 @@ Upgrade Haven Ring from single-owner ring access to consent-based small group ac
 ## Security Model
 
 - No invite plaintext persisted; only `sha256(invite_code)` hash.
-- Invite is one-time, expires quickly (default 10 minutes), and can be cancelled.
+- Invite is one-time, valid for 24 hours, and can be cancelled by the owner/creator.
 - Linking a ring requires:
   - authenticated user
   - valid invite

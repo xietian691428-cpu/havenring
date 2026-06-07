@@ -77,10 +77,10 @@ const MESSAGES: Record<Locale, Dictionary> = {
       "Sealed content is encrypted on this device for speed and privacy. The ring is a quick-access shortcut, not a replacement for your account.",
     "help.recovery.title": "If something is lost or broken",
     "help.recovery.body":
-      "Your account still holds your haven. For a ring or device issue, use recovery in the app to reissue or unlink a ring. Revoke a lost ring from a trusted device as soon as you can.",
+      "Your Haven membership protects shared access. For a ring or device issue, retire a lost ring credential from a trusted device as soon as you can.",
     "help.optional_cloud.title": "Optional cross-device backup",
     "help.optional_cloud.body":
-      "You can turn on optional Sign in with Apple or Google in Settings to sync backup across devices. Your account remains the source of trust—not the physical ring alone.",
+      "You can turn on optional Sign in with Apple or Google in Settings to sync backup across devices. Each partner keeps their own account; the physical ring is not a shared login.",
   },
   fr: {
     "common.return": "Retour",

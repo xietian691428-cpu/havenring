@@ -74,6 +74,7 @@ function reconcileLocalRingsFromCloud(cloudRings = []) {
     const ring = upsertBoundRingByUidKey(uidKey, {
       label: row.nickname || "Recovered ring",
       cloudRingId: row.id,
+      havenId: row.haven_id || null,
       cloudBoundAt: row.bound_at || null,
       cloudLastUsedAt: row.last_used_at || null,
     });
@@ -130,6 +131,7 @@ export async function syncRingScopedCaches(options = {}) {
     if (!cloud) continue;
     updateRingCloudMetadata(localRing.uidKey, {
       cloudRingId: cloud.id,
+      havenId: cloud.haven_id || null,
       cloudBoundAt: cloud.bound_at || null,
       cloudLastUsedAt: cloud.last_used_at || null,
     });

@@ -28,6 +28,8 @@ type SealTicketRow = {
   id: string;
   draft_ids: unknown;
   ring_uid_hash: string | null;
+  ring_id: string | null;
+  haven_id: string | null;
   expires_at: string | null;
   consumed_at: string | null;
 };
@@ -106,7 +108,7 @@ export async function POST(req: NextRequest) {
     const admin = getSupabaseAdminClient();
     const { data: ticketRow, error: findErr } = await admin
       .from("seal_tickets" as never)
-      .select("id, draft_ids, ring_uid_hash, expires_at, consumed_at")
+      .select("id, draft_ids, ring_uid_hash, ring_id, haven_id, expires_at, consumed_at")
       .eq("ticket_hash", ticketHash)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -265,7 +267,8 @@ export async function POST(req: NextRequest) {
         if (
           msg.includes("draft_set_mismatch") ||
           msg.includes("draft_payload_mismatch") ||
-          msg.includes("no_active_ring")
+          msg.includes("no_active_ring") ||
+          msg.includes("not_haven_member")
         ) {
           await recordSealTelemetry(admin, {
             user_id: user.id,

@@ -55,7 +55,7 @@ const EN = {
   nfcHelpGeneric:
     "Try once more with a steady ring touch. If it still fails, check network and ring binding status.",
   cloudSourceNote:
-    "Your account is the source of truth. Local data helps with offline use and can be rebuilt anytime.",
+    "Your Haven membership is the source of shared access. Local data helps with offline use and can be rebuilt when your account and keys are available.",
   integrityMismatch:
     "Detected data inconsistency. Cloud is the source of truth, please resync now.",
   resyncNow: "Resync",

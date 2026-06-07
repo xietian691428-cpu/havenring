@@ -51,15 +51,15 @@ const EN = {
   riskOpRingManage: "Add or unbind pair rings",
   riskOpExportMigrate: "Export or migrate protected data",
   riskOpDeleteSealed: "Delete sealed memories",
-  riskOpRemoteRevoke: "Remote revoke lost rings",
+  riskOpRemoteRevoke: "Retire lost ring credentials",
   privacyLine1: "All memories are stored locally on your device with encryption.",
   privacyLine2: "Cloud backup is completely optional.",
   privacyNfcLine:
-    "NFC bind/unbind: we store only a secure fingerprint of the tag, not a naked UID. You can revoke a lost ring from another signed-in device.",
+    "NFC bind/retire: we store only a secure fingerprint of the tag, not a naked UID. You can retire a lost ring from another signed-in device.",
   privacyUnbindLine:
-    "Unlinking a ring does not delete your sealed memories; it stops that ring from being used for quick access.",
+    "Retiring a ring does not delete your sealed memories; it stops that ring from being used for sealing and it cannot be transferred to another Haven.",
   privacyE2eLine:
-    "Your sealed memories are protected with end-to-end encryption on supported flows. Rings are shortcuts to your account, not the only proof of identity.",
+    "Your sealed memories are protected with end-to-end encryption on supported flows. Rings are keys to your Haven, while each partner keeps their own account identity.",
   privacyPolicy: "View Privacy Policy",
   openHelp: "Open Help Center",
   confirmExport: "Export encrypted local backup file now?",
@@ -94,16 +94,16 @@ const EN = {
   loadStatsFailed: "Could not load local storage stats.",
   sessionSectionTitle: "Ring & session",
   keepSignedInLabel:
-    "Stay signed in after NFC login (uses a longer server session until you sign out or revoke rings).",
+    "Stay signed in on this device. Ring-only account login is disabled for shared Haven pairs.",
   revokeAllNfcTitle: "Cloud-linked NFC rings",
   revokeAllNfcBody:
-    "Revoke every ring binding for your Haven pair. Lost rings stop working immediately; sign in from Settings if needed.",
-  revokeAllNfcButton: "Revoke all rings on this account",
+    "Retire every ring credential for your Haven membership. Lost rings stop working immediately and cannot be transferred.",
+  revokeAllNfcButton: "Retire my ring credentials",
   confirmRevokeAllNfc:
-    "Revoke ALL NFC ring bindings for your cloud account? This cannot be undone from the ring side.",
+    "Retire ALL NFC ring credentials for this account? Retired rings cannot be transferred to another Haven.",
   revokeAllNfcNeedSignIn: "Sign in with cloud backup first, then try again.",
-  revokeAllNfcDone: "Revoked {n} ring binding(s). Cloud login may be required to add rings again.",
-  revokeAllNfcFailed: "Could not revoke all rings.",
+  revokeAllNfcDone: "Retired {n} ring credential(s).",
+  revokeAllNfcFailed: "Could not retire all rings.",
   temporarySectionTitle: "Temporary phone safety",
   temporaryModeLabel:
     "Temporary device mode (auto wipe local data after use).",
@@ -123,7 +123,7 @@ const EN = {
     "Free: local storage only. Plus: local plus optional cloud sync for your private pair. If you cancel Plus, download cloud data within 30 days — cloud copies are then removed automatically. Manage billing from your device’s subscription settings when available.",
   subscriptionManageCta: "Manage subscription",
   ringsSectionTitle: "Rings",
-  ringsBody: "See up to two linked rings, bind a pair ring, or revoke access if a ring is lost.",
+  ringsBody: "See up to two linked rings, invite your partner, or retire your own ring if it is lost.",
   ringsManageCta: "Manage rings",
   dataPrivacySectionTitle: "Data & privacy",
   legalSectionTitle: "Legal",

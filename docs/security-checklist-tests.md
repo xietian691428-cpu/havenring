@@ -4,9 +4,9 @@ Run these before release; automate where possible.
 
 ## Multi-ring
 
-1. **Bind 2 rings** for the same user via `POST /api/nfc/bind` (with valid session + `X-Haven-Secondary-Verified: 1`).
-2. **List** returns all rows; **active** count cannot exceed 2.
-3. **Partial unique index**: same UID cannot be active twice; after **revoke**, same UID can be bound again (inactive row remains).
+1. **Bind 1 ring** for the first account via `POST /api/nfc/bind` (valid session + `X-Haven-Secondary-Verified: 1`).
+2. Bind the partner ring only through a valid partner invite and the partner's own account.
+3. **Partial unique index**: same UID cannot be active twice; after retire, the same UID cannot be rebound to another account/Haven.
 4. Verify `RingsPage` card fields from cloud/local merge:
    - nickname
    - cloud `bound_at`
@@ -35,34 +35,39 @@ Run these before release; automate where possible.
 1. **Android Chrome**: Web NFC available — bind flow uses UID hash client-side before POST.
 2. **iOS Safari**: Web NFC unavailable — expect wizard branch `blocked_ios`; bind via Android/desktop or native helper.
 
-## iOS + Android mixed-device regression (must-pass)
+## iOS + Android mixed-device regression (single user, must-pass)
 
-1. Bind ring A on Android, then sign in on iOS and confirm ring list + timeline load with the same account.
+1. Bind ring A on Android, then sign in on iOS with the same user account and confirm ring list + timeline load.
 2. Create 2 drafts on iOS, get ticket with ring tap, and finalize on iOS from Home Screen launch.
 3. Repeat finalize on Android for a different draft and verify both memories appear after sync.
-4. Revoke ring A on iOS, then confirm Android ring-tap login/seal is rejected for that ring.
-5. Bind ring B on Android, then confirm iOS can use ring B without rebinding.
+4. Retire ring A on iOS, then confirm Android seal is rejected for that ring.
+5. Confirm the retired ring UID cannot be rebound to another account/Haven.
 6. Verify `seal_telemetry_events` captures success/error ratio and key `error_code` values.
 
-## Extreme: two rings in use
+## Dual-account shared Haven regression (must-pass)
 
-1. Attempt third bind → **409** with limit message.
-2. Revoke one → bind succeeds again.
+1. Partner A signs in with Apple/Google and binds ring A → first bind creates one-person Haven.
+2. A creates partner invite from Rings page / `POST /api/haven/invite`.
+3. Partner B opens invite, signs in with B's own Apple/Google account, taps ring B, and binds with `invite_code`.
+4. Confirm A and B list the same Haven rings, with one ring owned by each account.
+5. Confirm B cannot join with A's OAuth account and cannot bind ring B without invite.
+6. Confirm a third account cannot list rings, issue seal tickets, or read moments for the Haven.
+7. Confirm a third active ring in the same Haven returns **409** `HAVEN_PAIR_FULL`.
 
 ## Cross-device sync / recovery
 
-1. Device A binds 2 rings and creates offline drafts.
-2. Device B signs in to same account and opens timeline/rings pages.
+1. Device A binds one ring and creates offline drafts.
+2. Device B signs in to the same user account and opens timeline/rings pages.
 3. Verify cloud placeholder groups appear by ring and can be expanded/collapsed.
 4. Trigger "Sync active ring" then "Sync all rings" and confirm issue panel clears.
 
 ## Lost ring single revoke
 
-1. Use Rings page revoke on one ring with secondary verification.
+1. Use Rings page retire on one ring with secondary verification.
 2. Confirm warning text is shown before verification:
-   "After unbinding, this ring will immediately stop working for login and sealing. All sealed content remains permanently and safely stored in the cloud."
+   "This ring credential will stop working for sealing right away and cannot be transferred to another Haven."
 3. Confirm `/api/nfc/revoke` success updates both cloud list and local registry.
-4. Verify revoked ring UID can no longer complete `nfc-login` (401).
+4. Verify retired ring UID cannot be rebound and cannot complete seal.
 
 ## Hash mismatch recovery
 
@@ -70,10 +75,10 @@ Run these before release; automate where possible.
 2. Run sync and verify mismatch warning + issue reason appears.
 3. Use manual resync action; verify fallback to cloud source path and no data deletion.
 
-## NFC login JWT
+## NFC login
 
-1. With `SUPABASE_JWT_SECRET` unset → **503** `nfc_login_unconfigured`.
-2. With secret set → **200** and JWT accepted by Supabase client `setSession` / REST per project configuration (**verify in staging** — JWT claims must match your GoTrue version).
+1. `POST /api/auth/nfc-login` returns **410** `nfc_login_disabled_for_shared_haven`.
+2. Verify a ring tap never signs Partner B into Partner A's account.
 
 ## Privacy gates
 

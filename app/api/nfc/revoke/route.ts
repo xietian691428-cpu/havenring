@@ -9,7 +9,8 @@ import {
 type RevokeBody = { ring_id?: unknown; privacy_acknowledged?: unknown };
 
 /**
- * POST /api/nfc/revoke — soft-revoke a binding (is_active = false).
+ * POST /api/nfc/revoke — retire a binding (is_active = false).
+ * Retired rings are not released for transfer to another account/Haven.
  * Requires secondary verification header (same contract as bind).
  */
 export async function POST(req: NextRequest) {
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
       .from("user_nfc_rings")
       .update({
         is_active: false,
+        retired_at: new Date().toISOString(),
+        retired_reason: "user_retired",
       })
       .eq("id", ringId)
       .eq("user_id", user.id)

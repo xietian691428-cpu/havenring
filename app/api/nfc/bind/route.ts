@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import { createHash } from "node:crypto";
+import { hashNfcUidAliases, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {
   getSupabaseAdminClient,
-  getSupabaseUserClient,
   isAnonymousUser,
   requireAuthenticatedUser,
-  requireBearerToken,
 } from "@/lib/supabase/server";
 import {
   activatePlusTrialForUser,
@@ -16,12 +15,19 @@ import {
 type BindBody = {
   nfc_uid?: unknown;
   nickname?: unknown;
+  invite_code?: unknown;
   privacy_acknowledged?: unknown;
 };
 
+function sha256(input: string) {
+  return createHash("sha256").update(input, "utf8").digest("hex");
+}
+
 /**
  * POST /api/nfc/bind
- * Binds a ring UID (hashed server-side) to the authenticated user.
+ * Binds a ring UID (hashed server-side) to the authenticated user's Haven.
+ * First ring creates a one-person Haven. A second ring must use a short-lived
+ * partner invite and a separate authenticated account.
  * Requires: Bearer session, explicit privacy acknowledgment, and a secondary
  * verification signal (e.g. after device passcode / passkey) via header.
  */
@@ -68,17 +74,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const uidHash = hashNfcUid(normalized);
+    const uidHashCandidates = hashNfcUidAliases(rawUid);
+    if (!uidHashCandidates.length) {
+      return NextResponse.json({ error: "Invalid nfc_uid." }, { status: 400 });
+    }
+    const uidHash = uidHashCandidates[0];
     const nickname = String(body.nickname ?? "").trim() || "Ring";
-    const accessToken = requireBearerToken(req);
-    const supabase = getSupabaseUserClient(accessToken);
+    const inviteCode = String(body.invite_code ?? "").trim();
 
     const admin = getSupabaseAdminClient();
     const { data: existingGlobal, error: existingErr } = await admin
       .from("user_nfc_rings")
-      .select("id, user_id")
-      .eq("nfc_uid_hash", uidHash)
-      .eq("is_active", true)
+      .select("id, user_id, haven_id, nickname, bound_at, last_used_at, is_active, retired_at")
+      .in("nfc_uid_hash", uidHashCandidates)
+      .order("is_active", { ascending: false })
+      .order("bound_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (existingErr) {
@@ -88,71 +99,190 @@ export async function POST(req: NextRequest) {
       );
     }
     if (existingGlobal) {
-      if (existingGlobal.user_id === user.id) {
-        const { data: existingRing } = await supabase
-          .from("user_nfc_rings")
-          .select("id, nickname, bound_at, last_used_at, is_active")
-          .eq("id", existingGlobal.id)
-          .maybeSingle();
-
+      if (existingGlobal.user_id === user.id && existingGlobal.is_active) {
         return NextResponse.json({
           success: true,
           alreadyLinkedToYou: true,
-          ring: existingRing ?? { id: existingGlobal.id },
+          havenId: existingGlobal.haven_id,
+          ring: existingGlobal,
           message: "This ring is already linked to your account.",
         });
+      }
+      if (!existingGlobal.is_active || existingGlobal.retired_at) {
+        return NextResponse.json(
+          {
+            error:
+              "This ring was previously activated and cannot be transferred to another Haven.",
+            code: "RING_NON_TRANSFERABLE",
+          },
+          { status: 409 }
+        );
       }
       return NextResponse.json(
         {
           error:
-            "This ring is already linked to another Haven account. The owner must unlink it in My Rings before it can be linked here.",
+            "This ring is already linked to another Haven and cannot be transferred.",
           code: "RING_BOUND_TO_OTHER_USER",
         },
         { status: 409 }
       );
     }
 
-    const subscription = await getUserSubscriptionStatus(supabase, user.id).catch(
-      () => null
-    );
+    const subscription = await getUserSubscriptionStatus(admin, user.id).catch(() => null);
     const ringLimit = subscription?.ringLimit ?? 2;
 
-    const { count, error: countError } = await supabase
+    const { data: existingUserRings, error: userRingErr } = await admin
       .from("user_nfc_rings")
-      .select("id", { count: "exact", head: true })
+      .select("id, haven_id")
       .eq("user_id", user.id)
       .eq("is_active", true);
 
-    if (countError) {
+    if (userRingErr) {
       return NextResponse.json(
-        { error: countError.message || "Count failed." },
+        { error: userRingErr.message || "Count failed." },
         { status: 500 }
       );
     }
-    if ((count ?? 0) >= ringLimit) {
+    if ((existingUserRings?.length ?? 0) >= 1) {
       return NextResponse.json(
         {
-          error:
-            ringLimit === 2
-              ? "Haven supports up to 2 active rings for one private pair."
-              : `Maximum ${ringLimit} active rings per Haven pair.`,
+          error: "Each partner account can link one active ring. Invite your partner to link their own ring with their own account.",
           code: "RING_LIMIT_REACHED",
-          ringLimit,
+          ringLimit: 1,
         },
         { status: 409 }
       );
     }
 
-    const { data, error } = await supabase
+    let havenId = "";
+    let role: "owner" | "member" = "owner";
+
+    if (inviteCode) {
+      const inviteHash = sha256(inviteCode);
+      const { data: invite, error: inviteErr } = await admin
+        .from("ring_invites")
+        .select("id, haven_id, created_by, expires_at, consumed_at, cancelled_at")
+        .eq("invite_hash", inviteHash)
+        .is("consumed_at", null)
+        .is("cancelled_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inviteErr) {
+        return NextResponse.json({ error: inviteErr.message }, { status: 500 });
+      }
+      if (!invite?.haven_id) {
+        return NextResponse.json(
+          { error: "Invite is invalid or expired.", code: "INVALID_INVITE" },
+          { status: 403 }
+        );
+      }
+      if (invite.created_by === user.id) {
+        return NextResponse.json(
+          {
+            error: "Partner invite must be accepted from your partner's own account.",
+            code: "INVITE_REQUIRES_SEPARATE_ACCOUNT",
+          },
+          { status: 409 }
+        );
+      }
+
+      const { count: havenRingCount, error: havenCountErr } = await admin
+        .from("user_nfc_rings")
+        .select("id", { count: "exact", head: true })
+        .eq("haven_id", invite.haven_id)
+        .eq("is_active", true);
+      if (havenCountErr) {
+        return NextResponse.json({ error: havenCountErr.message }, { status: 500 });
+      }
+      if ((havenRingCount ?? 0) >= ringLimit) {
+        return NextResponse.json(
+          {
+            error: "This Haven already has two active rings.",
+            code: "HAVEN_PAIR_FULL",
+            ringLimit,
+          },
+          { status: 409 }
+        );
+      }
+
+      const { error: memberErr } = await admin
+        .from("haven_members")
+        .upsert(
+          {
+            haven_id: invite.haven_id,
+            user_id: user.id,
+            role: "member",
+          },
+          { onConflict: "haven_id,user_id" }
+        );
+      if (memberErr) {
+        return NextResponse.json({ error: memberErr.message }, { status: 500 });
+      }
+
+      const { error: consumeErr } = await admin
+        .from("ring_invites")
+        .update({ consumed_by: user.id, consumed_at: new Date().toISOString() })
+        .eq("id", invite.id)
+        .is("consumed_at", null)
+        .is("cancelled_at", null);
+      if (consumeErr) {
+        return NextResponse.json({ error: consumeErr.message }, { status: 500 });
+      }
+
+      havenId = invite.haven_id;
+      role = "member";
+    } else {
+      const { data: existingMembership, error: membershipErr } = await admin
+        .from("haven_members")
+        .select("haven_id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (membershipErr) {
+        return NextResponse.json({ error: membershipErr.message }, { status: 500 });
+      }
+
+      if (existingMembership?.haven_id) {
+        havenId = existingMembership.haven_id;
+      } else {
+        const { data: haven, error: havenErr } = await admin
+          .from("havens")
+          .insert({ created_by: user.id })
+          .select("id")
+          .single();
+        if (havenErr || !haven?.id) {
+          return NextResponse.json(
+            { error: havenErr?.message || "Could not create Haven." },
+            { status: 500 }
+          );
+        }
+        havenId = haven.id;
+        const { error: ownerErr } = await admin.from("haven_members").insert({
+          haven_id: havenId,
+          user_id: user.id,
+          role: "owner",
+        });
+        if (ownerErr) {
+          return NextResponse.json({ error: ownerErr.message }, { status: 500 });
+        }
+      }
+    }
+
+    const { data, error } = await admin
       .from("user_nfc_rings")
       .insert({
         user_id: user.id,
+        haven_id: havenId,
         nfc_uid_hash: uidHash,
         nickname,
         bound_at: new Date().toISOString(),
         is_active: true,
       })
-      .select("id, nickname, bound_at, is_active")
+      .select("id, user_id, haven_id, nickname, bound_at, last_used_at, is_active")
       .single();
 
     if (error) {
@@ -160,7 +290,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "This ring was linked in another tab or account. Refresh and try again, or unlink it from the other account first.",
+              "This ring was linked in another tab or account. Activated rings cannot be transferred.",
             code: "BIND_CONFLICT",
           },
           { status: 409 }
@@ -169,16 +299,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const plusTrial = await activatePlusTrialForUser(supabase, user.id).catch(
-      () => null
-    );
+    const { error: mirrorErr } = await admin.from("rings").upsert({
+      id: data.id,
+      haven_id: havenId,
+      owner_id: user.id,
+      status: "active",
+      token_hash: uidHash,
+      claimed_at: data.bound_at,
+    });
+    if (mirrorErr) {
+      return NextResponse.json({ error: mirrorErr.message }, { status: 500 });
+    }
+
+    const plusTrial = await activatePlusTrialForUser(admin, user.id).catch(() => null);
 
     return NextResponse.json({
       success: true,
       ringId: data.id,
+      havenId,
+      role,
       ring: data,
       message:
-        "Ring successfully linked! You can now use it to seal memories.",
+        role === "member"
+          ? "Your ring is linked to your shared Haven."
+          : "Ring successfully linked. Invite your partner to link their own ring.",
       plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
       plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
       subscription: plusTrial,

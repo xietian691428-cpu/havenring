@@ -3,6 +3,8 @@
  * Run: npx tsx scripts/verify-flow-contracts.ts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { hasSdmSearch, readNfcIntent } from "../lib/nfc-intent";
 import {
   isPrimarySealWaitPage,
@@ -32,6 +34,10 @@ function check(label: string, fn: () => void) {
     console.error(`✗ ${label}`);
     throw error;
   }
+}
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
 }
 
 check("SDM picc_data + cmac detected", () => {
@@ -85,6 +91,52 @@ check("ring pair limit is 2 everywhere (not legacy 5-ring family)", () => {
   assert.equal(PLUS_RING_LIMIT, 2);
   assert.equal(MAX_RING_QUANTITY, 2);
   assert.equal(MAX_BOUND_RINGS, 2);
+});
+
+check("dual-account Haven requires invite for second ring", () => {
+  const bindRoute = readRepoFile("app/api/nfc/bind/route.ts");
+  assert.match(bindRoute, /invite_code/);
+  assert.match(bindRoute, /INVITE_REQUIRES_SEPARATE_ACCOUNT/);
+  assert.match(bindRoute, /Each partner account can link one active ring/);
+});
+
+check("ring-only login cannot bootstrap partner account", () => {
+  const nfcLogin = readRepoFile("app/api/auth/nfc-login/route.ts");
+  assert.match(nfcLogin, /nfc_login_disabled_for_shared_haven/);
+  assert.doesNotMatch(nfcLogin, /signSupabaseAccessJwt/);
+});
+
+check("dual-account migration enforces Haven membership and non-transferability", () => {
+  const migration = readRepoFile("supabase/migrations/0017_dual_account_haven_pair.sql");
+  assert.match(migration, /user_nfc_rings_haven_user_active_uniq/);
+  assert.match(migration, /haven_ring_limit_reached/);
+  assert.match(migration, /ring_binding_is_non_transferable/);
+  assert.match(migration, /issue_partner_invite/);
+  assert.match(migration, /interval '24 hours'/);
+  assert.match(migration, /haven_member_keys/);
+  assert.match(migration, /legacy_single_account_extra_ring/);
+});
+
+check("invite revoke and shared key flows are wired", () => {
+  const inviteRoute = readRepoFile("app/api/haven/invite/route.ts");
+  const bindClient = readRepoFile("app/bind-ring/bind-ring-client.tsx");
+  const ringsPage = readRepoFile("src/views/RingsPage.js");
+  const keyService = readRepoFile("src/services/havenKeyService.js");
+  assert.match(inviteRoute, /24 \* 60 \* 60 \* 1000/);
+  assert.match(inviteRoute, /export async function DELETE/);
+  assert.match(ringsPage, /createInviteKeyPackage/);
+  assert.match(ringsPage, /handleRevokeInvite/);
+  assert.match(bindClient, /importHavenKeyFromInvitePackage/);
+  assert.match(bindClient, /uploadWrappedHavenKey/);
+  assert.match(keyService, /RSA-OAEP/);
+});
+
+check("daily access routes by Haven membership", () => {
+  const resolveRoute = readRepoFile("app/api/rings/sdm/resolve/route.ts");
+  const startClient = readRepoFile("app/start/StartClient.tsx");
+  assert.match(resolveRoute, /currentUserIsHavenMember/);
+  assert.match(startClient, /isDailyMember/);
+  assert.doesNotMatch(startClient, /isDailySelfOwner/);
 });
 
 console.log("\nAll flow contract checks passed.");

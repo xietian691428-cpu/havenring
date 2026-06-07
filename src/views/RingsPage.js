@@ -19,6 +19,11 @@ import {
 } from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { RingReadyBadge } from "../components/RingReadyBadge";
+import {
+  createInviteKeyPackage,
+  encodeInviteKeyPackage,
+  uploadWrappedHavenKey,
+} from "../services/havenKeyService";
 
 export function RingsPage({
   locale = "en",
@@ -46,6 +51,11 @@ export function RingsPage({
   const [verifyError, setVerifyError] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState(null);
   const [revokePrepOpen, setRevokePrepOpen] = useState(false);
+  const [havens, setHavens] = useState([]);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteError, setInviteError] = useState("");
   /** When user has rings: `null` = collapsed by default; `true` = expanded. Ignored when `rings.length === 0`. */
   const [howExplicit, setHowExplicit] = useState(null);
 
@@ -60,9 +70,26 @@ export function RingsPage({
         cloudRingId: ring.cloudRingId || c?.id || null,
         cloudBoundAt: c?.bound_at || ring.cloudBoundAt || null,
         cloudLastUsedAt: c?.last_used_at || ring.cloudLastUsedAt || null,
+        havenId: c?.haven_id || ring.havenId || null,
+        ownedByYou: c?.ownedByYou ?? true,
         nickname: c?.nickname || ring.label,
       };
     });
+    for (const c of cloud) {
+      if (!c?.id || rows.some((row) => row.cloudRingId === c.id)) continue;
+      rows.push({
+        uidKey: c.nfc_uid_hash || c.id,
+        cloudRingId: c.id,
+        havenId: c.haven_id || null,
+        cloudBoundAt: c.bound_at || null,
+        cloudLastUsedAt: c.last_used_at || null,
+        nickname: c.nickname || (c.ownedByYou ? "Your ring" : "Partner ring"),
+        label: c.nickname || (c.ownedByYou ? "Your ring" : "Partner ring"),
+        colorKey: c.ownedByYou ? "gold" : "rose",
+        icon: "ring",
+        ownedByYou: Boolean(c.ownedByYou),
+      });
+    }
     return rows.sort((a, b) => {
       const da = Date.parse(a.cloudBoundAt || "") || a.createdAt || 0;
       const db = Date.parse(b.cloudBoundAt || "") || b.createdAt || 0;
@@ -95,6 +122,7 @@ export function RingsPage({
       if (!session?.access_token) {
         setCloudRings([]);
         setMemoryCountByRingId({});
+        setHavens([]);
         return;
       }
 
@@ -110,6 +138,7 @@ export function RingsPage({
       }
       const cloudRows = Array.isArray(listPayload.rings) ? listPayload.rings : [];
       setCloudRings(cloudRows);
+      setHavens(Array.isArray(listPayload.havens) ? listPayload.havens : []);
 
       const localNow = getBoundRings();
       for (const ring of localNow) {
@@ -237,9 +266,96 @@ export function RingsPage({
     setLocalRings(getBoundRings());
   }
 
+  async function handleInvitePartner() {
+    setInviteBusy(true);
+    setInviteError("");
+    setInviteLink("");
+    try {
+      const sb = getSupabaseBrowserClient();
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (!session?.access_token) {
+        setInviteError(t.cloudSignInRequired);
+        return;
+      }
+      const havenId = rings.find((ring) => ring.havenId)?.havenId || havens[0]?.haven_id || "";
+      if (havenId) {
+        await uploadWrappedHavenKey({
+          accessToken: session.access_token,
+          havenId,
+        });
+      }
+      const res = await fetch("/api/haven/invite", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ haven_id: havenId || undefined }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInviteError(payload.error || "Could not create invite.");
+        return;
+      }
+      const keyPackage = await createInviteKeyPackage(payload.havenId, payload.inviteCode);
+      const url = new URL("/bind-ring", window.location.origin);
+      url.searchParams.set("invite", payload.inviteCode);
+      url.hash = `key=${encodeURIComponent(encodeInviteKeyPackage(keyPackage))}`;
+      setInviteLink(url.toString());
+      setInviteCode(payload.inviteCode);
+      try {
+        await navigator.clipboard?.writeText(url.toString());
+      } catch {
+        // Copy support is optional; the link is still shown.
+      }
+    } catch {
+      setInviteError("Could not create invite.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function handleRevokeInvite() {
+    if (!inviteCode) return;
+    setInviteBusy(true);
+    setInviteError("");
+    try {
+      const sb = getSupabaseBrowserClient();
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      if (!session?.access_token) {
+        setInviteError(t.cloudSignInRequired);
+        return;
+      }
+      const res = await fetch("/api/haven/invite", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ invite_code: inviteCode }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInviteError(payload.error || "Could not revoke invite.");
+        return;
+      }
+      setInviteCode("");
+      setInviteLink("");
+    } catch {
+      setInviteError("Could not revoke invite.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   const ringLimitReached = !canUseFeature(userEntitlements, "expand_ring_slots", {
     currentRingCount: rings.length,
   });
+  const canInvitePartner = rings.length === 1 && !ringLimitReached;
 
   const showHowDetail = rings.length === 0 || (!loading && howExplicit === true);
 
@@ -260,11 +376,11 @@ export function RingsPage({
           </div>
           <button
             type="button"
-            onClick={onOpenRingSetup}
+            onClick={canInvitePartner ? handleInvitePartner : onOpenRingSetup}
             style={ringLimitReached ? styles.secondaryBtn : styles.headerAddBtn}
             disabled={ringLimitReached}
           >
-            {t.addRingHeaderCta || t.openSetup}
+            {canInvitePartner ? t.invitePartnerCta || "Invite partner" : t.addRingHeaderCta || t.openSetup}
           </button>
         </header>
 
@@ -370,24 +486,31 @@ export function RingsPage({
                   <p style={styles.ringMeta}>
                     {t.linkedMemories}: {memoryCountByRingId[ring.cloudRingId] || 0}
                   </p>
+                  <p style={styles.ringMeta}>
+                    {ring.ownedByYou ? t.yourRingLabel || "Your ring" : t.partnerRingLabel || "Partner ring"}
+                  </p>
                 </div>
                 {ring.cloudRingId ? (
                   <div style={styles.ringActions}>
-                    <button
-                      type="button"
-                      style={styles.secondaryBtn}
-                      onClick={() => handleRenameRing(ring)}
-                    >
-                      {t.rename || "Rename"}
-                    </button>
-                    <button
-                      type="button"
-                      style={styles.revokeBtn}
-                      onClick={() => askRevoke(ring)}
-                      disabled={busyCloudRingId === ring.cloudRingId}
-                    >
-                      {busyCloudRingId === ring.cloudRingId ? t.revoking : t.revoke}
-                    </button>
+                    {ring.ownedByYou ? (
+                      <>
+                        <button
+                          type="button"
+                          style={styles.secondaryBtn}
+                          onClick={() => handleRenameRing(ring)}
+                        >
+                          {t.rename || "Rename"}
+                        </button>
+                        <button
+                          type="button"
+                          style={styles.revokeBtn}
+                          onClick={() => askRevoke(ring)}
+                          disabled={busyCloudRingId === ring.cloudRingId}
+                        >
+                          {busyCloudRingId === ring.cloudRingId ? t.revoking : t.retire || t.revoke}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -399,12 +522,24 @@ export function RingsPage({
           <div style={styles.actions}>
             <button
               type="button"
-              onClick={onOpenRingSetup}
+              onClick={canInvitePartner ? handleInvitePartner : onOpenRingSetup}
               style={styles.secondaryBtn}
               disabled={ringLimitReached}
             >
-              {t.addAnotherRingSecondary || t.openSetup}
+              {canInvitePartner ? t.invitePartnerCta || "Invite partner" : t.addAnotherRingSecondary || t.openSetup}
             </button>
+            {inviteBusy ? <p style={styles.note}>{t.inviteCreating || "Creating invite..."}</p> : null}
+            {inviteLink ? (
+              <>
+                <p style={styles.note}>
+                  {t.inviteReady || "Invite copied. Send this link:"} {inviteLink}
+                </p>
+                <button type="button" onClick={() => void handleRevokeInvite()} style={styles.ghostBtn}>
+                  {t.revokeInvite || "Revoke invite"}
+                </button>
+              </>
+            ) : null}
+            {inviteError ? <p style={styles.error}>{inviteError}</p> : null}
             {ringLimitReached ? (
               <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
             ) : null}

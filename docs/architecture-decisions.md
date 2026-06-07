@@ -77,12 +77,13 @@ supabase/migrations/    # DB schema (rings, user_nfc_rings, seal_tickets, entitl
 
 1. User signs in with **Apple** or **Google** via **Supabase Auth** (`lib/supabase/client.ts`, `SessionProvider`).
 2. Authenticated API calls use **`Authorization: Bearer <access_token>`**.
-3. Optional **NFC long-session** path: `POST /api/auth/nfc-login` issues a JWT-style access token when `SUPABASE_JWT_SECRET` is configured (`lib/supabase-access-jwt.ts`). This is **not** a refresh-token model; security notes live in `docs/technical-security-checklist.md`.
+3. `POST /api/auth/nfc-login` is disabled for shared Havens. A ring tap must not sign one partner into another partner's account.
 4. **Device trust** (password / recovery codes) gates sensitive local operations (`deviceTrustService.js`).
 
 ### 3.2 Ring binding (hardware trust in the account)
 
-- **Pair limit:** Each Haven account supports **at most 2 active NFC rings** (one private pair — personal + couple positioning). **Free and Plus share the same cap** (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` in `lib/subscription.ts`). Enforced in **`POST /api/nfc/bind`** via `subscription.ringLimit`; PWA local registry mirrors this in `ringRegistryService.js` (`MAX_BOUND_RINGS`). Shop checkout uses `MAX_RING_QUANTITY` in `lib/shop/catalog.ts`. **Do not** restore legacy “up to 5 rings” or family-sharing positioning.
+- **Pair limit:** Each private Haven pair supports **at most 2 active NFC rings** (usually one ring per partner account). **Free and Plus share the same cap** (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` in `lib/subscription.ts`). Enforced in **`POST /api/nfc/bind`** via Haven membership: first ring creates a one-person Haven; second ring requires a 24-hour partner invite and a separate authenticated account. PWA local registry mirrors the cap in `ringRegistryService.js` (`MAX_BOUND_RINGS`). Shop checkout uses `MAX_RING_QUANTITY` in `lib/shop/catalog.ts`. **Do not** restore legacy “up to 5 rings”, family-sharing positioning, or shared-login partner access.
+- **Dual-account privacy model:** Couples do **not** share Apple/Google login credentials. A shared Haven is authorized through `havens` + `haven_members`; ring credentials are non-transferable in normal flows and can only be retired for loss/security incidents.
 - **Dynamic NFC** payloads are verified server-side: **`POST /api/rings/sdm/resolve`** (canonical). Legacy **`POST /api/sdm/verify`** forwards to the same handler.
 - Replay protection: **`user_nfc_rings.last_sdm_counter`** must **strictly increase** for bound rings.
 - Binding: **`POST /api/nfc/bind`** creates/updates **`user_nfc_rings`** and can activate **Plus trial** (`activatePlusTrialForUser`).

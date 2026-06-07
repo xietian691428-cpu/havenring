@@ -1,14 +1,17 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { API_RATE_POLICIES, enforceIpRateLimit } from "@/lib/api-rate-limit";
-import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import { hashNfcUidAliases, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import {
   hashSealTicketSecret,
   parseSealDraftIds,
   sealTicketExpiryMs,
   SEAL_CONFIRMATION_CONTEXT,
 } from "@/lib/seal-shared";
-import { getSupabaseAdminClient, requireAuthenticatedUser } from "@/lib/supabase/server";
+import {
+  getOptionalAuthenticatedUser,
+  getSupabaseAdminClient,
+} from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -32,9 +35,11 @@ type SdmVerification = {
 type BoundRing = {
   id: string;
   user_id: string;
+  haven_id: string | null;
   last_used_at: string | null;
   is_active: boolean;
   last_sdm_counter: number | null;
+  last_sdm_verified_at: string | null;
 };
 
 function cleanParam(input: unknown): string {
@@ -129,6 +134,17 @@ async function markRingVerified(ring: BoundRing, counter: number | null) {
     throw new Error("RING_UPDATE_FAILED");
   }
   if (counter !== null && (!data || data.length === 0)) {
+    const verifiedAtMs = Date.parse(String(ring.last_sdm_verified_at || ""));
+    const duplicateWindowMs = 15_000;
+    if (
+      ring.last_sdm_counter !== null &&
+      ring.last_sdm_counter === counter &&
+      Number.isFinite(verifiedAtMs) &&
+      Date.now() - verifiedAtMs <= duplicateWindowMs
+    ) {
+      // Idempotent duplicate request from the same recent NFC tap.
+      return;
+    }
     throw new Error("SDM_REPLAY_DETECTED");
   }
 }
@@ -136,6 +152,8 @@ async function markRingVerified(ring: BoundRing, counter: number | null) {
 async function issueSealTicket(opts: {
   userId: string;
   uidHash: string;
+  ringId: string;
+  havenId: string | null;
   draftIds: string[];
 }) {
   if (!opts.draftIds.length) return null;
@@ -145,6 +163,8 @@ async function issueSealTicket(opts: {
   const { error } = await admin.from("seal_tickets" as never).insert({
     user_id: opts.userId,
     ring_uid_hash: opts.uidHash,
+    ring_id: opts.ringId,
+    haven_id: opts.havenId,
     draft_ids: opts.draftIds,
     ticket_hash: hashSealTicketSecret(ticket),
     expires_at: expiresAt,
@@ -166,13 +186,22 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ResolveBody;
     const verified = await verifySdmPayload(body);
-    const uidHash = hashNfcUid(verified.uid);
+    const uidHashCandidates = hashNfcUidAliases(verified.uid);
+    const uidHash = uidHashCandidates[0] || "";
+    if (!uidHash) {
+      return NextResponse.json(
+        { valid: false, error: "Invalid ring uid.", code: "INVALID_RING_UID" },
+        { status: 400 }
+      );
+    }
     const admin = getSupabaseAdminClient();
     const { data: ring, error } = await admin
       .from("user_nfc_rings")
-      .select("id, user_id, last_used_at, is_active, last_sdm_counter")
-      .eq("nfc_uid_hash", uidHash)
+      .select("id, user_id, haven_id, last_used_at, is_active, last_sdm_counter, last_sdm_verified_at")
+      .in("nfc_uid_hash", uidHashCandidates)
       .eq("is_active", true)
+      .order("bound_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -182,32 +211,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (
-      ring &&
-      verified.counter !== null &&
-      ring.last_sdm_counter !== null &&
-      verified.counter <= ring.last_sdm_counter
-    ) {
-      return NextResponse.json(
-        {
-          valid: false,
-          error: "This ring touch was already used.",
-          code: "SDM_REPLAY_DETECTED",
-        },
-        { status: 409 }
-      );
-    }
     const context = cleanParam(body.context);
     let scene: SdmScene = ring ? "daily_access" : "new_ring_binding";
     let currentUserId = "";
+    let currentUserIsHavenMember = false;
 
-    if (ring && context === SEAL_CONFIRMATION_CONTEXT) {
-      try {
-        const user = await requireAuthenticatedUser(req);
-        currentUserId = user.id;
-        scene = user.id === ring.user_id ? "seal_confirmation" : "daily_access";
-      } catch {
-        scene = "daily_access";
+    if (ring) {
+      const user = await getOptionalAuthenticatedUser(req);
+      currentUserId = user?.id || "";
+      if (user) {
+        if (ring.haven_id) {
+          const { data: member } = await admin
+            .from("haven_members")
+            .select("id")
+            .eq("haven_id", ring.haven_id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          currentUserIsHavenMember = Boolean(member);
+        } else {
+          currentUserIsHavenMember = user.id === ring.user_id;
+        }
+      }
+      if (context === SEAL_CONFIRMATION_CONTEXT) {
+        if (!currentUserId) {
+          return NextResponse.json(
+            {
+              valid: false,
+              error: "Sign in required to seal.",
+              code: "SEAL_AUTH_REQUIRED",
+            },
+            { status: 401 }
+          );
+        }
+        if (!currentUserIsHavenMember) {
+          return NextResponse.json(
+            {
+              valid: false,
+              error: "This ring belongs to another Haven.",
+              code: "NOT_HAVEN_MEMBER",
+            },
+            { status: 403 }
+          );
+        }
+        scene = "seal_confirmation";
       }
     }
 
@@ -236,6 +282,8 @@ export async function POST(req: NextRequest) {
         sealTicket = await issueSealTicket({
           userId: currentUserId,
           uidHash,
+          ringId: ring.id,
+          havenId: ring.haven_id,
           draftIds: parseSealDraftIds(body.draft_ids),
         });
       } catch (error) {
@@ -257,8 +305,10 @@ export async function POST(req: NextRequest) {
       counter: verified.counter,
       scene,
       ringId: ring?.id ?? null,
+      havenId: ring?.haven_id ?? null,
       ownerId: ring?.user_id ?? null,
       currentUserId: currentUserId || null,
+      currentUserIsHavenMember,
       sealTicket: sealTicket?.ticket ?? null,
       sealTicketExpiresAt: sealTicket?.expiresAt ?? null,
     });

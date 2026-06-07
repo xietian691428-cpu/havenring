@@ -7,7 +7,8 @@ import {
 } from "@/lib/supabase/server";
 
 /**
- * POST /api/nfc/revoke-all — deactivate every NFC ring binding for the user.
+ * POST /api/nfc/revoke-all — retire every NFC ring binding for the user.
+ * Retired rings are not released for transfer to another account/Haven.
  * Same contract as /api/nfc/revoke: requires secondary verification header
  * and explicit privacy acknowledgment.
  */
@@ -49,7 +50,11 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("user_nfc_rings")
-      .update({ is_active: false })
+      .update({
+        is_active: false,
+        retired_at: new Date().toISOString(),
+        retired_reason: "user_retired_all",
+      })
       .eq("user_id", user.id)
       .eq("is_active", true)
       .select("id");

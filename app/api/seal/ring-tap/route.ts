@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { hashNfcUid, normalizeNfcUidInput } from "@/lib/nfc-uid";
+import { hashNfcUidAliases, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import {
   hashSealTicketSecret,
   parseSealDraftIds,
@@ -62,14 +62,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const uidHash = hashNfcUid(normalizedUid);
+    const uidHashCandidates = hashNfcUidAliases(rawUid);
+    const uidHash = uidHashCandidates[0] || "";
+    if (!uidHash) {
+      return NextResponse.json(
+        { error: "Invalid nfc_uid.", error_code: "INVALID_NFC_UID" },
+        { status: 400 }
+      );
+    }
     const admin = getSupabaseAdminClient();
     const { data: boundRing, error: boundErr } = await admin
       .from("user_nfc_rings")
-      .select("id, nfc_uid_hash")
-      .eq("user_id", user.id)
-      .eq("nfc_uid_hash", uidHash)
+      .select("id, haven_id, nfc_uid_hash")
+      .in("nfc_uid_hash", uidHashCandidates)
       .eq("is_active", true)
+      .order("bound_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (boundErr) {
       await recordSealTelemetry(admin, {
@@ -96,11 +104,31 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json(
         {
-          error: "This ring is not linked to your account.",
+          error: "This ring is not linked to your Haven.",
           error_code: "RING_NOT_LINKED",
         },
         { status: 404 }
       );
+    }
+    if (boundRing.haven_id) {
+      const { data: membership, error: membershipErr } = await admin
+        .from("haven_members")
+        .select("id")
+        .eq("haven_id", boundRing.haven_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (membershipErr) {
+        return NextResponse.json(
+          { error: "Could not verify Haven membership.", error_code: "HAVEN_VERIFY_FAILED" },
+          { status: 500 }
+        );
+      }
+      if (!membership) {
+        return NextResponse.json(
+          { error: "This ring belongs to another Haven.", error_code: "NOT_HAVEN_MEMBER" },
+          { status: 403 }
+        );
+      }
     }
 
     const ticket = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
@@ -109,6 +137,8 @@ export async function POST(req: NextRequest) {
     const { error: insertErr } = await admin.from("seal_tickets" as never).insert({
       user_id: user.id,
       ring_uid_hash: uidHash,
+      ring_id: boundRing.id,
+      haven_id: boundRing.haven_id,
       draft_ids: draftIds,
       ticket_hash: ticketHash,
       expires_at: expiresAt,

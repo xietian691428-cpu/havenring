@@ -52,10 +52,10 @@ export function LandingPricing() {
           </h2>
           <ul className="mt-8 flex flex-col gap-5 text-[14px] leading-[1.75] text-white/52">
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              One Haven can hold up to two equal rings for a private pair.
+              One Haven can hold up to two equal rings for a private pair, one per partner account.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              Either ring can add new memories; old sealed memories remain immutable.
+              Each partner signs in separately; either ring can add new memories once invited.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
               Optional cloud backup with your keys still feeling like yours — not a billboard lease.

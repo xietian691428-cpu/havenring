@@ -22,8 +22,8 @@
 | `POST /api/rings/sdm/resolve` | Verifies dynamic NFC ring SDM payload (`uid`, `ctr`, `cmac`, `picc`) through `sdm-backend`; returns `new_ring_binding`, `daily_access`, or `seal_confirmation`. |
 | `POST /api/nfc/bind` | Auth user; requires `X-Haven-Secondary-Verified: 1` and `privacy_acknowledged: true`; max 2 active rings for one private pair. |
 | `GET /api/nfc/list` | Lists current user’s bindings. |
-| `POST /api/nfc/revoke` | Sets `is_active = false` (requires same secondary header). |
-| `POST /api/auth/nfc-login` | Looks up active hash; returns JWT **if** `SUPABASE_JWT_SECRET` is set (Dashboard → API → JWT Secret). |
+| `POST /api/nfc/revoke` | Retires the credential with `is_active = false`; the physical ring is not released for transfer. |
+| `POST /api/auth/nfc-login` | Disabled for shared Havens; ring taps must not log one partner into another partner's account. |
 
 ## Integrity
 

@@ -5,6 +5,7 @@ import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
+import { getRingWithMembership } from "@/lib/haven-membership";
 
 interface RouteParams {
   params: Promise<{ ringId: string }>;
@@ -52,6 +53,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const tokenHash = hashToken(token);
 
     const admin = getSupabaseAdminClient();
+    const { ring, error: ringErr } = await getRingWithMembership(admin, ringId, user.id);
+    if (ringErr) {
+      return NextResponse.json({ error: ringErr.message }, { status: 500 });
+    }
+    if (!ring) {
+      return NextResponse.json(
+        { error: "Ring not found or not available to this Haven member." },
+        { status: 404 }
+      );
+    }
     const { data, error } = await admin
       .from("rings")
       .update({
@@ -59,7 +70,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         status: "active",
       })
       .eq("id", ringId)
-      .eq("owner_id", user.id)
       .eq("status", "active")
       .select("id")
       .limit(1);

@@ -40,6 +40,7 @@ export type MomentRow = {
 export type UserNfcRingRow = {
   id: string;
   user_id: string;
+  haven_id: string | null;
   nfc_uid_hash: string;
   nickname: string;
   bound_at: string;
@@ -49,6 +50,8 @@ export type UserNfcRingRow = {
   sdm_enabled: boolean;
   last_sdm_counter: number | null;
   last_sdm_verified_at: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
 };
 
 export type UserEntitlementPlan = "free" | "plus";
@@ -107,6 +110,15 @@ export type RingEventRow = {
   action: RingEventAction;
   metadata: Record<string, unknown> | null;
   created_at: string;
+};
+
+export type HavenMemberKeyRow = {
+  haven_id: string;
+  user_id: string;
+  public_key_jwk: Record<string, unknown>;
+  wrapped_haven_key: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -199,6 +211,27 @@ export type Database = {
           },
         ];
       };
+      haven_member_keys: {
+        Row: HavenMemberKeyRow;
+        Insert: {
+          haven_id: string;
+          user_id: string;
+          public_key_jwk: Record<string, unknown>;
+          wrapped_haven_key: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<HavenMemberKeyRow>;
+        Relationships: [
+          {
+            foreignKeyName: "haven_member_keys_haven_id_fkey";
+            columns: ["haven_id"];
+            isOneToOne: false;
+            referencedRelation: "havens";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       moments: {
         Row: MomentRow;
         Insert: {
@@ -240,6 +273,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          haven_id?: string | null;
           nfc_uid_hash: string;
           nickname?: string;
           bound_at?: string;
@@ -249,6 +283,8 @@ export type Database = {
           sdm_enabled?: boolean;
           last_sdm_counter?: number | null;
           last_sdm_verified_at?: string | null;
+          retired_at?: string | null;
+          retired_reason?: string | null;
         };
         Update: Partial<UserNfcRingRow>;
         Relationships: [];
@@ -329,6 +365,10 @@ export type Database = {
       link_ring_by_invite: {
         Args: { p_token: string; p_invite_code: string };
         Returns: { haven_id: string; ring_id: string }[];
+      };
+      issue_partner_invite: {
+        Args: { p_haven_id: string };
+        Returns: { invite_code: string; expires_at: string }[];
       };
     };
     Enums: {

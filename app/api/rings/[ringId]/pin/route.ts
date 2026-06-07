@@ -4,6 +4,7 @@ import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
+import { getRingWithMembership } from "@/lib/haven-membership";
 
 interface RouteParams {
   params: Promise<{ ringId: string }>;
@@ -34,32 +35,32 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const momentId = typeof body.momentId === "string" ? body.momentId.trim() : null;
 
     const admin = getSupabaseAdminClient();
-    const { data: ownedRing, error: ownedRingError } = await admin
-      .from("rings")
-      .select("id")
-      .eq("id", ringId)
-      .eq("owner_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
+    const { ring: ownedRing, error: ownedRingError } = await getRingWithMembership(
+      admin,
+      ringId,
+      user.id
+    );
 
     if (ownedRingError) {
       return NextResponse.json({ error: ownedRingError.message }, { status: 500 });
     }
     if (!ownedRing) {
       return NextResponse.json(
-        { error: "Ring not found or not owned by user." },
+        { error: "Ring not found or not available to this Haven member." },
         { status: 404 }
       );
     }
 
     if (momentId) {
-      const { data: moment, error: momentError } = await admin
+      let momentQuery = admin
         .from("moments")
         .select("id")
         .eq("id", momentId)
-        .eq("ring_id", ringId)
-        .eq("is_sealed", true)
-        .maybeSingle();
+        .eq("is_sealed", true);
+      momentQuery = ownedRing.haven_id
+        ? momentQuery.eq("haven_id", ownedRing.haven_id)
+        : momentQuery.eq("ring_id", ringId);
+      const { data: moment, error: momentError } = await momentQuery.maybeSingle();
 
       if (momentError) {
         return NextResponse.json({ error: momentError.message }, { status: 500 });
@@ -76,7 +77,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       .from("rings")
       .update({ pinned_moment_id: momentId ?? null })
       .eq("id", ringId)
-      .eq("owner_id", user.id)
       .eq("status", "active");
 
     if (updateError) {

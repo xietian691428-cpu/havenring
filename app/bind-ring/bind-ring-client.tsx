@@ -17,6 +17,14 @@ import {
   verifyAndTrustCurrentDevice,
 } from "@/src/services/deviceTrustService";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
+import {
+  clearPendingPartnerInvite,
+  importHavenKeyFromInvitePackage,
+  readInviteKeyPackageFromLocation,
+  readPendingInviteKeyPackage,
+  savePendingPartnerInvite,
+  uploadWrappedHavenKey,
+} from "@/src/services/havenKeyService";
 
 type AuthState = "checking" | "signed_out" | "ready";
 type BindState = "idle" | "binding" | "success" | "error";
@@ -25,8 +33,11 @@ type BindResponse = {
   success?: boolean;
   alreadyLinkedToYou?: boolean;
   message?: string;
+  havenId?: string | null;
+  role?: "owner" | "member";
   ring?: {
     id?: string;
+    haven_id?: string | null;
     bound_at?: string | null;
     last_used_at?: string | null;
   };
@@ -44,21 +55,32 @@ type BindResponse = {
   code?: string;
 };
 
-type UidLinkState = "idle" | "checking" | "unlinked" | "yours" | "other" | "linked_unknown" | "error";
+type UidLinkState =
+  | "idle"
+  | "checking"
+  | "unlinked"
+  | "yours"
+  | "other"
+  | "retired"
+  | "linked_unknown"
+  | "error";
 
 interface BindRingClientProps {
   initialUid: string;
+  initialInviteCode?: string;
 }
 
-function redirectUrlFor(uid: string) {
+function redirectUrlFor(uid: string, inviteCode = "") {
   const params = new URLSearchParams();
   params.set("uid", uid);
+  if (inviteCode) params.set("invite", inviteCode);
   const origin = canonicalAuthOriginFromLocation();
   return `${origin}/bind-ring?${params.toString()}`;
 }
 
-export function BindRingClient({ initialUid }: BindRingClientProps) {
+export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingClientProps) {
   const uid = useMemo(() => normalizeNfcUidInput(initialUid), [initialUid]);
+  const inviteCode = useMemo(() => String(initialInviteCode || "").trim(), [initialInviteCode]);
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [session, setSession] = useState<Session | null>(null);
   const [busyProvider, setBusyProvider] = useState<"apple" | "google" | "">("");
@@ -68,6 +90,19 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
   const [bindState, setBindState] = useState<BindState>("idle");
   const [message, setMessage] = useState("");
   const [uidLink, setUidLink] = useState<UidLinkState>("idle");
+  const [inviteKeyPackage, setInviteKeyPackage] = useState("");
+
+  useEffect(() => {
+    if (!inviteCode || typeof window === "undefined") return;
+    const fromHash = readInviteKeyPackageFromLocation();
+    const fromStorage = readPendingInviteKeyPackage();
+    const encodedPackage = fromHash || fromStorage;
+    savePendingPartnerInvite(inviteCode, encodedPackage);
+    setInviteKeyPackage(encodedPackage);
+    if (fromHash) {
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    }
+  }, [inviteCode]);
 
   useEffect(() => {
     let active = true;
@@ -120,7 +155,12 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
           linked?: boolean;
           ownedByYou?: boolean;
           linkedToOtherAccount?: boolean;
+          nonTransferable?: boolean;
         };
+        if (j.nonTransferable) {
+          setUidLink("retired");
+          return;
+        }
         if (!j.linked) {
           setUidLink("unlinked");
           return;
@@ -149,7 +189,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: redirectUrlFor(uid) },
+        options: { redirectTo: redirectUrlFor(uid, inviteCode) },
       });
       if (error) {
         setMessage("登录失败");
@@ -169,6 +209,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         colorKey: "gold",
         icon: "ring",
         cloudRingId: payload.ring?.id || undefined,
+        havenId: payload.havenId || payload.ring?.haven_id || undefined,
         cloudBoundAt: payload.ring?.bound_at || undefined,
         cloudLastUsedAt: payload.ring?.last_used_at || undefined,
       });
@@ -184,6 +225,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         colorKey: "gold",
         icon: "ring",
         cloudRingId: payload.ring?.id || undefined,
+        havenId: payload.havenId || payload.ring?.haven_id || undefined,
         cloudBoundAt: payload.ring?.bound_at || undefined,
         cloudLastUsedAt: payload.ring?.last_used_at || undefined,
       });
@@ -214,6 +256,14 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
     setMessage("");
     try {
       await verifyAndTrustCurrentDevice({ password, recoveryCode });
+      const pendingKeyPackage = inviteCode
+        ? inviteKeyPackage || readPendingInviteKeyPackage()
+        : "";
+      if (inviteCode && !pendingKeyPackage) {
+        setBindState("error");
+        setMessage("Invite key missing. Ask your partner to create a fresh invite.");
+        return;
+      }
 
       const response = await fetch("/api/nfc/bind", {
         method: "POST",
@@ -225,6 +275,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         body: JSON.stringify({
           nfc_uid: uid,
           nickname: nickname.trim() || "Ring",
+          invite_code: inviteCode || undefined,
           privacy_acknowledged: true,
         }),
       });
@@ -242,10 +293,24 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         cacheSubscriptionStatus(payload.subscription);
       }
       await saveLocalRing(payload);
+      const havenId = payload.havenId || payload.ring?.haven_id || "";
+      if (havenId && inviteCode && pendingKeyPackage) {
+        await importHavenKeyFromInvitePackage(havenId, inviteCode, pendingKeyPackage);
+      }
+      if (havenId) {
+        await uploadWrappedHavenKey({
+          accessToken: activeSession.access_token,
+          havenId,
+        });
+      }
+      if (inviteCode) {
+        clearPendingPartnerInvite();
+      }
       setBindState("success");
       const trial = payload.plusTrialActivated ? "1" : "0";
+      const role = payload.role === "member" ? "member" : "owner";
       window.setTimeout(() => {
-        window.location.href = `/bind-success?trial=${trial}`;
+        window.location.href = `/bind-success?trial=${trial}&role=${role}`;
       }, 400);
     } catch {
       setBindState("error");
@@ -257,9 +322,13 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
     return (
       <main style={styles.page}>
         <section style={styles.card}>
-          <p style={styles.kicker}>绑定</p>
-          <h1 style={styles.title}>请重试</h1>
-          <p style={styles.body}>请重新贴戒指</p>
+          <p style={styles.kicker}>Join Haven</p>
+          <h1 style={styles.title}>{inviteCode ? "Now tap your ring" : "请重试"}</h1>
+          <p style={styles.body}>
+            {inviteCode
+            ? "Invite saved. Sign in, then tap your ring."
+              : "请重新贴戒指"}
+          </p>
           <button type="button" onClick={() => window.history.back()} style={styles.secondaryButton}>
             返回
           </button>
@@ -269,14 +338,28 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
   }
 
   const signedOut = authState === "signed_out" || !isPermanentSupabaseSession(session);
-  const blockNewBind = uidLink === "yours" || uidLink === "other" || uidLink === "checking";
+  const blockNewBind =
+    uidLink === "yours" ||
+    uidLink === "other" ||
+    uidLink === "retired" ||
+    uidLink === "checking";
 
   return (
     <main style={styles.page}>
       <section style={styles.card}>
         <p style={styles.kicker}>绑定</p>
-        <h1 style={styles.title}>绑定戒指</h1>
-        <p style={styles.body}>请确认</p>
+        <h1 style={styles.title}>{inviteCode ? "Join Haven" : "Bind Ring"}</h1>
+        <p style={styles.body}>
+          {inviteCode
+            ? "Use your own account and ring."
+            : "Bind your ring. Invite your partner later."}
+        </p>
+        {inviteCode ? (
+          <div style={styles.uidBox}>
+            <span style={styles.uidLabel}>Partner invite</span>
+            <span style={styles.uidValue}>{inviteCode}</span>
+          </div>
+        ) : null}
         <div style={styles.uidBox}>
           <span style={styles.uidLabel}>UID</span>
           <span style={styles.uidValue}>{uid}</span>
@@ -292,6 +375,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
               ...(uidLink === "unlinked" ? styles.ringStatusUnlinked : {}),
               ...(uidLink === "yours" ? styles.ringStatusYours : {}),
               ...(uidLink === "other" ? styles.ringStatusOther : {}),
+              ...(uidLink === "retired" ? styles.ringStatusOther : {}),
               ...(uidLink === "linked_unknown" ? styles.ringStatusUnknown : {}),
               ...(uidLink === "error" ? styles.ringStatusError : {}),
             }}
@@ -300,12 +384,14 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
             {uidLink === "unlinked"
               ? "可绑定"
               : uidLink === "yours"
-                ? "已绑定"
+                ? "This ring is already linked to your account."
                 : uidLink === "other"
-                  ? "戒指已绑定"
-                  : uidLink === "linked_unknown"
-                    ? "请登录"
-                    : "检查失败"}
+                  ? "This ring is already linked to another Haven and cannot be transferred."
+                  : uidLink === "retired"
+                    ? "This ring was already activated and cannot be transferred to another Haven."
+                    : uidLink === "linked_unknown"
+                      ? "请登录"
+                      : "检查失败"}
           </div>
         ) : null}
 
@@ -314,7 +400,7 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
         ) : signedOut ? (
           <div style={styles.stack}>
             <p style={styles.notice}>
-              请先登录
+              Use your own account.
             </p>
             <button
               type="button"
@@ -371,7 +457,11 @@ export function BindRingClient({ initialUid }: BindRingClientProps) {
               disabled={bindState === "binding" || blockNewBind}
               style={styles.primaryButton}
             >
-              {bindState === "binding" ? "绑定中" : "确认绑定"}
+              {bindState === "binding"
+                ? "Binding..."
+                : inviteCode
+                  ? "Join Haven and bind my ring"
+                  : "Create Haven with this ring"}
             </button>
           </div>
         )}

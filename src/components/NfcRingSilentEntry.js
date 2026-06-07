@@ -34,7 +34,14 @@ export function NfcRingSilentEntry({
       onSignedIn?.();
     } catch (e) {
       const code = e?.code || e?.message || "";
-      if (code === "nfc_login_unconfigured" || /not configured/i.test(String(e?.message))) {
+      if (code === "nfc_login_disabled_for_shared_haven") {
+        setErrorState({
+          message: t.disabled || "Ring-only sign-in is disabled.",
+          help:
+            t.helpDisabled ||
+            "Sign in with your own Apple or Google account. The ring should never sign you into a partner's account.",
+        });
+      } else if (code === "nfc_login_unconfigured" || /not configured/i.test(String(e?.message))) {
         setErrorState({
           message: t.unconfigured || "Cloud sign-in is not configured on this build.",
           help:

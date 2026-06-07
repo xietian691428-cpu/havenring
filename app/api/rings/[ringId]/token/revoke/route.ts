@@ -4,6 +4,7 @@ import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
+import { getRingWithMembership } from "@/lib/haven-membership";
 
 interface RouteParams {
   params: Promise<{ ringId: string }>;
@@ -35,12 +36,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const admin = getSupabaseAdminClient();
+    const { ring, error: ringErr } = await getRingWithMembership(admin, ringId, user.id);
+    if (ringErr) {
+      return NextResponse.json({ error: ringErr.message }, { status: 500 });
+    }
+    if (!ring) {
+      return NextResponse.json(
+        { error: "Ring not found or not available to this Haven member." },
+        { status: 404 }
+      );
+    }
 
     const { data: revokedRows, error: revokeError } = await admin
       .from("rings")
       .update({ status: "revoked" })
       .eq("id", ringId)
-      .eq("owner_id", user.id)
       .eq("status", "active")
       .select("id")
       .limit(1);
@@ -50,6 +60,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     if (revokedRows && revokedRows.length > 0) {
+      await admin
+        .from("user_nfc_rings")
+        .update({
+          is_active: false,
+          retired_at: new Date().toISOString(),
+          retired_reason: "token_revoked",
+        })
+        .eq("id", ringId);
       try {
         await admin.from("ring_events").insert({
           ring_id: revokedRows[0].id,
@@ -74,7 +92,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       .from("rings")
       .select("id")
       .eq("id", ringId)
-      .eq("owner_id", user.id)
       .eq("status", "revoked")
       .limit(1);
 

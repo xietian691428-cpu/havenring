@@ -53,6 +53,7 @@ import {
 } from "@/lib/appAuthGate";
 
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
+const PARTNER_INVITE_STORAGE_KEY = "haven.partner_invite_code.v1";
 
 function isSealNfcLaunchSearch(search: string): boolean {
   return hasSdmSearch(search);
@@ -116,7 +117,7 @@ function getSdmCardStyle(state: StartSdmStateForCopy): CSSProperties {
   if (state.kind === "ready" && state.scene === "daily_access") {
     const self = state.viewerUserId || "";
     const owner = state.ownerId || "";
-    if (self && owner && self !== owner) {
+    if (self && owner && self !== owner && !state.currentUserIsHavenMember) {
       return styles.sdmCardFailed;
     }
     return styles.sdmCardTrusted;
@@ -327,10 +328,13 @@ export default function StartClient() {
     return getSealArmedRemainingMs();
   }, [sealClockTick, showSealCountdown, sealWaitMode]);
 
-  const isDailySelfOwner =
+  const isDailyMember =
     sdmState.kind === "ready" &&
     sdmState.scene === "daily_access" &&
-    Boolean(sdmState.viewerUserId && sdmState.ownerId && sdmState.viewerUserId === sdmState.ownerId);
+    Boolean(
+      sdmState.currentUserIsHavenMember ||
+        (sdmState.viewerUserId && sdmState.ownerId && sdmState.viewerUserId === sdmState.ownerId)
+    );
 
   const sealArmed = isSealFlowArmed();
   void sealPrepRevision;
@@ -347,7 +351,7 @@ export default function StartClient() {
     !nfcSealBootstrapping &&
     sdmState.kind === "ready" &&
     sdmState.scene === "daily_access" &&
-    isDailySelfOwner;
+    isDailyMember;
 
   const showSealPrepGuide =
     nfcFlow &&
@@ -366,13 +370,13 @@ export default function StartClient() {
 
   useEffect(() => {
     if (sealWaitMode) return;
-    if (!isDailySelfOwner || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
+    if (!isDailyMember || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
       return;
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, 2000);
     return () => window.clearTimeout(t);
-  }, [sealWaitMode, isDailySelfOwner, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
+  }, [sealWaitMode, isDailyMember, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -634,13 +638,15 @@ export default function StartClient() {
           ringId: data.ringId || null,
           ownerId: data.ownerId || null,
           viewerUserId,
+          currentUserIsHavenMember: Boolean(data.currentUserIsHavenMember),
         });
         setNotice(
           scene === "new_ring_binding"
             ? "请绑定戒指"
             : scene === "seal_confirmation"
               ? "封印中"
-              : viewerUserId && data.ownerId && viewerUserId === data.ownerId
+              : data.currentUserIsHavenMember ||
+                  (viewerUserId && data.ownerId && viewerUserId === data.ownerId)
                 ? "已识别"
                 : viewerUserId && data.ownerId && viewerUserId !== data.ownerId
                   ? "戒指已绑定"
@@ -872,7 +878,10 @@ export default function StartClient() {
       if (!session?.access_token) return;
       bindRingRedirectDoneRef.current = true;
       setNotice("绑定中");
-      window.location.assign(`/bind-ring?uid=${encodeURIComponent(uid)}`);
+      const params = new URLSearchParams({ uid });
+      const inviteCode = window.localStorage.getItem(PARTNER_INVITE_STORAGE_KEY) || "";
+      if (inviteCode) params.set("invite", inviteCode);
+      window.location.assign(`/bind-ring?${params.toString()}`);
     }
 
     void supabase.auth.getSession().then(({ data }) => go(data.session ?? null));
@@ -1092,7 +1101,7 @@ export default function StartClient() {
               role={sdmState.kind === "failed" ? "alert" : "status"}
               aria-live="polite"
             >
-              {isDailySelfOwner && !showSealPrepGuide ? (
+              {isDailyMember && !showSealPrepGuide ? (
                 <p style={styles.sdmSuccessMark} aria-hidden>
                   ✓
                 </p>
@@ -1106,7 +1115,7 @@ export default function StartClient() {
                 (sdmState.kind === "ready" &&
                   (sdmState.scene === "seal_confirmation" ||
                     sdmState.scene === "new_ring_binding" ||
-                    isDailySelfOwner))) ? (
+                    isDailyMember))) ? (
                 <NfcPhoneHint platform={platform} />
               ) : null}
               {sdmCopy.placementHint && nfcFlow ? (

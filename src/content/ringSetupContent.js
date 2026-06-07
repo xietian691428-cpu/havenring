@@ -160,7 +160,7 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Ajouter une autre bague",
     doneToHaven: "Aller a mon espace souvenirs",
     limitTitle: "Limite de bagues",
-    limitBody: "Jusqu'a cinq bagues. Retirez-en une avant d'en ajouter une nouvelle.",
+    limitBody: "Deux bagues maximum par Haven, une par compte partenaire.",
   },
   es: {
     ...EN,
@@ -185,7 +185,7 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Anadir otro anillo",
     doneToHaven: "Ir a mi espacio",
     limitTitle: "Limite de anillos",
-    limitBody: "Hasta cinco anillos. Quita uno antes de anadir otro.",
+    limitBody: "Maximo dos anillos por Haven, uno por cuenta de cada pareja.",
   },
   de: {
     ...EN,
@@ -210,7 +210,7 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Weiteren Ring hinzufugen",
     doneToHaven: "Zu meinem Bereich",
     limitTitle: "Ring-Limit",
-    limitBody: "Maximal funf Ringe. Entferne einen, bevor du einen neuen addierst.",
+    limitBody: "Maximal zwei Ringe pro Haven, einer pro Partnerkonto.",
   },
   it: {
     ...EN,
@@ -235,6 +235,6 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Aggiungi un altro anello",
     doneToHaven: "Vai al mio spazio",
     limitTitle: "Limite anelli",
-    limitBody: "Massimo cinque anelli. Rimuovine uno prima di aggiungerne un altro.",
+    limitBody: "Massimo due anelli per Haven, uno per account partner.",
   },
 };

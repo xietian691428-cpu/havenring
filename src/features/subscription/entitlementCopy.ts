@@ -43,7 +43,7 @@ export function getRingSlotLimitUpsellNotice(
 ): string {
   const tier = entitlements?.tier ?? "free";
   if (tier === "free") {
-    return `Haven supports up to ${PLUS_RING_LIMIT} rings for one private pair. Revoke one ring before adding another.`;
+    return `Haven supports up to ${PLUS_RING_LIMIT} rings for one private pair, one per partner account. Invite your partner instead of sharing a login.`;
   }
   return `You have reached Haven's ring limit: up to ${PLUS_RING_LIMIT} rings for one private pair.`;
 }

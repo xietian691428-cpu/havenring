@@ -55,7 +55,8 @@ export function LandingTheRing() {
               </h2>
               <p className="text-lg text-[#F5F5F5]/80">
                 Crafted for daily wear, each HavenRing becomes a private key for personal records
-                and couple memories. Link up to two rings to one Haven.
+                and couple memories. Couples link one ring per person to one shared Haven, with
+                separate accounts.
               </p>
             </div>
 

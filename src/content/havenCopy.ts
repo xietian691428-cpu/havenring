@@ -10,7 +10,7 @@ export type Platform = HavenPlatform;
 
 /** Face ID + ring roles — Rings, Help, marketing */
 export const HAVEN_EN_LAYERED_CORE_LINE =
-  "Your Face ID protects your account. Your rings give you and your partner fast access and a special ritual for your most precious memories.";
+  "Each partner keeps their own account. Your rings unlock one shared Haven for a private sealing ritual.";
 
 /** @alias */
 export const RING_VS_FACE_ID_SUMMARY_EN = HAVEN_EN_LAYERED_CORE_LINE;
@@ -150,7 +150,7 @@ const HAVEN_NEW_MEMORY_SHARED = {
   upgradeCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   upgradeModalTitle: "Unlock the Ritual Experience",
   upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional cloud backup for one private pair — up to 2 rings where available. Link your first ring to start a 30-day trial where available.",
+    "Haven Plus unlocks Seal with Ring and optional cloud backup for one private pair — one account and one ring per partner, up to 2 rings per Haven where available. Link your first ring to start a 30-day trial where available.",
   upgradeModalCloudDisclaimer: HAVEN_CLOUD_STORAGE_DISCLAIMER_EN,
   upgradeModalDismiss: "Maybe later",
   upgradeModalSubscribe: "Subscribe — $4.90/mo or $49/yr",
@@ -283,6 +283,7 @@ export type StartSdmStateForCopy =
       ringId: string | null;
       ownerId: string | null;
       viewerUserId: string | null;
+      currentUserIsHavenMember?: boolean;
     };
 
 export type StartSdmCardCopy = {
@@ -441,7 +442,7 @@ export function getStartSdmCardCopy(
   const self = state.viewerUserId || "";
   const owner = state.ownerId || "";
 
-  if (self && owner && self === owner) {
+  if (state.currentUserIsHavenMember || (self && owner && self === owner)) {
     return { ...HAVEN_START_DAILY_ACCESS_SELF[platform] };
   }
 
@@ -646,7 +647,7 @@ export function getOnboardingFlowEn(platform: HavenPlatform): OnboardingFlowBund
         kind: "ready",
         illustration: "ownership",
         title: "Ready to create your first sealed memory?",
-        body: "Bind your first ring now. You can add one partner ring later; both rings can add new memories, while sealed memories remain unchanged.",
+        body: "Bind your first ring now. Later, invite your partner so they can join with their own account and their own ring. Both rings can add new memories; sealed memories remain unchanged.",
         primaryButton: "Bind my first ring",
         secondaryButton: "Start with Face ID only",
       },
@@ -659,7 +660,7 @@ export const HAVEN_PRICING_PAGE_EN = {
   pageTitle: "Haven Plus",
   heroTitle: "A private memory space for one person or one pair",
   heroSubtitle:
-    "Seal personal records and couple memories with intention. Either ring can add new memories; sealed memories stay unchanged.",
+    "Seal personal records and couple memories with intention. Couples use two separate accounts, one shared Haven, and one ring each.",
   trustLine: "Local-first • Strong encryption on supported flows • You choose what leaves your device",
   colFeature: "Feature",
   colFree: "Free",

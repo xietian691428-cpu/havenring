@@ -13,6 +13,8 @@
  * "Your content is encrypted and stored locally on your device."
  */
 
+import { getDefaultHavenCryptoKey } from "./havenKeyService";
+
 const KEY_DB_NAME = "haven_ring_crypto_db";
 const KEY_DB_VERSION = 1;
 const KEY_STORE = "crypto_meta";
@@ -124,7 +126,8 @@ function toPlaintext(value) {
  * Returns a compact payload safe for IndexedDB storage.
  */
 export async function encryptValue(value) {
-  const key = await getKey();
+  const havenKey = await getDefaultHavenCryptoKey().catch(() => null);
+  const key = havenKey?.key || (await getKey());
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const plaintext = utf8Encode(toPlaintext(value));
 
@@ -136,6 +139,8 @@ export async function encryptValue(value) {
 
   return {
     alg: ALGO,
+    keyScope: havenKey?.havenId ? "haven" : "device",
+    havenId: havenKey?.havenId || undefined,
     iv: toBase64(iv),
     data: toBase64(new Uint8Array(cipherBuffer)),
     ts: Date.now(),
@@ -151,7 +156,9 @@ export async function decryptValue(payload) {
     throw new Error("Invalid encrypted payload.");
   }
 
-  const key = await getKey();
+  const havenKey =
+    payload.keyScope === "haven" ? await getDefaultHavenCryptoKey().catch(() => null) : null;
+  const key = havenKey?.key || (await getKey());
   const iv = fromBase64(payload.iv);
   const data = fromBase64(payload.data);
 

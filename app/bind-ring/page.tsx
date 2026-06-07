@@ -17,6 +17,7 @@ export default async function BindRingPage({ searchParams }: BindRingPageProps) 
     firstParam(params.nfc_uid) ||
     firstParam(params.ring_uid) ||
     "";
+  const invite = firstParam(params.invite) || "";
 
-  return <BindRingClient initialUid={uid} />;
+  return <BindRingClient initialUid={uid} initialInviteCode={invite} />;
 }

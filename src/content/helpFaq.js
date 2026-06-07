@@ -14,11 +14,15 @@ export const HELP_FAQ = {
     },
     {
       q: "Can I use Haven without creating an account?",
-      a: "Yes. Haven is designed to work with low friction. Optional cloud backup can be enabled later.",
+      a: "You can explore locally, but binding a ring or joining a shared Haven requires your own Apple or Google account.",
+    },
+    {
+      q: "Does my partner use my account?",
+      a: "No. Each partner signs in with their own Apple or Google account. One member invites the other, then each person links their own ring to the same private Haven.",
     },
     {
       q: "Is one ring the \"main\" ring?",
-      a: "No. Haven supports up to two equal rings for one private pair. Either ring can open Haven and seal new memories; old sealed memories remain unchanged.",
+      a: "No. Haven supports up to two equal rings for one private pair, usually one per partner account. Either ring can open the shared Haven and seal new memories; old sealed memories remain unchanged.",
     },
     {
       q: "Does the ring replace my password or account?",
@@ -26,7 +30,7 @@ export const HELP_FAQ = {
     },
     {
       q: "What if I lose my ring?",
-      a: "Revoke or unlink that ring from your account on another trusted device as soon as you can. Your sealed memories stay with your account; losing the ring does not erase them if you still have access.",
+      a: "Retire that ring credential from another trusted device as soon as you can. A retired ring cannot be transferred to another Haven. Shared memories remain in your Haven subject to each member's privacy rights.",
     },
   ],
   fr: [

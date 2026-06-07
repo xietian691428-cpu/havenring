@@ -105,7 +105,7 @@ export function findRingByUidKey(uidKey) {
 }
 
 /**
- * @param {{ serialNumber?: string | null, fallbackText?: string, label: string, colorKey: string, icon?: string, cloudRingId?: string, cloudBoundAt?: string | null, cloudLastUsedAt?: string | null }} params
+ * @param {{ serialNumber?: string | null, fallbackText?: string, label: string, colorKey: string, icon?: string, cloudRingId?: string, havenId?: string | null, cloudBoundAt?: string | null, cloudLastUsedAt?: string | null }} params
  */
 export async function addBoundRing(params) {
   const {
@@ -115,6 +115,7 @@ export async function addBoundRing(params) {
     colorKey,
     icon,
     cloudRingId,
+    havenId,
     cloudBoundAt,
     cloudLastUsedAt,
   } = params;
@@ -140,6 +141,7 @@ export async function addBoundRing(params) {
         icon: icon || "💍",
         createdAt: Date.now(),
         cloudRingId: cloudRingId || null,
+        havenId: havenId || null,
         cloudBoundAt: cloudBoundAt || null,
         cloudLastUsedAt: cloudLastUsedAt || null,
       },
@@ -170,6 +172,7 @@ export function updateRingCloudMetadata(uidKey, meta = {}) {
         ? {
             ...ring,
             cloudRingId: meta.cloudRingId ?? ring.cloudRingId ?? null,
+            havenId: meta.havenId ?? ring.havenId ?? null,
             cloudBoundAt: meta.cloudBoundAt ?? ring.cloudBoundAt ?? null,
             cloudLastUsedAt: meta.cloudLastUsedAt ?? ring.cloudLastUsedAt ?? null,
           }
@@ -195,6 +198,7 @@ export function upsertBoundRingByUidKey(uidKey, patch = {}) {
               colorKey: patch.colorKey ?? ring.colorKey,
               icon: patch.icon ?? ring.icon,
               cloudRingId: patch.cloudRingId ?? ring.cloudRingId ?? null,
+              havenId: patch.havenId ?? ring.havenId ?? null,
               cloudBoundAt: patch.cloudBoundAt ?? ring.cloudBoundAt ?? null,
               cloudLastUsedAt: patch.cloudLastUsedAt ?? ring.cloudLastUsedAt ?? null,
             }
@@ -213,6 +217,7 @@ export function upsertBoundRingByUidKey(uidKey, patch = {}) {
     icon: patch.icon || "💍",
     createdAt: Date.now(),
     cloudRingId: patch.cloudRingId || null,
+    havenId: patch.havenId || null,
     cloudBoundAt: patch.cloudBoundAt || null,
     cloudLastUsedAt: patch.cloudLastUsedAt || null,
   };
