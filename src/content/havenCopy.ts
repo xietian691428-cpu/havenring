@@ -296,15 +296,15 @@ export type StartSdmCardCopy = {
 
 const HAVEN_START_IDLE_HERO: Record<HavenPlatform, { title: string; subtitle: string }> = {
   ios: {
-    title: "请贴上戒指",
+    title: "Tap your ring",
     subtitle: "",
   },
   android: {
-    title: "请贴上戒指",
+    title: "Tap your ring",
     subtitle: "",
   },
   other: {
-    title: "请贴上戒指",
+    title: "Tap your ring",
     subtitle: "",
   },
 };
@@ -314,21 +314,21 @@ type StartCardFields = Pick<StartSdmCardCopy, "eyebrow" | "title" | "body" | "pl
 const HAVEN_START_SEAL_CONFIRMATION: Record<HavenPlatform, StartCardFields> = {
   ios: {
     eyebrow: "",
-    title: "封印中",
+    title: "Sealing your memory...",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   android: {
     eyebrow: "",
-    title: "封印中",
+    title: "Sealing your memory...",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   other: {
     eyebrow: "",
-    title: "封印中",
+    title: "Sealing your memory...",
     body: "",
     nextLine: "",
     placementHint: null,
@@ -338,21 +338,21 @@ const HAVEN_START_SEAL_CONFIRMATION: Record<HavenPlatform, StartCardFields> = {
 const HAVEN_START_NEW_RING_BINDING: Record<HavenPlatform, StartCardFields> = {
   ios: {
     eyebrow: "",
-    title: "绑定戒指",
+    title: "Bind this ring to your account?",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   android: {
     eyebrow: "",
-    title: "绑定戒指",
+    title: "Bind this ring to your account?",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   other: {
     eyebrow: "",
-    title: "绑定戒指",
+    title: "Bind this ring to your account?",
     body: "",
     nextLine: "",
     placementHint: null,
@@ -362,21 +362,21 @@ const HAVEN_START_NEW_RING_BINDING: Record<HavenPlatform, StartCardFields> = {
 const HAVEN_START_DAILY_ACCESS_SELF: Record<HavenPlatform, StartCardFields> = {
   ios: {
     eyebrow: "",
-    title: "已识别",
+    title: "Opening Haven...",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   android: {
     eyebrow: "",
-    title: "已识别",
+    title: "Opening Haven...",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   other: {
     eyebrow: "",
-    title: "已识别",
+    title: "Opening Haven...",
     body: "",
     nextLine: "",
     placementHint: null,
@@ -403,21 +403,21 @@ export function getStartSdmCardCopy(
 ): StartSdmCardCopy {
   if (state.kind === "resolving") {
     return {
-      eyebrow: "Ring tap received",
-      title: "Verifying your ring",
-      body: "Haven is checking the secure signature from this tap. Keep this page open and the ring steady.",
-      nextLine: "Next: hold steady until verification finishes.",
-      placementHint: nfcPlacementHintWhileWaiting(platform),
+      eyebrow: "",
+      title: "Recognizing your ring...",
+      body: "",
+      nextLine: "",
+      placementHint: null,
     };
   }
 
   if (state.kind === "failed") {
     return {
-      eyebrow: "Could not verify",
-      title: "Could not complete that tap",
-      body: "Try once more with a steady hold, or confirm this ring is linked in My Rings. Your saved draft stays on this device.",
-      nextLine: state.message || "Tap Retry, or return to Capture and start Seal with Ring again.",
-      placementHint: nfcPlacementHintWhileWaiting(platform),
+      eyebrow: "",
+      title: "Ring recognized but sign-in failed. Tap to retry.",
+      body: "",
+      nextLine: state.message || "",
+      placementHint: null,
     };
   }
 
@@ -449,7 +449,7 @@ export function getStartSdmCardCopy(
   if (self && owner && self !== owner) {
     return {
       eyebrow: "",
-      title: "戒指已绑定",
+      title: "Ring recognized but sign-in failed. Tap to retry.",
       body: "",
       nextLine: "",
       placementHint: null,
@@ -458,7 +458,7 @@ export function getStartSdmCardCopy(
 
   return {
     eyebrow: "",
-    title: "戒指已绑定",
+    title: "Signing in with your ring...",
     body: "",
     nextLine: "",
     placementHint: null,
@@ -466,23 +466,23 @@ export function getStartSdmCardCopy(
 }
 
 export const START_PAGE_EN = {
-  heroSubtitleFallback: "请贴上戒指",
-  backToHaven: "返回",
-  continueWithoutRing: "退出",
-  keepSealing: "继续",
-  leaveSealWarning: "退出封印？",
-  leaveSealConfirmCta: "退出",
-  retryRingTap: "Try again",
-  readingRingStatus: "读戒指中…",
-  preparingMemory: "Sealing…",
-  ringVerifyFailedNotice: "贴戒指失败，请重试",
+  heroSubtitleFallback: "Tap your ring",
+  backToHaven: "Cancel",
+  continueWithoutRing: "Cancel",
+  keepSealing: "Keep sealing",
+  leaveSealWarning: "Cancel sealing?",
+  leaveSealConfirmCta: "Cancel",
+  retryRingTap: "Retry",
+  readingRingStatus: "Recognizing your ring...",
+  preparingMemory: "Sealing your memory...",
+  ringVerifyFailedNotice: "Ring recognized but sign-in failed. Tap to retry.",
   footerSecurityReminder: "",
-  sealCountdownPrefix: "剩余",
-  sealWaitTitle: "请贴上戒指",
-  sealWaitBody: "贴上戒指即可封印",
-  sealWaitFinishingTitle: "Sealing…",
+  sealCountdownPrefix: "Time left",
+  sealWaitTitle: "Tap your ring",
+  sealWaitBody: "",
+  sealWaitFinishingTitle: "Sealing your memory...",
   sealWaitFinishingBody: "",
-  sealWaitBackToEdit: "返回编辑",
+  sealWaitBackToEdit: "Back to memory",
   sealWaitSignedInNote: "",
   sealWaitTapHintAndroid: "",
   sealWaitTapHintIos: "",
@@ -498,20 +498,20 @@ export const SEAL_FLOW_EN = {
   readySubtitleIos: "Near top of phone",
   readySubtitleAndroid: "On back of phone",
   readySubtitleOther: "Near NFC reader",
-  autoSealHint: "写完后贴戒指",
-  sealingLabel: "Sealing…",
-  sealNotReadyLine: "请先点封印",
-  successTitle: "记忆已封印",
+  autoSealHint: "Tap your ring when ready.",
+  sealingLabel: "Sealing your memory...",
+  sealNotReadyLine: "Open your memory first.",
+  successTitle: "Memory sealed",
   successMessage: "",
-  successViewMemoriesCta: "继续",
-  successSealAnotherCta: "再写一条",
+  successViewMemoriesCta: "View Memories",
+  successSealAnotherCta: "Seal Another",
   autoSaving: "Saving…",
   sealArmFailedCta: "Open",
-  sealWaitingStep2: "请贴上戒指",
-  sealWaitingCountdownPrefix: "剩余",
+  sealWaitingStep2: "Tap your ring",
+  sealWaitingCountdownPrefix: "Time left",
   sealScanRingCta: "Scan ring on this phone",
   sealScanRingBusy: "Listening for ring…",
-  sealCompletedElsewhere: "记忆已封印",
+  sealCompletedElsewhere: "Memory sealed",
 } as const;
 
 export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {

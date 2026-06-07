@@ -136,6 +136,9 @@ check("daily access routes by Haven membership", () => {
   const startClient = readRepoFile("app/start/StartClient.tsx");
   assert.match(resolveRoute, /currentUserIsHavenMember/);
   assert.match(startClient, /isDailyMember/);
+  assert.match(startClient, /minimalNfcCopy/);
+  assert.match(startClient, /Opening Haven/);
+  assert.match(startClient, /Recognizing your ring/);
   assert.doesNotMatch(startClient, /isDailySelfOwner/);
 });
 

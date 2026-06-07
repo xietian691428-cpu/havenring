@@ -197,11 +197,20 @@ function NfcPhoneHint({ platform }: { platform: HavenPlatform }) {
   );
 }
 
-function StartRingGlyphPulse() {
+function StartRingGlyphPulse({ variant = "default" }: { variant?: "default" | "hero" }) {
+  const hero = variant === "hero";
   return (
-    <div style={styles.ringMarkWrap} aria-hidden>
-      <span style={styles.ringHalo} />
-      <svg width="76" height="76" viewBox="0 0 76 76" style={styles.ringSvg}>
+    <div
+      style={hero ? { ...styles.ringMarkWrap, ...styles.ringMarkWrapHero } : styles.ringMarkWrap}
+      aria-hidden
+    >
+      <span style={hero ? { ...styles.ringHalo, ...styles.ringHaloHero } : styles.ringHalo} />
+      <svg
+        width={hero ? "118" : "76"}
+        height={hero ? "118" : "76"}
+        viewBox="0 0 76 76"
+        style={styles.ringSvg}
+      >
         <circle cx="38" cy="38" r="24" fill="none" stroke="#e6b48d" strokeWidth="5.5" />
         <circle cx="38" cy="38" r="14" fill="none" stroke="#f0c29e" strokeWidth="2.5" opacity="0.55" />
       </svg>
@@ -359,8 +368,7 @@ export default function StartClient() {
     !hasRecoverableContent &&
     !nfcSealBootstrapping &&
     !showSealArmFailedGuide &&
-    (sdmState.kind === "resolving" ||
-      (sdmState.kind === "ready" && sdmState.scene === "daily_access"));
+    sdmState.kind === "resolving";
 
   const showSealConnecting =
     nfcFlow &&
@@ -374,7 +382,7 @@ export default function StartClient() {
       return;
     const t = window.setTimeout(() => {
       window.location.assign("/app");
-    }, 2000);
+    }, 450);
     return () => window.clearTimeout(t);
   }, [sealWaitMode, isDailyMember, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
 
@@ -609,7 +617,7 @@ export default function StartClient() {
             }),
           });
         } catch {
-          throw new Error("贴戒指失败，请重试");
+          throw new Error("Ring recognized but sign-in failed. Tap to retry.");
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
@@ -624,12 +632,12 @@ export default function StartClient() {
           throw new Error(
             typeof data?.error === "string" && data.error
               ? data.error
-              : "This ring could not be verified."
+              : "Ring recognized but sign-in failed. Tap to retry."
           );
         }
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         if (scene === "daily_access" && pendingSealTapRef.current) {
-          throw new Error("请从编辑页封印");
+          throw new Error("Open your memory first.");
         }
         const viewerUserId = sessionData.session?.user?.id ?? null;
         setSdmState({
@@ -642,25 +650,25 @@ export default function StartClient() {
         });
         setNotice(
           scene === "new_ring_binding"
-            ? "请绑定戒指"
+            ? "Bind this ring to your account?"
             : scene === "seal_confirmation"
-              ? "封印中"
+              ? "Sealing your memory..."
               : data.currentUserIsHavenMember ||
                   (viewerUserId && data.ownerId && viewerUserId === data.ownerId)
-                ? "已识别"
+                ? "Opening Haven..."
                 : viewerUserId && data.ownerId && viewerUserId !== data.ownerId
-                  ? "戒指已绑定"
-                  : "请登录"
+                  ? "Ring recognized but sign-in failed. Tap to retry."
+                  : "Signing in with your ring..."
         );
         if (scene === "seal_confirmation") {
           if (!accessToken) {
-            throw new Error("请先登录");
+            throw new Error("Ring recognized but sign-in failed. Tap to retry.");
           }
           if (!data.sealTicket) {
-            throw new Error("请重试");
+            throw new Error("Ring recognized but sign-in failed. Tap to retry.");
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
-          setNotice("封印中");
+          setNotice("Sealing your memory...");
           const finalizeResult = await finalizeSealChainFromSdmResponseSafe({
             sealTicket: String(data.sealTicket),
             draftIds: pendingSealDraftIds,
@@ -676,7 +684,7 @@ export default function StartClient() {
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (controller.signal.aborted) return;
         const baseMsg =
-          error instanceof Error ? error.message : "贴戒指失败，请重试";
+          error instanceof Error ? error.message : "Ring recognized but sign-in failed. Tap to retry.";
         setSdmState({
           kind: "failed",
           message: baseMsg,
@@ -708,13 +716,13 @@ export default function StartClient() {
         const desc = hp.get("error_description") || hp.get("error") || "";
         const readable = desc
           ? decodeURIComponent(desc.replace(/\+/g, " "))
-          : "登录失败";
+          : "Sign-in failed.";
         queueMicrotask(() => setNotice(readable));
         const u = new URL(window.location.href);
         u.hash = "";
         window.history.replaceState({}, "", `${u.pathname}${u.search}`);
       } catch {
-        queueMicrotask(() => setNotice("登录失败"));
+        queueMicrotask(() => setNotice("Sign-in failed."));
       }
     }
   }, []);
@@ -759,7 +767,7 @@ export default function StartClient() {
     const timer = window.setTimeout(() => {
       setClaimToken(normalized);
       setClaimState("waiting_signin");
-      setNotice("绑定中");
+      setNotice("Linking ring...");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -769,7 +777,7 @@ export default function StartClient() {
     if (typeof window === "undefined") return;
     const timer = window.setTimeout(() => {
       setClaimToken("");
-      setNotice("已绑定");
+      setNotice("Ring linked.");
       window.location.assign("/app");
     }, 1200);
     return () => window.clearTimeout(timer);
@@ -782,7 +790,7 @@ export default function StartClient() {
       claimAttemptedRef.current = false;
       setClaimState("failed");
       setNotice(
-        "绑定失败，请重试"
+        "Could not link this ring. Try again."
       );
     }, 12_000);
     return () => window.clearTimeout(timer);
@@ -792,7 +800,7 @@ export default function StartClient() {
     if (!claimToken || claimAttemptedRef.current) return;
     claimAttemptedRef.current = true;
     setClaimState("claiming");
-    setNotice("绑定中");
+    setNotice("Linking ring...");
     try {
       const controller = new AbortController();
       const timer = window.setTimeout(() => controller.abort(), CLAIM_REQUEST_TIMEOUT_MS);
@@ -823,14 +831,14 @@ export default function StartClient() {
       setClaimState("claimed");
       setNotice(
         data?.plusTrialActivated
-          ? "已绑定"
-          : "已绑定"
+          ? "Ring linked."
+          : "Ring linked."
       );
     } catch {
       claimAttemptedRef.current = false;
       setClaimState("failed");
       setNotice(
-        "绑定失败，请重试"
+        "Could not link this ring. Try again."
       );
     }
   }, [claimToken]);
@@ -877,7 +885,7 @@ export default function StartClient() {
       if (!active || bindRingRedirectDoneRef.current) return;
       if (!session?.access_token) return;
       bindRingRedirectDoneRef.current = true;
-      setNotice("绑定中");
+      setNotice("Opening ring setup...");
       const params = new URLSearchParams({ uid });
       const inviteCode = window.localStorage.getItem(PARTNER_INVITE_STORAGE_KEY) || "";
       if (inviteCode) params.set("invite", inviteCode);
@@ -908,9 +916,9 @@ export default function StartClient() {
   function getFriendlyAuthError(message: string, provider: "apple" | "google") {
     if (isOAuthProviderNotEnabledMessage(message)) {
       if (provider === "apple") {
-        return "Apple 不可用";
+        return "Apple sign-in is unavailable.";
       }
-      return "Google 不可用";
+      return "Google sign-in is unavailable.";
     }
     const detail = String(message || "").trim();
     if (detail) {
@@ -937,7 +945,7 @@ export default function StartClient() {
           isOAuthProviderNotEnabledMessage(String(error.message || ""))
         ) {
           setAppleProviderReady(false);
-          setNotice("Apple 不可用，打开 Google");
+          setNotice("Apple sign-in is unavailable. Opening Google...");
           window.setTimeout(() => {
             void signInWith("google");
           }, 250);
@@ -953,6 +961,96 @@ export default function StartClient() {
     } finally {
       setBusyProvider("");
     }
+  }
+
+  function cancelNfcFlow() {
+    if (typeof window === "undefined") return;
+    if (needsSealLeaveDouble) {
+      confirmLeaveWithoutRing();
+      return;
+    }
+    window.location.assign("/app");
+  }
+
+  function bindCurrentRing() {
+    if (typeof window === "undefined") return;
+    const uid = (new URLSearchParams(window.location.search).get("uid") || "").trim();
+    const params = new URLSearchParams();
+    if (uid) params.set("uid", uid);
+    const inviteCode = window.localStorage.getItem(PARTNER_INVITE_STORAGE_KEY) || "";
+    if (inviteCode) params.set("invite", inviteCode);
+    const suffix = params.toString();
+    window.location.assign(suffix ? `/bind-ring?${suffix}` : "/bind-ring");
+  }
+
+  function minimalNfcCopy() {
+    if (sdmState.kind === "failed") {
+      return {
+        title: "Ring recognized but sign-in failed. Tap to retry.",
+        button: "Retry",
+        onAction: retrySdmTouch,
+      };
+    }
+    if (sdmState.kind === "resolving") {
+      return {
+        title: "Recognizing your ring...",
+        button: "",
+        onAction: null,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "new_ring_binding") {
+      return {
+        title: "Bind this ring to your account?",
+        button: "Bind Ring",
+        onAction: bindCurrentRing,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation") {
+      return {
+        title: "Sealing your memory...",
+        button: "",
+        onAction: null,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "daily_access") {
+      return {
+        title: isDailyMember ? "Opening Haven..." : "Signing in with your ring...",
+        button: isDailyMember ? "" : "Retry",
+        onAction: isDailyMember ? null : retrySdmTouch,
+      };
+    }
+    if (showSealConnecting || nfcSealBootstrapping) {
+      return {
+        title: "Recognizing your ring...",
+        button: "",
+        onAction: null,
+      };
+    }
+    return {
+      title: "Recognizing your ring...",
+      button: "",
+      onAction: null,
+    };
+  }
+
+  if (nfcFlow && !claimToken) {
+    const copy = minimalNfcCopy();
+    return (
+      <main style={styles.minimalPage}>
+        <button type="button" onClick={cancelNfcFlow} style={styles.minimalCancel}>
+          Cancel
+        </button>
+        <section style={styles.minimalPanel} aria-live="polite">
+          <StartRingGlyphPulse variant="hero" />
+          <h1 style={styles.minimalTitle}>{copy.title}</h1>
+          {copy.button && copy.onAction ? (
+            <button type="button" onClick={() => copy.onAction?.()} style={styles.minimalPrimary}>
+              {copy.button}
+            </button>
+          ) : null}
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -1133,13 +1231,13 @@ export default function StartClient() {
 
           {claimToken ? (
             <section style={styles.claimCard}>
-              <p style={styles.claimTitle}>绑定中</p>
+              <p style={styles.claimTitle}>Linking ring</p>
               <p style={styles.claimBody}>
                 {claimState === "claimed"
-                  ? "已绑定"
+                  ? "Ring linked."
                   : claimState === "waiting_signin"
-                    ? "请登录"
-                    : "绑定中"}
+                    ? "Sign in to continue."
+                    : "Linking ring..."}
               </p>
               {claimState === "failed" ? (
                 <button
@@ -1151,17 +1249,17 @@ export default function StartClient() {
                       if (data.session?.access_token) {
                         void claimRingWithToken(data.session.access_token);
                       } else {
-                        setNotice("请先登录");
+                        setNotice("Sign in to continue.");
                         setClaimState("waiting_signin");
                       }
                     } catch {
-                      setNotice("请先登录");
+                      setNotice("Sign in to continue.");
                       setClaimState("waiting_signin");
                     }
                   }}
                   style={styles.secondaryButton}
                 >
-                  重试
+                  Retry
                 </button>
               ) : null}
               {claimState !== "claimed" ? (
@@ -1175,7 +1273,7 @@ export default function StartClient() {
                   }}
                   style={styles.secondaryButton}
                 >
-                  跳过
+                  Skip
                 </button>
               ) : null}
             </section>
@@ -1220,10 +1318,10 @@ export default function StartClient() {
                 style={styles.primaryButton}
               >
                 {busyProvider === "apple"
-                  ? "打开中"
+                  ? "Opening..."
                   : appleProviderReady
-                    ? "Apple 登录"
-                    : "Apple 不可用"}
+                    ? "Continue with Apple"
+                    : "Apple unavailable"}
               </button>
 
               <button
@@ -1233,8 +1331,8 @@ export default function StartClient() {
                 style={styles.secondaryButton}
               >
                 {busyProvider === "google"
-                  ? "打开中"
-                  : "Google 登录"}
+                  ? "Opening..."
+                  : "Continue with Google"}
               </button>
             </>
           ) : null}
@@ -1255,6 +1353,64 @@ const styles: Record<string, CSSProperties> = {
     placeItems: "center",
     background:
       "linear-gradient(160deg, rgba(30,22,18,0.96) 0%, rgba(18,14,12,1) 55%, rgba(14,12,11,1) 100%)",
+  },
+  minimalPage: {
+    minHeight: "100dvh",
+    margin: 0,
+    padding: 24,
+    display: "grid",
+    placeItems: "center",
+    background:
+      "radial-gradient(circle at 50% 38%, rgba(240,194,158,0.12), transparent 34%), linear-gradient(180deg, #120f0e 0%, #080707 100%)",
+    color: "#fff7ef",
+    fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+  },
+  minimalCancel: {
+    position: "fixed",
+    top: "max(18px, env(safe-area-inset-top))",
+    right: 20,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,247,239,0.68)",
+    borderRadius: 999,
+    padding: "9px 14px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    backdropFilter: "blur(12px)",
+  },
+  minimalPanel: {
+    width: "100%",
+    maxWidth: 360,
+    minHeight: 360,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 26,
+    textAlign: "center",
+  },
+  minimalTitle: {
+    margin: 0,
+    maxWidth: 330,
+    fontSize: "clamp(25px, 7vw, 31px)",
+    lineHeight: 1.18,
+    fontWeight: 600,
+    letterSpacing: "-0.03em",
+    color: "#fff7ef",
+  },
+  minimalPrimary: {
+    marginTop: 4,
+    border: "1px solid rgba(230,180,141,0.92)",
+    background: "linear-gradient(180deg, #f1c6a3, #dca778)",
+    color: "#17100d",
+    borderRadius: 999,
+    minWidth: 160,
+    padding: "15px 30px",
+    fontSize: 16,
+    fontWeight: 800,
+    cursor: "pointer",
+    boxShadow: "0 14px 32px rgba(220,167,120,0.18)",
   },
   heroCard: {
     position: "relative",
@@ -1316,6 +1472,10 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 88,
     margin: "2px 0 8px",
   },
+  ringMarkWrapHero: {
+    minHeight: 150,
+    margin: "0 0 4px",
+  },
   ringHalo: {
     position: "absolute",
     width: 92,
@@ -1324,6 +1484,11 @@ const styles: Record<string, CSSProperties> = {
     border: "2px solid rgba(240,194,158,0.28)",
     animation: "havenStartRingHalo 2.4s ease-out infinite",
     pointerEvents: "none",
+  },
+  ringHaloHero: {
+    width: 142,
+    height: 142,
+    borderColor: "rgba(240,194,158,0.22)",
   },
   ringSvg: {
     position: "relative",
