@@ -402,21 +402,23 @@ export function getStartSdmCardCopy(
   state: StartSdmStateForCopy
 ): StartSdmCardCopy {
   if (state.kind === "resolving") {
+    const hold = getNfcHoldGuideCopy(platform);
     return {
       eyebrow: "",
-      title: "Recognizing your ring...",
-      body: "",
-      nextLine: "",
+      title: hold.resolvingTitle,
+      body: hold.resolvingSubtitle,
+      nextLine: hold.holdSteadyLine,
       placementHint: null,
     };
   }
 
   if (state.kind === "failed") {
+    const hold = getNfcHoldGuideCopy(platform);
     return {
       eyebrow: "",
-      title: "Ring recognized but sign-in failed. Tap to retry.",
-      body: "",
-      nextLine: state.message || "",
+      title: hold.failedTitle,
+      body: state.message || hold.failedSubtitle,
+      nextLine: hold.waitStep,
       placementHint: null,
     };
   }
@@ -447,22 +449,104 @@ export function getStartSdmCardCopy(
   }
 
   if (self && owner && self !== owner) {
+    const hold = getNfcHoldGuideCopy(platform);
     return {
       eyebrow: "",
-      title: "Ring recognized but sign-in failed. Tap to retry.",
-      body: "",
+      title: hold.signInTitle,
+      body: hold.signInSubtitle,
       nextLine: "",
       placementHint: null,
     };
   }
 
+  const hold = getNfcHoldGuideCopy(platform);
   return {
     eyebrow: "",
-    title: "Signing in with your ring...",
-    body: "",
+    title: hold.signInTitle,
+    body: hold.signInSubtitle,
     nextLine: "",
     placementHint: null,
   };
+}
+
+export type NfcHoldGuideCopy = {
+  waitTitle: string;
+  waitSubtitle: string;
+  waitStep: string;
+  resolvingTitle: string;
+  resolvingSubtitle: string;
+  replayTitle: string;
+  replaySubtitle: string;
+  signInTitle: string;
+  signInSubtitle: string;
+  sealWaitTitle: string;
+  sealWaitSubtitle: string;
+  failedTitle: string;
+  failedSubtitle: string;
+  tryAgainCta: string;
+  tapRingAgainCta: string;
+  holdSteadyLine: string;
+};
+
+const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
+  ios: {
+    waitTitle: "Tap your ring",
+    waitSubtitle: "Hold your ring on the top of your iPhone, near the camera.",
+    waitStep: "Step 1 · Keep it steady for 3–5 seconds until Haven opens.",
+    resolvingTitle: "Reading your ring…",
+    resolvingSubtitle: "Keep the ring on the top of your phone. Do not lift yet.",
+    replayTitle: "That tap was already used",
+    replaySubtitle: "Tap your ring again on the top of your iPhone.",
+    signInTitle: "Sign in to open Haven",
+    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    sealWaitTitle: "Tap your ring to seal",
+    sealWaitSubtitle: "Hold your ring on the top of your iPhone until sealing starts.",
+    failedTitle: "We could not finish that tap",
+    failedSubtitle: "Hold your ring steady on the top of your iPhone, then tap again.",
+    tryAgainCta: "Try again",
+    tapRingAgainCta: "Tap ring again",
+    holdSteadyLine: "Keep holding — this usually takes 3–5 seconds.",
+  },
+  android: {
+    waitTitle: "Tap your ring",
+    waitSubtitle: "Hold your ring on the back of your phone, near the camera.",
+    waitStep: "Step 1 · Keep it steady for 2–4 seconds until Haven opens.",
+    resolvingTitle: "Reading your ring…",
+    resolvingSubtitle: "Keep the ring on the back of your phone. Do not lift yet.",
+    replayTitle: "That tap was already used",
+    replaySubtitle: "Tap your ring again on the back of your phone.",
+    signInTitle: "Sign in to open Haven",
+    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    sealWaitTitle: "Tap your ring to seal",
+    sealWaitSubtitle: "Hold your ring on the back of your phone until sealing starts.",
+    failedTitle: "We could not finish that tap",
+    failedSubtitle: "Hold your ring steady on the back of your phone, then tap again.",
+    tryAgainCta: "Try again",
+    tapRingAgainCta: "Tap ring again",
+    holdSteadyLine: "Keep holding — this usually takes 2–4 seconds.",
+  },
+  other: {
+    waitTitle: "Tap your ring",
+    waitSubtitle: "Hold your ring on the upper back area of your phone.",
+    waitStep: "Step 1 · Keep it steady for 3–5 seconds until Haven opens.",
+    resolvingTitle: "Reading your ring…",
+    resolvingSubtitle: "Keep the ring on your phone. Do not lift yet.",
+    replayTitle: "That tap was already used",
+    replaySubtitle: "Tap your ring again on the NFC reader area.",
+    signInTitle: "Sign in to open Haven",
+    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    sealWaitTitle: "Tap your ring to seal",
+    sealWaitSubtitle: "Hold your ring on your phone until sealing starts.",
+    failedTitle: "We could not finish that tap",
+    failedSubtitle: "Hold your ring steady, then tap again.",
+    tryAgainCta: "Try again",
+    tapRingAgainCta: "Tap ring again",
+    holdSteadyLine: "Keep holding — this usually takes a few seconds.",
+  },
+};
+
+export function getNfcHoldGuideCopy(platform: HavenPlatform): NfcHoldGuideCopy {
+  return NFC_HOLD_GUIDE_EN[platform] ?? NFC_HOLD_GUIDE_EN.other;
 }
 
 export const START_PAGE_EN = {
@@ -472,10 +556,10 @@ export const START_PAGE_EN = {
   keepSealing: "Keep sealing",
   leaveSealWarning: "Cancel sealing?",
   leaveSealConfirmCta: "Cancel",
-  retryRingTap: "Retry",
-  readingRingStatus: "Recognizing your ring...",
+  retryRingTap: "Tap ring again",
+  readingRingStatus: "Reading your ring…",
   preparingMemory: "Sealing your memory...",
-  ringVerifyFailedNotice: "Ring recognized but sign-in failed. Tap to retry.",
+  ringVerifyFailedNotice: "We could not finish that tap.",
   footerSecurityReminder: "",
   sealCountdownPrefix: "Time left",
   sealWaitTitle: "Tap your ring",

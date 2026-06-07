@@ -25,6 +25,9 @@ import {
   savePendingPartnerInvite,
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
+import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
+import { getNfcHoldGuideCopy, type HavenPlatform } from "@/src/content/havenCopy";
+import { usePlatform } from "@/src/hooks/usePlatform";
 
 type AuthState = "checking" | "signed_out" | "ready";
 type BindState = "idle" | "binding" | "success" | "error";
@@ -81,6 +84,9 @@ function redirectUrlFor(uid: string, inviteCode = "") {
 export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingClientProps) {
   const uid = useMemo(() => normalizeNfcUidInput(initialUid), [initialUid]);
   const inviteCode = useMemo(() => String(initialInviteCode || "").trim(), [initialInviteCode]);
+  const { platform: detectedPlatform, ready: platformReady } = usePlatform();
+  const platform = (platformReady ? detectedPlatform : "other") as HavenPlatform;
+  const holdCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [session, setSession] = useState<Session | null>(null);
   const [busyProvider, setBusyProvider] = useState<"apple" | "google" | "">("");
@@ -323,14 +329,15 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       <main style={styles.page}>
         <section style={styles.card}>
           <p style={styles.kicker}>Join Haven</p>
-          <h1 style={styles.title}>{inviteCode ? "Now tap your ring" : "请重试"}</h1>
+          <h1 style={styles.title}>{inviteCode ? "Now tap your ring" : holdCopy.waitTitle}</h1>
           <p style={styles.body}>
             {inviteCode
-            ? "Invite saved. Sign in, then tap your ring."
-              : "请重新贴戒指"}
+              ? "Invite saved. Sign in, then tap your ring."
+              : holdCopy.waitSubtitle}
           </p>
+          {!inviteCode ? <NfcHoldGuide platform={platform} /> : null}
           <button type="button" onClick={() => window.history.back()} style={styles.secondaryButton}>
-            返回
+            Back
           </button>
         </section>
       </main>

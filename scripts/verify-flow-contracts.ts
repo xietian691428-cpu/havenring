@@ -134,12 +134,18 @@ check("invite revoke and shared key flows are wired", () => {
 check("daily access routes by Haven membership", () => {
   const resolveRoute = readRepoFile("app/api/rings/sdm/resolve/route.ts");
   const startClient = readRepoFile("app/start/StartClient.tsx");
+  const timing = readRepoFile("lib/nfc-flow-timing.ts");
   assert.match(resolveRoute, /currentUserIsHavenMember/);
   assert.match(startClient, /isDailyMember/);
   assert.match(startClient, /minimalNfcCopy/);
+  assert.match(startClient, /getNfcHoldGuideCopy/);
+  assert.match(startClient, /enterRingWaitMode/);
+  assert.match(startClient, /NfcHoldGuide/);
   assert.match(startClient, /Opening Haven/);
-  assert.match(startClient, /Recognizing your ring/);
+  assert.match(readRepoFile("src/content/havenCopy.ts"), /Reading your ring/);
+  assert.match(timing, /minFailedBeforeRetryMs/);
   assert.doesNotMatch(startClient, /isDailySelfOwner/);
+  assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);
 });
 
 check("seal commit persists memories to local timeline", () => {
