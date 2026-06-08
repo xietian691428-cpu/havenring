@@ -55,7 +55,7 @@ type Route =
   | { name: "timeline"; memoryId: null }
   | { name: "explore"; memoryId: null }
   | { name: "rings"; memoryId: null }
-  | { name: "new"; memoryId: string | null; autoSeal?: boolean }
+  | { name: "new"; memoryId: string | null; autoSeal?: boolean; fromDraftId?: string }
   | { name: "settings"; memoryId: null }
   | { name: "pricing"; memoryId: null }
   | { name: "help"; memoryId: null }
@@ -335,6 +335,19 @@ export function AppRouter() {
     navigateTo({ name: "detail", memoryId }, "forward");
   }
 
+  async function openMostRecentDraft() {
+    const { listDraftItems } = await import("../features/memories/draftBoxStore");
+    const drafts = await listDraftItems();
+    if (!drafts.length) {
+      navigateTo({ name: "new", memoryId: null }, "forward");
+      return;
+    }
+    navigateTo(
+      { name: "new", memoryId: null, fromDraftId: drafts[0].id },
+      "forward"
+    );
+  }
+
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEYS.onboardingCompleted) === "1";
     if (done) return;
@@ -363,6 +376,10 @@ export function AppRouter() {
       params.get("open") === "new" || params.get("seal") === "1" || params.get("seal") === "new";
     const autoSeal =
       params.get("autoSeal") === "true" || params.get("autoSeal") === "1";
+    if (params.get("ring") === "signin") {
+      navigateTo({ name: "home", memoryId: null }, "forward");
+      return;
+    }
     if (openNew) {
       navigateTo({ name: "new", memoryId: null, autoSeal }, "forward");
       params.delete("open");
@@ -637,22 +654,12 @@ export function AppRouter() {
           onCreateMemory={() =>
             navigateTo({ name: "new", memoryId: null }, "forward")
           }
-          onOpenMemoryFromRing={openMemoryFromRingParams}
-          showRingSignIn={
-            !enforceSingleFlowCard &&
-            !sessionLoading &&
-            !supabaseSession &&
-            !hideNfcPrompt
-          }
-          onRingSignedIn={async () => {
-            setHideNfcPrompt(true);
-            navigateTo({ name: "timeline", memoryId: null }, "forward");
-            scheduleBackgroundSync();
+          onImportDraft={() => {
+            void openMostRecentDraft();
           }}
+          onOpenMemoryFromRing={openMemoryFromRingParams}
           flowPrimaryUi={flowPrimaryUi}
           onFlowPrimaryAction={flowPrimaryAction}
-          suppressSecondaryNotices={enforceSingleFlowCard}
-          flowMainState={flowState.mainState}
         />
       </FadePage>
     );
@@ -690,6 +697,7 @@ export function AppRouter() {
                   null)
                 : null
             }
+            initialDraftId={route.fromDraftId || ""}
             onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
             onSaveMemory={persistComposerMemory}
             onSaved={async () => {

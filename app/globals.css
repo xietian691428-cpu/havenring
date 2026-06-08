@@ -258,3 +258,68 @@ body:not(.high-contrast) [style*="linear-gradient(180deg, #e6b48d, #d9a67a)"] {
     opacity: 0;
   }
 }
+
+@keyframes slideFadeInForward {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes slideFadeInBack {
+  from {
+    opacity: 0;
+    transform: translate3d(-10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes havenNfcPulse {
+    0%,
+    100% {
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  @keyframes havenSealReadyPulse {
+    0%,
+    100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  @keyframes havenSealReadyHalo {
+    0%,
+    100% {
+      transform: none;
+      opacity: 0;
+    }
+  }
+
+  @keyframes slideFadeInForward {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideFadeInBack {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

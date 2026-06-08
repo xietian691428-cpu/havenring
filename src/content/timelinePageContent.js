@@ -74,6 +74,8 @@ const EN = {
   syncIssueOffline:
     "You're offline. Your memories stay on this device and sync when you're back online.",
   syncIssueSync: "Couldn't sync right now. We'll retry automatically.",
+  flowCardCta: "Continue",
+  integrityBanner: "Data consistency issue detected. Cloud is the source of truth — tap Resync.",
   syncIssueAutoRetryHint: "Tap Resync to try now.",
   syncIssueHash:
     "Some entries failed integrity checks (hash mismatch). Keep cloud as source and resync.",

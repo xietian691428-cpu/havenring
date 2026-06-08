@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { saveDraftItem } from "../services/draftBoxService";
+import { getDraftItem, removeDraftItem, saveDraftItem } from "../services/draftBoxService";
 import { SaveToHavenDialog } from "../components/SaveToHavenDialog";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
@@ -155,6 +155,7 @@ export function NewMemoryPage({
   locale = "en",
   userEntitlements = getFreeEntitlements(),
   initialEditMemory = null,
+  initialDraftId = "",
   autoSealMode = false,
 }) {
   const t = NEW_MEMORY_PAGE_CONTENT[locale] || NEW_MEMORY_PAGE_CONTENT.en;
@@ -245,6 +246,27 @@ export function NewMemoryPage({
     });
     return undefined;
   }, [initialEditMemory, initialEditMemory?.id]);
+
+  useEffect(() => {
+    const draftId = String(initialDraftId || "").trim();
+    if (!draftId || initialEditMemory?.id) return undefined;
+    let active = true;
+    void getDraftItem(draftId).then((draft) => {
+      if (!active || !draft) return;
+      setTitle(String(draft.title || ""));
+      setStory(String(draft.story || ""));
+      const ra = Number(draft.releaseAt || 0) || 0;
+      setReleaseAtInput(ra ? new Date(ra).toISOString().slice(0, 16) : "");
+      const ph = Array.isArray(draft.photo) ? draft.photo : [];
+      setPhotos(ph);
+      setAttachments(Array.isArray(draft.attachments) ? draft.attachments : []);
+      setEditingDraftId(String(draft.id));
+      setFeedback(t.feedbackDraftRestored);
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialDraftId, initialEditMemory?.id, t.feedbackDraftRestored]);
 
   useEffect(() => {
     return () => {
@@ -586,6 +608,8 @@ export function NewMemoryPage({
           releaseAt,
           timelineAt: Date.now(),
         });
+        await removeDraftItem(savedDraft.id);
+        setEditingDraftId("");
       }
       if (openSealPromptOnSuccess) {
         primeSealPrepAfterDraftPersisted(savedDraft.id);
@@ -658,8 +682,6 @@ export function NewMemoryPage({
   }
 
   async function handleSealNow() {
-    // eslint-disable-next-line no-console
-    console.log(`=== SEAL BUTTON CLICKED === autoSeal: ${String(autoSealMode)}`);
     if (!canSealWithRing) {
       setSealPromptOpen(false);
       setUpgradeModalOpen(true);
@@ -672,12 +694,6 @@ export function NewMemoryPage({
     try {
       const savedDraft = await persistDraftForSealPrep();
       primeSealPrepAfterDraftPersisted(savedDraft.id);
-      // eslint-disable-next-line no-console
-      console.log("[seal] armed for ring tap", {
-        draftId: savedDraft.id,
-        remainingMs: getSealArmedRemainingMs(),
-        origin: typeof window !== "undefined" ? window.location.origin : "",
-      });
       setEditingDraftId(savedDraft.id);
       navigateToSealWaitPage();
     } catch (error) {
@@ -802,10 +818,10 @@ export function NewMemoryPage({
   }
 
   function getPrimaryButtonText() {
-    if (!canSealWithRing) return "Upgrade to Seal with Ring";
-    if (sealPromptOpen) return "Waiting for your ring...";
-    if (editingDraftId) return "Tap your ring to seal this memory";
-    return "Seal this Memory with Ring";
+    if (!canSealWithRing) return pageCopy.upgradeCta || "Upgrade to Seal with Ring";
+    if (sealPromptOpen) return pageCopy.sealPrimaryCtaWaiting;
+    if (editingDraftId) return pageCopy.sealPrimaryCtaReady;
+    return pageCopy.sealPrimaryCta;
   }
 
   function removeAttachmentById(id) {

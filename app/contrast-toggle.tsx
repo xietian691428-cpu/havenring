@@ -1,14 +1,18 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { shouldHideGlobalChrome } from "@/lib/hide-global-chrome";
 import { DEFAULT_LOCALE, getPreferredLocale, getTranslator, type Locale } from "@/lib/i18n";
 
 const STORAGE_KEY = "haven.high_contrast";
 
 export function ContrastToggle() {
+  const pathname = usePathname();
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const [enabled, setEnabled] = useState(true);
   const t = getTranslator(locale);
+  const hideChrome = shouldHideGlobalChrome(pathname || "");
 
   useEffect(() => {
     setLocale(getPreferredLocale(new URLSearchParams(window.location.search)));
@@ -22,6 +26,10 @@ export function ContrastToggle() {
     document.body.classList.toggle("high-contrast", enabled);
     window.localStorage.setItem(STORAGE_KEY, enabled ? "on" : "off");
   }, [enabled]);
+
+  if (hideChrome) {
+    return null;
+  }
 
   return (
     <button

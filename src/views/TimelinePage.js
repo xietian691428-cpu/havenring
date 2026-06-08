@@ -6,6 +6,7 @@ import {
 } from "../services/firstRunTelemetryService";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
+import { listDraftItems } from "../services/draftBoxService";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
@@ -19,10 +20,14 @@ export function TimelinePage({
   syncing = false,
   syncMeta = null,
   syncIssues = [],
+  integrityWarning = "",
   onResyncNow,
   onOpenMemory,
   onOpenMemoryFromRing,
   onCreateMemory,
+  onImportDraft,
+  flowPrimaryUi = null,
+  onFlowPrimaryAction,
   locale = "en",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
@@ -45,6 +50,17 @@ export function TimelinePage({
   const { soundEnabled, hapticEnabled, soundScope } = useFeedbackPrefs();
 
   const [hintHidden, setHintHidden] = useState(false);
+  const [draftCount, setDraftCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    void listDraftItems().then((items) => {
+      if (active) setDraftCount(Array.isArray(items) ? items.length : 0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [loading, memories.length]);
 
   const showPostFtuxBanner = useMemo(() => {
     if (hintHidden) return false;
@@ -158,6 +174,33 @@ export function TimelinePage({
           </section>
         ) : null}
 
+        {flowPrimaryUi ? (
+          <section style={styles.flowCard} role="status" aria-live="polite">
+            <p style={styles.flowTitle}>{flowPrimaryUi.title}</p>
+            <p style={styles.flowBody}>{flowPrimaryUi.body}</p>
+            {flowPrimaryUi.actionLabel ? (
+              <button
+                type="button"
+                onClick={() => onFlowPrimaryAction?.("primary")}
+                style={styles.flowCta}
+              >
+                {flowPrimaryUi.actionLabel}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+
+        {integrityWarning ? (
+          <section style={styles.syncBanner} role="alert">
+            <p style={styles.syncBannerText}>{t.integrityBanner}</p>
+            {onResyncNow ? (
+              <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
+                {t.resyncNow}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+
         {showPostFtuxBanner ? (
           <section style={styles.ftuxBanner} aria-label={t.postOnboardingWelcome}>
             <div style={styles.ftuxTextCol}>
@@ -207,8 +250,12 @@ export function TimelinePage({
             ) : null}
           </section>
         ) : null}
-        {error ? <p style={styles.error}>{error}</p> : null}
-        {!loading && !orderedFiltered.length ? (
+        {error ? (
+          <p style={styles.error} role="alert">
+            {error}
+          </p>
+        ) : null}
+        {!loading && !orderedFiltered.length && !showHeroWhenEmpty ? (
           <section style={styles.emptyPanel}>
             <div style={styles.emptyArt} aria-hidden>
               ◎
@@ -224,9 +271,15 @@ export function TimelinePage({
                 <button type="button" onClick={() => onCreateMemory?.()} style={styles.primaryButton}>
                   {t.emptyPrimaryCta}
                 </button>
-                <button type="button" onClick={() => onCreateMemory?.()} style={styles.secondaryGhost}>
-                  {t.emptySecondaryCta}
-                </button>
+                {draftCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => (onImportDraft ?? onCreateMemory)?.()}
+                    style={styles.secondaryGhost}
+                  >
+                    {t.emptySecondaryCta}
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -296,7 +349,9 @@ export function TimelinePage({
           })}
         </ol>
 
-        <p style={styles.feedback}>{notice || "\u00a0"}</p>
+        <p style={styles.feedback} role="status" aria-live="polite">
+          {notice || "\u00a0"}
+        </p>
       </section>
     </main>
   );
@@ -619,6 +674,37 @@ const styles = {
   error: {
     margin: 0,
     color: "#ffb8a3",
+  },
+  flowCard: {
+    display: "grid",
+    gap: 10,
+    padding: "14px 16px",
+    borderRadius: 14,
+    border: "1px solid rgba(196, 149, 106, 0.35)",
+    background: "rgba(26, 20, 18, 0.72)",
+  },
+  flowTitle: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 600,
+    color: sanctuaryTheme.cream,
+  },
+  flowBody: {
+    margin: 0,
+    fontSize: 14,
+    lineHeight: 1.5,
+    color: "rgba(248, 239, 231, 0.78)",
+  },
+  flowCta: {
+    justifySelf: "start",
+    minHeight: 44,
+    border: "1px solid rgba(196, 149, 106, 0.45)",
+    background: "transparent",
+    color: sanctuaryTheme.accentSoft,
+    borderRadius: 999,
+    padding: "10px 16px",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   syncBanner: {
     display: "grid",

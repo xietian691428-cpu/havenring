@@ -237,8 +237,10 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: 12,
     border: `1px solid rgba(107, 83, 68, 0.2)`,
     background: "rgba(255, 255, 255, 0.5)",
@@ -275,6 +277,7 @@ const styles: Record<string, CSSProperties> = {
   tabBtn: {
     border: "none",
     background: "transparent",
+    minHeight: 44,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",

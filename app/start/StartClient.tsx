@@ -1404,7 +1404,9 @@ export default function StartClient() {
                   </p>
                 ) : null}
                 <p style={styles.subtitle} aria-live="polite">
-                  {sealFlow.sealScanRingBusy}
+                  {nfcSealScanBusy
+                    ? sealFlow.sealScanRingBusy
+                    : sealFlow.readySubtitle || sealFlow.tapPlacement}
                 </p>
                 <NfcPhoneHint platform={platform} />
                 {webNfcAvailable ? (

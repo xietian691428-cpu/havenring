@@ -35,6 +35,11 @@ const EN = {
   backupNow: "Backup Now",
   restore: "Restore",
   unlink: "Unlink Account",
+  feedbackSectionTitle: "Sounds & haptics",
+  feedbackSoundsLabel: "Success sounds",
+  feedbackHapticsLabel: "Haptic feedback",
+  feedbackSoundsHint: "Short tones when you save or pin a memory.",
+  feedbackHapticsHint: "A light tap on supported devices.",
   privacySectionTitle: "Privacy",
   riskOpsTitle: "High-risk actions need extra verification",
   riskOpsBody:

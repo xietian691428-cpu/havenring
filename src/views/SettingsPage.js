@@ -29,6 +29,7 @@ import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
 import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { havenCopy } from "../content/havenCopy";
+import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 
 /**
  * Settings Page
@@ -66,6 +67,7 @@ export function SettingsPage({
   const [exportFormat, setExportFormat] = useState("full");
   const [exportPickerOpen, setExportPickerOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const { soundEnabled, hapticEnabled, updateFeedbackPrefs } = useFeedbackPrefs();
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -602,6 +604,32 @@ export function SettingsPage({
         </section>
 
         <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>{localeCopy.feedbackSectionTitle}</h2>
+          <label style={styles.toggleRow}>
+            <span>
+              <strong style={styles.toggleLabel}>{localeCopy.feedbackSoundsLabel}</strong>
+              <span style={styles.toggleHint}>{localeCopy.feedbackSoundsHint}</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={soundEnabled}
+              onChange={(e) => updateFeedbackPrefs({ soundEnabled: e.target.checked })}
+            />
+          </label>
+          <label style={styles.toggleRow}>
+            <span>
+              <strong style={styles.toggleLabel}>{localeCopy.feedbackHapticsLabel}</strong>
+              <span style={styles.toggleHint}>{localeCopy.feedbackHapticsHint}</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={hapticEnabled}
+              onChange={(e) => updateFeedbackPrefs({ hapticEnabled: e.target.checked })}
+            />
+          </label>
+        </section>
+
+        <section style={styles.card}>
           <h2 style={styles.sectionTitle}>{localeCopy.riskOpsTitle}</h2>
           <p style={styles.copy}>{localeCopy.riskOpsBody}</p>
           <ul style={styles.deviceList}>
@@ -830,6 +858,27 @@ const styles = {
   sectionTitle: {
     margin: 0,
     fontSize: 18,
+  },
+  toggleRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 44,
+    cursor: "pointer",
+  },
+  toggleLabel: {
+    display: "block",
+    fontSize: 15,
+    fontWeight: 600,
+    color: sanctuaryTheme.cream,
+  },
+  toggleHint: {
+    display: "block",
+    marginTop: 4,
+    fontSize: 13,
+    color: "#d9c3b3",
+    fontWeight: 400,
   },
   subheading: {
     margin: "12px 0 0",

@@ -40,6 +40,7 @@ import {
   clearSealWaitTabActive,
 } from "./sealCrossTab";
 import { clearSealNfcTapHref } from "./sealNfcTapRelay";
+import { clearComposerSnapshot } from "./composerSnapshotSafe";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -326,6 +327,7 @@ export async function finalizeSealWithTicket(
 
   await persistSealedDraftsLocally(draftIds);
   await Promise.all(draftIds.map((id) => removeDraftItem(id)));
+  clearComposerSnapshot();
 }
 
 /** Called after composing & persisting draft to idb, before prompting for ring tap. */

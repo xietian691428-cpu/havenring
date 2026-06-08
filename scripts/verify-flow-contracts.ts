@@ -174,6 +174,8 @@ check("seal commit persists memories to local timeline", () => {
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
   assert.match(sealFlow, /persistSealedDraftsLocally/);
   assert.match(sealFlow, /await persistSealedDraftsLocally\(draftIds\)/);
+  assert.match(sealFlow, /removeDraftItem/);
+  assert.match(sealFlow, /clearComposerSnapshot/);
   assert.match(sealFlow, /createMemory/);
 });
 

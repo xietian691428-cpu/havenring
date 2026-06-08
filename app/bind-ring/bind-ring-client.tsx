@@ -28,6 +28,7 @@ import {
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
 import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
 import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
+import { BIND_RING_PAGE_EN } from "@/src/content/bindRingPageContent";
 import { getNfcHoldGuideCopy, type HavenPlatform } from "@/src/content/havenCopy";
 import { usePlatform } from "@/src/hooks/usePlatform";
 
@@ -89,6 +90,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const { platform: detectedPlatform, ready: platformReady } = usePlatform();
   const platform = (platformReady ? detectedPlatform : "other") as HavenPlatform;
   const holdCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
+  const copy = BIND_RING_PAGE_EN;
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [session, setSession] = useState<Session | null>(null);
   const [busyProvider, setBusyProvider] = useState<"apple" | "google" | "">("");
@@ -200,7 +202,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         options: { redirectTo: redirectUrlFor(uid, inviteCode) },
       });
       if (error) {
-        setMessage("登录失败");
+        setMessage(copy.signInFailed);
       }
     } finally {
       setBusyProvider("");
@@ -249,14 +251,14 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     const activeSession = session;
     if (!isPermanentSupabaseSession(activeSession)) {
       setAuthState("signed_out");
-      setMessage("请先登录");
+      setMessage(copy.signInRequired);
       return;
     }
 
     const security = getSecuritySummary();
     if (!security.initialized) {
       setBindState("error");
-      setMessage("请先完成设备验证");
+      setMessage(copy.verifyDeviceFirst);
       return;
     }
 
@@ -292,7 +294,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       if (!response.ok) {
         setBindState("error");
         setMessage(
-          payload.error || (response.status === 409 ? "戒指已绑定" : "绑定失败，请重试")
+          payload.error || (response.status === 409 ? copy.alreadyBound : copy.bindFailed)
         );
         return;
       }
@@ -322,7 +324,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       }, ACTION_STEP_TIMING.bindSuccessRedirectMs);
     } catch {
       setBindState("error");
-      setMessage("绑定失败，请重试");
+      setMessage(copy.bindFailed);
     }
   }
 
@@ -356,7 +358,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.kicker}>绑定</p>
+        <p style={styles.kicker}>{copy.kicker}</p>
         <h1 style={styles.title}>{inviteCode ? "Join Haven" : "Bind Ring"}</h1>
         <p style={styles.body}>
           {inviteCode
@@ -396,7 +398,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             role="status"
           >
             {uidLink === "unlinked"
-              ? "可绑定"
+              ? copy.statusUnlinked
               : uidLink === "yours"
                 ? "This ring is already linked to your account."
                 : uidLink === "other"
@@ -404,8 +406,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                   : uidLink === "retired"
                     ? "This ring was already activated and cannot be transferred to another Haven."
                     : uidLink === "linked_unknown"
-                      ? "请登录"
-                      : "检查失败"}
+                      ? copy.signInRequiredShort
+                      : copy.statusCheckFailed}
           </div>
         ) : null}
 
@@ -427,7 +429,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               disabled={Boolean(busyProvider)}
               style={styles.primaryButton}
             >
-              {busyProvider === "apple" ? "打开中" : "Apple 登录"}
+              {busyProvider === "apple" ? copy.openingSignIn : copy.signInApple}
             </button>
             <button
               type="button"
@@ -435,13 +437,13 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               disabled={Boolean(busyProvider)}
               style={styles.secondaryButton}
             >
-              {busyProvider === "google" ? "打开中" : "Google 登录"}
+              {busyProvider === "google" ? copy.openingSignIn : copy.signInGoogle}
             </button>
           </div>
         ) : (
           <div style={styles.stack}>
             <label style={styles.label}>
-              名称
+              {copy.nicknameLabel}
               <input
                 type="text"
                 value={nickname}
@@ -451,7 +453,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               />
             </label>
             <label style={styles.label}>
-              设备密码
+              {copy.devicePasswordLabel}
               <input
                 type="password"
                 value={password}
@@ -461,13 +463,13 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               />
             </label>
             <label style={styles.label}>
-              恢复码
+              {copy.recoveryCodeLabel}
               <input
                 type="text"
                 value={recoveryCode}
                 onChange={(event) => setRecoveryCode(event.target.value)}
                 style={styles.input}
-                placeholder="可选"
+                placeholder={copy.recoveryOptional}
               />
             </label>
             <button
@@ -477,7 +479,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               style={styles.primaryButton}
             >
               {bindState === "binding"
-                ? "Binding..."
+                ? copy.binding
                 : inviteCode
                   ? "Join Haven and bind my ring"
                   : "Create Haven with this ring"}
@@ -514,7 +516,8 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
-    padding: 24,
+    padding:
+      "max(24px, env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)) 24px",
     background: "#120f0e",
     color: "#f8efe7",
     fontFamily: "Inter, system-ui, sans-serif",

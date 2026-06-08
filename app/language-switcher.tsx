@@ -1,6 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { shouldHideGlobalChrome } from "@/lib/hide-global-chrome";
 import {
   SUPPORTED_LOCALES,
   DEFAULT_LOCALE,
@@ -19,8 +21,10 @@ const LABELS: Record<Locale, string> = {
 };
 
 export function LanguageSwitcher() {
+  const pathname = usePathname();
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
   const t = getTranslator(locale);
+  const hideChrome = shouldHideGlobalChrome(pathname || "");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -36,6 +40,10 @@ export function LanguageSwitcher() {
     }
     setLocale(DEFAULT_LOCALE);
   }, []);
+
+  if (hideChrome) {
+    return null;
+  }
 
   function handleChange(next: string) {
     if (!isSupportedLocale(next)) return;
