@@ -7,8 +7,13 @@ export function classifySyncHealth({
   const hasHashIssue = Boolean(integrityWarning) || issues.includes("hash");
   const hasAuthIssue =
     issues.includes("auth") || String(syncMeta?.lastFailureCode || "") === "auth";
-  const hasNetworkIssue =
+  const hasOfflineIssue =
+    issues.includes("offline") ||
+    String(syncMeta?.lastFailureCode || "") === "offline";
+  const hasSyncIssue =
+    issues.includes("sync") ||
     issues.includes("network") ||
+    String(syncMeta?.lastFailureCode || "") === "sync" ||
     String(syncMeta?.lastFailureCode || "") === "network";
 
   if (hasHashIssue) {
@@ -17,8 +22,11 @@ export function classifySyncHealth({
   if (hasAuthIssue) {
     return { severity: "hard", reason: "auth_expired" };
   }
-  if (hasNetworkIssue) {
-    return { severity: "soft", reason: "network" };
+  if (hasOfflineIssue) {
+    return { severity: "soft", reason: "offline" };
+  }
+  if (hasSyncIssue) {
+    return { severity: "soft", reason: "sync" };
   }
   return { severity: "ok", reason: "" };
 }

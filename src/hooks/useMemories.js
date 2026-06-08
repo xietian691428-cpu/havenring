@@ -13,6 +13,7 @@ import {
   syncRingScopedCaches,
 } from "../services/ringSyncService";
 import { getActiveRingUidKey } from "../services/ringRegistryService";
+import { classifySyncFailure } from "@/lib/sync-failure";
 import { classifySyncHealth } from "../state/recoveryPolicy";
 
 const SAVE_RETRY_LIMIT = 2;
@@ -253,17 +254,19 @@ export function useMemories() {
       }
         return outcome;
       } catch {
-      setSyncMeta((prev) => {
-        const streak = (prev.failureStreak || 0) + 1;
-        const backoff = nextBackoffMs(streak);
-        return {
-          ...prev,
-          lastFailureAt: Date.now(),
-          lastFailureCode: "network",
-          failureStreak: streak,
-          nextRetryAt: Date.now() + backoff,
-        };
-      });
+        const issue = classifySyncFailure({});
+        setSyncIssues([issue]);
+        setSyncMeta((prev) => {
+          const streak = (prev.failureStreak || 0) + 1;
+          const backoff = nextBackoffMs(streak);
+          return {
+            ...prev,
+            lastFailureAt: Date.now(),
+            lastFailureCode: issue,
+            failureStreak: streak,
+            nextRetryAt: Date.now() + backoff,
+          };
+        });
         throw new Error("sync_failed");
       } finally {
         setSyncing(false);
@@ -330,17 +333,19 @@ export function useMemories() {
       }
         return outcome;
       } catch {
-      setSyncMeta((prev) => {
-        const streak = (prev.failureStreak || 0) + 1;
-        const backoff = nextBackoffMs(streak);
-        return {
-          ...prev,
-          lastFailureAt: Date.now(),
-          lastFailureCode: "network",
-          failureStreak: streak,
-          nextRetryAt: Date.now() + backoff,
-        };
-      });
+        const issue = classifySyncFailure({});
+        setSyncIssues([issue]);
+        setSyncMeta((prev) => {
+          const streak = (prev.failureStreak || 0) + 1;
+          const backoff = nextBackoffMs(streak);
+          return {
+            ...prev,
+            lastFailureAt: Date.now(),
+            lastFailureCode: issue,
+            failureStreak: streak,
+            nextRetryAt: Date.now() + backoff,
+          };
+        });
         throw new Error("sync_failed");
       } finally {
         setSyncing(false);

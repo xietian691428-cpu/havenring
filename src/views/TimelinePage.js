@@ -8,10 +8,6 @@ import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
-import { ActionStepCountdown } from "../components/NfcSyncedCountdown";
-import { useDeadlineCountdown } from "../hooks/useActionStepCountdown";
-import { getNfcHoldGuideCopy } from "../content/havenCopy";
-import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -30,11 +26,19 @@ export function TimelinePage({
   locale = "en",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
-  const platform = resolvePlatformTarget();
-  const holdCopy = getNfcHoldGuideCopy(platform);
-  const syncRetryCountdown = useDeadlineCountdown(
-    !syncing && syncMeta?.nextRetryAt ? syncMeta.nextRetryAt : 0
+  const [networkOnline, setNetworkOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine
   );
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const sync = () => setNetworkOnline(navigator.onLine);
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
   const [pinnedId, setPinnedId] = useState(null);
   const [notice, setNotice] = useState("");
   const ringHandledRef = useRef(false);
@@ -180,19 +184,23 @@ export function TimelinePage({
         {!syncing && syncIssues?.length ? (
           <section style={styles.syncBanner} role="status" aria-live="polite">
             <p style={styles.syncBannerText}>
-              {syncIssues.includes("network")
-                ? t.syncIssueNetwork
+              {!networkOnline || syncIssues.includes("offline")
+                ? t.syncIssueOffline
                 : syncIssues.includes("auth")
                   ? t.syncIssueAuth
-                  : t.syncIssueHash}
+                  : syncIssues.includes("hash")
+                    ? t.syncIssueHash
+                    : t.syncIssueSync}
             </p>
-            {syncRetryCountdown.isActive ? (
-              <ActionStepCountdown
-                label={holdCopy.syncRetryCountdownPrefix}
-                endsAt={syncRetryCountdown.endsAt}
-              />
+            {onResyncNow && networkOnline && !syncIssues.includes("auth") ? (
+              <>
+                <p style={styles.syncBannerHint}>{t.syncIssueAutoRetryHint}</p>
+                <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
+                  {t.resyncNow}
+                </button>
+              </>
             ) : null}
-            {onResyncNow ? (
+            {onResyncNow && syncIssues.includes("auth") ? (
               <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
                 {t.resyncNow}
               </button>
@@ -625,6 +633,12 @@ const styles = {
     color: "rgba(248, 239, 231, 0.82)",
     fontSize: 14,
     lineHeight: 1.5,
+  },
+  syncBannerHint: {
+    margin: 0,
+    color: "rgba(248, 239, 231, 0.55)",
+    fontSize: 13,
+    lineHeight: 1.4,
   },
   syncRetryBtn: {
     justifySelf: "start",

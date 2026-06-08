@@ -494,7 +494,6 @@ export type NfcHoldGuideCopy = {
   linkingCountdownPrefix: string;
   checkingCountdownPrefix: string;
   bindingCountdownPrefix: string;
-  syncRetryCountdownPrefix: string;
 };
 
 const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
@@ -523,7 +522,6 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
-    syncRetryCountdownPrefix: "Sync retry in",
   },
   android: {
     waitTitle: "Tap your ring",
@@ -550,7 +548,6 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
-    syncRetryCountdownPrefix: "Sync retry in",
   },
   other: {
     waitTitle: "Tap your ring",
@@ -577,7 +574,6 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
-    syncRetryCountdownPrefix: "Sync retry in",
   },
 };
 

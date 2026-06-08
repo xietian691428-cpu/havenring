@@ -1,3 +1,4 @@
+import { classifySyncFailure } from "@/lib/sync-failure";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { backupToCloud } from "./cloudBackupService";
 import {
@@ -42,7 +43,11 @@ async function fetchCloudRingBindings(accessToken) {
       },
     });
     if (!res.ok) {
-      return { ok: false, reason: res.status === 401 ? "auth" : "network", rows: [] };
+      return {
+        ok: false,
+        reason: classifySyncFailure({ httpStatus: res.status }),
+        rows: [],
+      };
     }
     const payload = await res.json().catch(() => ({}));
     return {
@@ -50,8 +55,8 @@ async function fetchCloudRingBindings(accessToken) {
       reason: "",
       rows: Array.isArray(payload.rings) ? payload.rings : [],
     };
-  } catch {
-    return { ok: false, reason: "network", rows: [] };
+  } catch (error) {
+    return { ok: false, reason: classifySyncFailure({ error }), rows: [] };
   }
 }
 
@@ -92,7 +97,9 @@ async function fetchMomentsDelta(cloudRingIds) {
     .in("ring_id", cloudRingIds)
     .order("created_at", { ascending: false })
     .limit(200);
-  if (error) return { ok: false, reason: "network", rows: [] };
+  if (error) {
+    return { ok: false, reason: classifySyncFailure({ error }), rows: [] };
+  }
   return { ok: true, reason: "", rows: data || [] };
 }
 
@@ -179,9 +186,9 @@ export async function syncRingScopedCaches(options = {}) {
           content_sha256: item.content_sha256 || null,
         });
         syncedIds.push(item.id);
-      } catch {
+      } catch (error) {
         // Cloud backup is optional; keep queue for next login/online sync.
-        issues.push("network");
+        issues.push(classifySyncFailure({ error }));
       }
     }
 
