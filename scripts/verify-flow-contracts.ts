@@ -163,8 +163,11 @@ check("timeline sync does not fail when optional cloud backup is off", () => {
   const backup = readRepoFile("src/services/cloudBackupService.js");
   assert.match(backup, /isCloudBackupReady/);
   assert.match(sync, /isCloudBackupReady/);
-  assert.match(sync, /Already reconciled with cloud metadata/);
   assert.match(sync, /if \(!cloudBackupReady\)/);
+  assert.match(sync, /clearRingSyncQueue/);
+  assert.match(sync, /isCriticalSyncIssue/);
+  assert.match(sync, /\/api\/sync\/moments/);
+  assert.match(readRepoFile("app/api/sync/moments/route.ts"), /requireAuthenticatedUser/);
 });
 
 check("seal commit persists memories to local timeline", () => {

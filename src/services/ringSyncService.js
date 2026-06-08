@@ -91,21 +91,40 @@ function reconcileLocalRingsFromCloud(cloudRings = []) {
   return recovered;
 }
 
-async function fetchMomentsDelta(cloudRingIds) {
+async function fetchMomentsDelta(accessToken, cloudRingIds) {
   if (!Array.isArray(cloudRingIds) || !cloudRingIds.length) {
     return { ok: true, reason: "", rows: [] };
   }
-  const sb = getSupabaseBrowserClient();
-  const { data, error } = await sb
-    .from("moments")
-    .select("id, ring_id, created_at, release_at, content_sha256, is_sealed")
-    .in("ring_id", cloudRingIds)
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (error) {
+  try {
+    const params = new URLSearchParams({
+      ring_ids: cloudRingIds.join(","),
+    });
+    const res = await fetch(`/api/sync/moments?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: classifySyncFailure({ httpStatus: res.status }),
+        rows: [],
+      };
+    }
+    const payload = await res.json().catch(() => ({}));
+    return {
+      ok: true,
+      reason: "",
+      rows: Array.isArray(payload.moments) ? payload.moments : [],
+    };
+  } catch (error) {
     return { ok: false, reason: classifySyncFailure({ error }), rows: [] };
   }
-  return { ok: true, reason: "", rows: data || [] };
+}
+
+function isCriticalSyncIssue(issue) {
+  return issue === "auth" || issue === "hash";
 }
 
 export async function syncRingScopedCaches(options = {}) {
@@ -125,8 +144,10 @@ export async function syncRingScopedCaches(options = {}) {
 
   const issues = [];
   const cloudRingResult = await fetchCloudRingBindings(accessToken);
-  if (!cloudRingResult.ok && cloudRingResult.reason) {
-    issues.push(cloudRingResult.reason);
+  if (!cloudRingResult.ok && cloudRingResult.reason === "auth") {
+    issues.push("auth");
+  } else if (!cloudRingResult.ok && cloudRingResult.reason) {
+    console.warn("[haven-ring] ring list sync skipped:", cloudRingResult.reason);
   }
   const cloudRings = cloudRingResult.rows || [];
   const recoveredLocalRings = reconcileLocalRingsFromCloud(cloudRings);
@@ -150,10 +171,11 @@ export async function syncRingScopedCaches(options = {}) {
   }
 
   const cloudMomentsResult = await fetchMomentsDelta(
+    accessToken,
     localRings.map((r) => r.cloudRingId).filter(Boolean)
   );
   if (!cloudMomentsResult.ok && cloudMomentsResult.reason) {
-    issues.push(cloudMomentsResult.reason);
+    console.warn("[haven-ring] moments metadata sync skipped:", cloudMomentsResult.reason);
   }
   const cloudMoments = cloudMomentsResult.rows || [];
   const byMomentId = new Map(cloudMoments.map((row) => [row.id, row]));
@@ -174,34 +196,38 @@ export async function syncRingScopedCaches(options = {}) {
 
     const cloudBackupReady = isCloudBackupReady();
 
-    for (const item of queue) {
-      const cloud = byMomentId.get(item.id);
-      if (cloud?.content_sha256 && item?.content_sha256) {
-        if (cloud.content_sha256 !== item.content_sha256) {
-          mismatch = true;
-          issues.push("hash");
+    if (!cloudBackupReady) {
+      if (queue.length) {
+        await clearRingSyncQueue(
+          ring.uidKey,
+          queue.map((row) => row?.id).filter(Boolean)
+        );
+      }
+    } else {
+      for (const item of queue) {
+        const cloud = byMomentId.get(item.id);
+        if (cloud?.content_sha256 && item?.content_sha256) {
+          if (cloud.content_sha256 !== item.content_sha256) {
+            mismatch = true;
+            issues.push("hash");
+            continue;
+          }
+          syncedIds.push(item.id);
           continue;
         }
-        // Already reconciled with cloud metadata — no optional backup needed.
-        syncedIds.push(item.id);
-        continue;
-      }
-      if (!cloudBackupReady) {
-        // Haven Plus cloud backup is optional; local-first users should not see sync errors.
-        continue;
-      }
-      try {
-        await backupToCloud({
-          ring_uid_hash: ring.uidKey,
-          id: item.id,
-          title: item.title || "",
-          timelineAt: item.timelineAt || Date.now(),
-          releaseAt: Number(item.releaseAt || 0) || 0,
-          content_sha256: item.content_sha256 || null,
-        });
-        syncedIds.push(item.id);
-      } catch (error) {
-        issues.push(classifySyncFailure({ error }));
+        try {
+          await backupToCloud({
+            ring_uid_hash: ring.uidKey,
+            id: item.id,
+            title: item.title || "",
+            timelineAt: item.timelineAt || Date.now(),
+            releaseAt: Number(item.releaseAt || 0) || 0,
+            content_sha256: item.content_sha256 || null,
+          });
+          syncedIds.push(item.id);
+        } catch (error) {
+          console.warn("[haven-ring] optional cloud backup skipped:", error);
+        }
       }
     }
 
@@ -234,7 +260,7 @@ export async function syncRingScopedCaches(options = {}) {
     message: mismatch ? INTEGRITY_MISMATCH_MSG : "",
     cloudPlaceholders,
     activeUidKey: active?.uidKey || "",
-    issues: Array.from(new Set(issues)),
+    issues: Array.from(new Set(issues)).filter(isCriticalSyncIssue),
     recoveredLocalRings,
   };
 }
