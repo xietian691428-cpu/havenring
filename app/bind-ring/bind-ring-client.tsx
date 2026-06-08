@@ -26,8 +26,11 @@ import {
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
+import { ActionStepCountdown } from "@/src/components/NfcSyncedCountdown";
 import { getNfcHoldGuideCopy, type HavenPlatform } from "@/src/content/havenCopy";
 import { usePlatform } from "@/src/hooks/usePlatform";
+import { useActionStepCountdown } from "@/src/hooks/useActionStepCountdown";
+import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
 
 type AuthState = "checking" | "signed_out" | "ready";
 type BindState = "idle" | "binding" | "success" | "error";
@@ -97,6 +100,14 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [message, setMessage] = useState("");
   const [uidLink, setUidLink] = useState<UidLinkState>("idle");
   const [inviteKeyPackage, setInviteKeyPackage] = useState("");
+  const bindCountdown = useActionStepCountdown(
+    bindState === "binding",
+    ACTION_STEP_TIMING.bindOperationMs
+  );
+  const checkingCountdown = useActionStepCountdown(
+    authState === "checking" || uidLink === "checking",
+    ACTION_STEP_TIMING.authCheckHintMs
+  );
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
@@ -317,7 +328,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const role = payload.role === "member" ? "member" : "owner";
       window.setTimeout(() => {
         window.location.href = `/bind-success?trial=${trial}&role=${role}`;
-      }, 400);
+      }, ACTION_STEP_TIMING.bindSuccessRedirectMs);
     } catch {
       setBindState("error");
       setMessage("绑定失败，请重试");
@@ -373,7 +384,15 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         </div>
 
         {uidLink === "checking" ? (
-          <p style={styles.muted}>检查中</p>
+          <div style={styles.stack}>
+            <p style={styles.muted}>Checking ring…</p>
+            {checkingCountdown.isActive ? (
+              <ActionStepCountdown
+                label={holdCopy.checkingCountdownPrefix}
+                endsAt={checkingCountdown.endsAt}
+              />
+            ) : null}
+          </div>
         ) : null}
         {uidLink !== "idle" && uidLink !== "checking" ? (
           <div
@@ -403,7 +422,15 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         ) : null}
 
         {authState === "checking" ? (
-          <p style={styles.muted}>检查中</p>
+          <div style={styles.stack}>
+            <p style={styles.muted}>Checking sign-in…</p>
+            {checkingCountdown.isActive ? (
+              <ActionStepCountdown
+                label={holdCopy.checkingCountdownPrefix}
+                endsAt={checkingCountdown.endsAt}
+              />
+            ) : null}
+          </div>
         ) : signedOut ? (
           <div style={styles.stack}>
             <p style={styles.notice}>
@@ -470,6 +497,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                   ? "Join Haven and bind my ring"
                   : "Create Haven with this ring"}
             </button>
+            {bindState === "binding" && bindCountdown.isActive ? (
+              <ActionStepCountdown
+                label={holdCopy.bindingCountdownPrefix}
+                endsAt={bindCountdown.endsAt}
+              />
+            ) : null}
           </div>
         )}
 

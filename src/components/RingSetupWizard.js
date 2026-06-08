@@ -23,6 +23,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
 import { getInstallGuideCopy } from "../content/installGuideContent";
 import { detectPlatform } from "../hooks/usePlatform";
+import { ActionStepCountdown } from "./NfcSyncedCountdown";
+import { useActionStepCountdown } from "../hooks/useActionStepCountdown";
+import { ACTION_STEP_TIMING } from "../../lib/nfc-flow-timing";
+import { getNfcHoldGuideCopy } from "../content/havenCopy";
 import { getPlatformGuidance } from "../utils/platformGuidance";
 import { trackFirstRunEvent } from "../services/firstRunTelemetryService";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
@@ -102,6 +106,12 @@ export function RingSetupWizard({
   });
   const [step, setStep] = useState("intro");
   const [scanBusy, setScanBusy] = useState(false);
+  const scanPlatform = isIosLike() ? "ios" : hasWebNfc() ? "android" : "other";
+  const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(scanPlatform), [scanPlatform]);
+  const scanListenCountdown = useActionStepCountdown(
+    scanBusy,
+    ACTION_STEP_TIMING.nfcScanListenMs
+  );
   const [scanPayload, setScanPayload] = useState(null);
   const [password, setPassword] = useState("");
   const [setupPassword, setSetupPassword] = useState("");
@@ -868,6 +878,12 @@ export function RingSetupWizard({
               <div style={styles.statusBox} role="status" aria-live="polite">
                 <p style={styles.noticeTitle}>{t.statusBindingTitle}</p>
                 <p style={styles.statusLine}>{t.scanWorking || t.statusBindingScanning}</p>
+                {scanListenCountdown.isActive ? (
+                  <ActionStepCountdown
+                    label={nfcHoldCopy.listeningCountdownPrefix}
+                    endsAt={scanListenCountdown.endsAt}
+                  />
+                ) : null}
               </div>
             )}
             <button type="button" onClick={() => setStep("intro")} style={styles.ghostBtn}>

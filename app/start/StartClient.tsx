@@ -8,10 +8,12 @@ import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import {
   NFC_FLOW_TIMING,
   RING_WAIT_QUERY,
+  ACTION_STEP_TIMING,
   clearRingWaitReason,
   isRingWaitSearch,
   readRingWaitReason,
   sleepMs,
+  visibleSecondsRemaining,
   writeRingWaitReason,
   type RingWaitReason,
 } from "@/lib/nfc-flow-timing";
@@ -19,6 +21,8 @@ import { hasSdmSearch } from "@/lib/nfc-intent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { usePlatform } from "@/src/hooks/usePlatform";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
+import { NfcSyncedCountdown } from "@/src/components/NfcSyncedCountdown";
+import { useActionStepCountdown } from "@/src/hooks/useActionStepCountdown";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
@@ -273,9 +277,24 @@ export default function StartClient() {
   );
   const [failedRetryReady, setFailedRetryReady] = useState(false);
   const resolveStartedAtRef = useRef(0);
+  const failedStartedAtRef = useRef(0);
+  const redirectStartedAtRef = useRef(0);
+  const [nfcUiTick, setNfcUiTick] = useState(0);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
   const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
+  const claimLinkCountdown = useActionStepCountdown(
+    claimState === "claiming",
+    ACTION_STEP_TIMING.claimTimeoutMs
+  );
+  const claimRedirectCountdown = useActionStepCountdown(
+    claimState === "claimed",
+    ACTION_STEP_TIMING.claimSuccessRedirectMs
+  );
+  const nfcListenCountdown = useActionStepCountdown(
+    nfcSealScanBusy,
+    ACTION_STEP_TIMING.nfcScanListenMs
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -293,8 +312,10 @@ export default function StartClient() {
   useEffect(() => {
     if (sdmState.kind !== "failed") {
       setFailedRetryReady(false);
+      failedStartedAtRef.current = 0;
       return;
     }
+    failedStartedAtRef.current = Date.now();
     const timer = window.setTimeout(
       () => setFailedRetryReady(true),
       NFC_FLOW_TIMING.minFailedBeforeRetryMs
@@ -425,11 +446,78 @@ export default function StartClient() {
     if (sealWaitMode) return;
     if (!isDailyMember || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
       return;
+    redirectStartedAtRef.current = Date.now();
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, NFC_FLOW_TIMING.successRedirectMs);
     return () => window.clearTimeout(t);
   }, [sealWaitMode, isDailyMember, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
+
+  const showMinimalSyncedCountdown =
+    sdmState.kind === "failed" ||
+    sdmState.kind === "resolving" ||
+    nfcSealBootstrapping ||
+    (sdmState.kind === "ready" && sdmState.scene === "daily_access" && isDailyMember) ||
+    (sealWaitMode && sealRemainingMs > 0);
+
+  useEffect(() => {
+    if (!showMinimalSyncedCountdown) return;
+    const id = window.setInterval(() => setNfcUiTick((n) => n + 1), 200);
+    return () => window.clearInterval(id);
+  }, [showMinimalSyncedCountdown]);
+
+  function renderMinimalSyncedCountdown() {
+    void nfcUiTick;
+    const now = Date.now();
+
+    if (
+      sdmState.kind === "ready" &&
+      sdmState.scene === "daily_access" &&
+      isDailyMember &&
+      redirectStartedAtRef.current > 0
+    ) {
+      const endsAt = redirectStartedAtRef.current + NFC_FLOW_TIMING.successRedirectMs;
+      if (visibleSecondsRemaining(endsAt, now) > 0) {
+        return (
+          <NfcSyncedCountdown label={nfcHoldCopy.redirectCountdownPrefix} endsAt={endsAt} />
+        );
+      }
+    }
+
+    if (sdmState.kind === "failed" && failedStartedAtRef.current > 0 && !failedRetryReady) {
+      const endsAt = failedStartedAtRef.current + NFC_FLOW_TIMING.minFailedBeforeRetryMs;
+      if (visibleSecondsRemaining(endsAt, now) > 0) {
+        return (
+          <NfcSyncedCountdown label={nfcHoldCopy.retryCountdownPrefix} endsAt={endsAt} />
+        );
+      }
+    }
+
+    if (sealWaitMode && sealRemainingMs > 0) {
+      return (
+        <p style={styles.minimalCountdown} role="timer" aria-live="polite">
+          {START_PAGE_EN.sealCountdownPrefix}{" "}
+          <strong>{formatSealCountdown(sealRemainingMs)}</strong>
+        </p>
+      );
+    }
+
+    if (
+      (sdmState.kind === "resolving" || nfcSealBootstrapping) &&
+      resolveStartedAtRef.current > 0
+    ) {
+      const endsAt = resolveStartedAtRef.current + NFC_FLOW_TIMING.minResolvingMs;
+      const readingRemaining = visibleSecondsRemaining(endsAt, now);
+      if (readingRemaining > 0) {
+        return (
+          <NfcSyncedCountdown label={nfcHoldCopy.readingCountdownPrefix} endsAt={endsAt} />
+        );
+      }
+      return <p style={styles.minimalHint}>{nfcHoldCopy.stillReadingLine}</p>;
+    }
+
+    return null;
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -555,6 +643,7 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
+    resolveStartedAtRef.current = Date.now();
     recordSealNfcTapHref(window.location.href);
     const myGen = ++nfcSdmResolveGenerationRef.current;
 
@@ -847,7 +936,7 @@ export default function StartClient() {
       setClaimToken("");
       setNotice("Ring linked.");
       window.location.assign("/app");
-    }, 1200);
+    }, ACTION_STEP_TIMING.claimSuccessRedirectMs);
     return () => window.clearTimeout(timer);
   }, [claimState]);
 
@@ -860,7 +949,7 @@ export default function StartClient() {
       setNotice(
         "Could not link this ring. Try again."
       );
-    }, 12_000);
+    }, ACTION_STEP_TIMING.claimTimeoutMs);
     return () => window.clearTimeout(timer);
   }, [claimState]);
 
@@ -1206,6 +1295,7 @@ export default function StartClient() {
           <StartRingGlyphPulse variant="hero" />
           <h1 style={styles.minimalTitle}>{copy.title}</h1>
           {copy.subtitle ? <p style={styles.minimalSubtitle}>{copy.subtitle}</p> : null}
+          {renderMinimalSyncedCountdown()}
           {copy.showGuide ? (
             <NfcHoldGuide platform={platform} stepLine={copy.stepLine} />
           ) : null}
@@ -1223,6 +1313,12 @@ export default function StartClient() {
             <p style={styles.minimalError} role="alert">
               {ringTapError}
             </p>
+          ) : null}
+          {nfcSealScanBusy && nfcListenCountdown.isActive ? (
+            <NfcSyncedCountdown
+              label={nfcHoldCopy.listeningCountdownPrefix}
+              endsAt={nfcListenCountdown.endsAt}
+            />
           ) : null}
           {copy.showOAuth ? (
             <div style={styles.minimalOAuthStack}>
@@ -1251,9 +1347,6 @@ export default function StartClient() {
             <button type="button" onClick={() => copy.onAction?.()} style={styles.minimalPrimary}>
               {copy.button}
             </button>
-          ) : null}
-          {!copy.showOAuth && !copy.button && sdmState.kind === "failed" && !failedRetryReady ? (
-            <p style={styles.minimalHint}>{nfcHoldCopy.holdSteadyLine}</p>
           ) : null}
         </section>
       </main>
@@ -1446,6 +1539,18 @@ export default function StartClient() {
                     ? "Sign in to continue."
                     : "Linking ring..."}
               </p>
+              {claimState === "claiming" && claimLinkCountdown.isActive ? (
+                <NfcSyncedCountdown
+                  label={nfcHoldCopy.linkingCountdownPrefix}
+                  endsAt={claimLinkCountdown.endsAt}
+                />
+              ) : null}
+              {claimState === "claimed" && claimRedirectCountdown.isActive ? (
+                <NfcSyncedCountdown
+                  label={nfcHoldCopy.redirectCountdownPrefix}
+                  endsAt={claimRedirectCountdown.endsAt}
+                />
+              ) : null}
               {claimState === "failed" ? (
                 <button
                   type="button"
@@ -1619,6 +1724,12 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.45,
     color: "rgba(255,247,239,0.58)",
+  },
+  minimalCountdown: {
+    margin: 0,
+    fontSize: 15,
+    lineHeight: 1.4,
+    color: "rgba(255,247,239,0.82)",
   },
   minimalError: {
     margin: 0,

@@ -141,8 +141,12 @@ check("daily access routes by Haven membership", () => {
   assert.match(startClient, /getNfcHoldGuideCopy/);
   assert.match(startClient, /enterRingWaitMode/);
   assert.match(startClient, /NfcHoldGuide/);
+  assert.match(startClient, /NfcSyncedCountdown/);
+  assert.match(readRepoFile("src/hooks/useActionStepCountdown.js"), /useDeadlineCountdown/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /ActionStepCountdown/);
+  assert.match(readRepoFile("src/views/TimelinePage.js"), /syncRetryCountdown/);
   assert.match(startClient, /Opening Haven/);
-  assert.match(readRepoFile("src/content/havenCopy.ts"), /Reading your ring/);
+  assert.match(readRepoFile("src/content/havenCopy.ts"), /readingCountdownPrefix/);
   assert.match(timing, /minFailedBeforeRetryMs/);
   assert.doesNotMatch(startClient, /isDailySelfOwner/);
   assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);

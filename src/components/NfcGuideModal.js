@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { NfcErrorHandler } from "./NfcErrorHandler";
 import { NfcTroubleshooting } from "./NfcTroubleshooting";
+import { ActionStepCountdown } from "./NfcSyncedCountdown";
+import { useActionStepCountdown } from "../hooks/useActionStepCountdown";
+import { ACTION_STEP_TIMING } from "../../lib/nfc-flow-timing";
+import { getNfcHoldGuideCopy } from "../content/havenCopy";
 import {
   readRingTextRecord,
   writeFixedEntryUrlToRing,
@@ -27,6 +31,11 @@ export function NfcGuideModal({
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
   const [lastAction, setLastAction] = useState("read");
   const canRewriteRingLink = platform === "android";
+  const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
+  const nfcListenCountdown = useActionStepCountdown(
+    nfcBusy,
+    ACTION_STEP_TIMING.nfcScanListenMs
+  );
   if (!open) return null;
 
   async function handleReadTap() {
@@ -142,6 +151,12 @@ export function NfcGuideModal({
             </p>
           ) : null}
           <p style={styles.statusText}>{nfcStatus || "\u00A0"}</p>
+          {nfcBusy && nfcListenCountdown.isActive ? (
+            <ActionStepCountdown
+              label={nfcHoldCopy.listeningCountdownPrefix}
+              endsAt={nfcListenCountdown.endsAt}
+            />
+          ) : null}
           <NfcErrorHandler
             error={nfcError}
             locale={locale}

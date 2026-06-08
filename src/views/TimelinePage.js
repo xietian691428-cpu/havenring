@@ -8,6 +8,10 @@ import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { ActionStepCountdown } from "../components/NfcSyncedCountdown";
+import { useDeadlineCountdown } from "../hooks/useActionStepCountdown";
+import { getNfcHoldGuideCopy } from "../content/havenCopy";
+import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -16,12 +20,21 @@ export function TimelinePage({
   memories = [],
   loading = false,
   error = "",
+  syncing = false,
+  syncMeta = null,
+  syncIssues = [],
+  onResyncNow,
   onOpenMemory,
   onOpenMemoryFromRing,
   onCreateMemory,
   locale = "en",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
+  const platform = resolvePlatformTarget();
+  const holdCopy = getNfcHoldGuideCopy(platform);
+  const syncRetryCountdown = useDeadlineCountdown(
+    !syncing && syncMeta?.nextRetryAt ? syncMeta.nextRetryAt : 0
+  );
   const [pinnedId, setPinnedId] = useState(null);
   const [notice, setNotice] = useState("");
   const ringHandledRef = useRef(false);
@@ -159,6 +172,33 @@ export function TimelinePage({
         ) : null}
 
         {loading ? <p style={styles.feedback}>{t.loading}</p> : null}
+        {syncing ? (
+          <section style={styles.syncBanner} role="status" aria-live="polite">
+            <p style={styles.syncBannerText}>{t.syncStatusRunning}</p>
+          </section>
+        ) : null}
+        {!syncing && syncIssues?.length ? (
+          <section style={styles.syncBanner} role="status" aria-live="polite">
+            <p style={styles.syncBannerText}>
+              {syncIssues.includes("network")
+                ? t.syncIssueNetwork
+                : syncIssues.includes("auth")
+                  ? t.syncIssueAuth
+                  : t.syncIssueHash}
+            </p>
+            {syncRetryCountdown.isActive ? (
+              <ActionStepCountdown
+                label={holdCopy.syncRetryCountdownPrefix}
+                endsAt={syncRetryCountdown.endsAt}
+              />
+            ) : null}
+            {onResyncNow ? (
+              <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
+                {t.resyncNow}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
         {error ? <p style={styles.error}>{error}</p> : null}
         {!loading && !orderedFiltered.length ? (
           <section style={styles.emptyPanel}>
@@ -571,5 +611,30 @@ const styles = {
   error: {
     margin: 0,
     color: "#ffb8a3",
+  },
+  syncBanner: {
+    display: "grid",
+    gap: 10,
+    padding: "14px 16px",
+    borderRadius: 14,
+    border: "1px solid rgba(196, 149, 106, 0.28)",
+    background: "rgba(26, 20, 18, 0.72)",
+  },
+  syncBannerText: {
+    margin: 0,
+    color: "rgba(248, 239, 231, 0.82)",
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  syncRetryBtn: {
+    justifySelf: "start",
+    border: "1px solid rgba(196, 149, 106, 0.45)",
+    background: "transparent",
+    color: sanctuaryTheme.accentSoft,
+    borderRadius: 999,
+    padding: "8px 14px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: 13,
   },
 };

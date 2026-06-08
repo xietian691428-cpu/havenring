@@ -7,6 +7,18 @@ export const NFC_FLOW_TIMING = {
   successRedirectMs: 2000,
 } as const;
 
+/** Timers for other user-action steps (NFC listen, claim, bind, hub, sync). */
+export const ACTION_STEP_TIMING = {
+  ...NFC_FLOW_TIMING,
+  nfcScanListenMs: 12_000,
+  claimTimeoutMs: 12_000,
+  claimSuccessRedirectMs: 1200,
+  bindSuccessRedirectMs: 400,
+  bindOperationMs: 15_000,
+  hubReadingMinMs: 2500,
+  authCheckHintMs: 8000,
+} as const;
+
 export const RING_WAIT_QUERY = "ring_wait";
 export const RING_WAIT_REASON_KEY = "haven.ring_wait_reason.v1";
 
@@ -49,4 +61,9 @@ export function clearRingWaitReason() {
 export function sleepMs(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/** Whole seconds left until `endsAt`, for on-page countdowns synced with internal timers. */
+export function visibleSecondsRemaining(endsAt: number, now = Date.now()): number {
+  return Math.max(0, Math.ceil((endsAt - now) / 1000));
 }

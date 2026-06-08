@@ -486,6 +486,15 @@ export type NfcHoldGuideCopy = {
   tryAgainCta: string;
   tapRingAgainCta: string;
   holdSteadyLine: string;
+  readingCountdownPrefix: string;
+  retryCountdownPrefix: string;
+  redirectCountdownPrefix: string;
+  stillReadingLine: string;
+  listeningCountdownPrefix: string;
+  linkingCountdownPrefix: string;
+  checkingCountdownPrefix: string;
+  bindingCountdownPrefix: string;
+  syncRetryCountdownPrefix: string;
 };
 
 const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
@@ -506,6 +515,15 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     tryAgainCta: "Try again",
     tapRingAgainCta: "Tap ring again",
     holdSteadyLine: "Keep holding — this usually takes 3–5 seconds.",
+    readingCountdownPrefix: "Keep holding",
+    retryCountdownPrefix: "Tap again in",
+    redirectCountdownPrefix: "Opening Haven in",
+    stillReadingLine: "Still reading… keep your ring on the phone.",
+    listeningCountdownPrefix: "Listening",
+    linkingCountdownPrefix: "Linking",
+    checkingCountdownPrefix: "Checking",
+    bindingCountdownPrefix: "Binding",
+    syncRetryCountdownPrefix: "Sync retry in",
   },
   android: {
     waitTitle: "Tap your ring",
@@ -524,6 +542,15 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     tryAgainCta: "Try again",
     tapRingAgainCta: "Tap ring again",
     holdSteadyLine: "Keep holding — this usually takes 2–4 seconds.",
+    readingCountdownPrefix: "Keep holding",
+    retryCountdownPrefix: "Tap again in",
+    redirectCountdownPrefix: "Opening Haven in",
+    stillReadingLine: "Still reading… keep your ring on the phone.",
+    listeningCountdownPrefix: "Listening",
+    linkingCountdownPrefix: "Linking",
+    checkingCountdownPrefix: "Checking",
+    bindingCountdownPrefix: "Binding",
+    syncRetryCountdownPrefix: "Sync retry in",
   },
   other: {
     waitTitle: "Tap your ring",
@@ -542,6 +569,15 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     tryAgainCta: "Try again",
     tapRingAgainCta: "Tap ring again",
     holdSteadyLine: "Keep holding — this usually takes a few seconds.",
+    readingCountdownPrefix: "Keep holding",
+    retryCountdownPrefix: "Tap again in",
+    redirectCountdownPrefix: "Opening Haven in",
+    stillReadingLine: "Still reading… keep your ring on the phone.",
+    listeningCountdownPrefix: "Listening",
+    linkingCountdownPrefix: "Linking",
+    checkingCountdownPrefix: "Checking",
+    bindingCountdownPrefix: "Binding",
+    syncRetryCountdownPrefix: "Sync retry in",
   },
 };
 

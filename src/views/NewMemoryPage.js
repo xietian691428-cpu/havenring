@@ -32,7 +32,10 @@ import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
-import { getNewMemoryPageCopy, getSealFlowCopy } from "../content/havenCopy";
+import { useActionStepCountdown } from "../hooks/useActionStepCountdown";
+import { getNewMemoryPageCopy, getNfcHoldGuideCopy, getSealFlowCopy } from "../content/havenCopy";
+import { ActionStepCountdown } from "../components/NfcSyncedCountdown";
+import { ACTION_STEP_TIMING } from "../../lib/nfc-flow-timing";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { getBoundRingCount } from "../services/ringRegistryService";
 
@@ -163,6 +166,7 @@ export function NewMemoryPage({
     [locale, platform, t]
   );
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
+  const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
   const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
   const ringReady = getBoundRingCount() > 0;
   const [title, setTitle] = useState("");
@@ -208,6 +212,10 @@ export function NewMemoryPage({
   const sealArmHadTimeRef = useRef(false);
   const { remainingMs: sealRemainingMs, remainingLabel: sealRemainingLabel } =
     useSealArmCountdown(sealPromptOpen);
+  const nfcListenCountdown = useActionStepCountdown(
+    nfcSealScanBusy,
+    ACTION_STEP_TIMING.nfcScanListenMs
+  );
 
   const storyTextareaRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -915,6 +923,12 @@ export function NewMemoryPage({
               >
                 {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
               </button>
+            ) : null}
+            {nfcSealScanBusy && nfcListenCountdown.isActive ? (
+              <ActionStepCountdown
+                label={nfcHoldCopy.listeningCountdownPrefix}
+                endsAt={nfcListenCountdown.endsAt}
+              />
             ) : null}
             {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
             {sealFinalizeError ? (
