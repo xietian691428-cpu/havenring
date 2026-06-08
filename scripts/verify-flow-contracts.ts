@@ -158,6 +158,15 @@ check("daily access routes by Haven membership", () => {
   assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);
 });
 
+check("timeline sync does not fail when optional cloud backup is off", () => {
+  const sync = readRepoFile("src/services/ringSyncService.js");
+  const backup = readRepoFile("src/services/cloudBackupService.js");
+  assert.match(backup, /isCloudBackupReady/);
+  assert.match(sync, /isCloudBackupReady/);
+  assert.match(sync, /Already reconciled with cloud metadata/);
+  assert.match(sync, /if \(!cloudBackupReady\)/);
+});
+
 check("seal commit persists memories to local timeline", () => {
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
   assert.match(sealFlow, /persistSealedDraftsLocally/);

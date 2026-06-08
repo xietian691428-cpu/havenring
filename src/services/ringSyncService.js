@@ -1,6 +1,6 @@
 import { classifySyncFailure } from "@/lib/sync-failure";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { backupToCloud } from "./cloudBackupService";
+import { backupToCloud, isCloudBackupReady } from "./cloudBackupService";
 import {
   clearRingSyncQueue,
   enqueueRingSync,
@@ -24,6 +24,9 @@ export async function stageDraftForActiveRing(memoryDraft) {
     return { staged: false };
   }
   await putRingDraft(ring.uidKey, memoryDraft.id, memoryDraft);
+  if (!isCloudBackupReady()) {
+    return { staged: true, uidKey: ring.uidKey, queued: false };
+  }
   await enqueueRingSync(ring.uidKey, {
     id: memoryDraft.id,
     title: memoryDraft.title,
@@ -89,7 +92,9 @@ function reconcileLocalRingsFromCloud(cloudRings = []) {
 }
 
 async function fetchMomentsDelta(cloudRingIds) {
-  if (!Array.isArray(cloudRingIds) || !cloudRingIds.length) return [];
+  if (!Array.isArray(cloudRingIds) || !cloudRingIds.length) {
+    return { ok: true, reason: "", rows: [] };
+  }
   const sb = getSupabaseBrowserClient();
   const { data, error } = await sb
     .from("moments")
@@ -167,6 +172,8 @@ export async function syncRingScopedCaches(options = {}) {
     const queue = await readRingSyncQueue(ring.uidKey);
     const syncedIds = [];
 
+    const cloudBackupReady = isCloudBackupReady();
+
     for (const item of queue) {
       const cloud = byMomentId.get(item.id);
       if (cloud?.content_sha256 && item?.content_sha256) {
@@ -175,6 +182,13 @@ export async function syncRingScopedCaches(options = {}) {
           issues.push("hash");
           continue;
         }
+        // Already reconciled with cloud metadata — no optional backup needed.
+        syncedIds.push(item.id);
+        continue;
+      }
+      if (!cloudBackupReady) {
+        // Haven Plus cloud backup is optional; local-first users should not see sync errors.
+        continue;
       }
       try {
         await backupToCloud({
@@ -187,7 +201,6 @@ export async function syncRingScopedCaches(options = {}) {
         });
         syncedIds.push(item.id);
       } catch (error) {
-        // Cloud backup is optional; keep queue for next login/online sync.
         issues.push(classifySyncFailure({ error }));
       }
     }

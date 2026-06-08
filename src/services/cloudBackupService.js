@@ -78,6 +78,11 @@ export async function signOutCloudBackup() {
   return next;
 }
 
+export function isCloudBackupReady() {
+  const settings = readBackupSettings();
+  return settings.enabled === true && Boolean(settings.user?.id);
+}
+
 function ensureReady() {
   const settings = readBackupSettings();
   if (!settings.enabled) {
