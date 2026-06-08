@@ -22,7 +22,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { usePlatform } from "@/src/hooks/usePlatform";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
 import { NfcSyncedCountdown } from "@/src/components/NfcSyncedCountdown";
-import { useActionStepCountdown } from "@/src/hooks/useActionStepCountdown";
+import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
 import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
@@ -283,18 +283,6 @@ export default function StartClient() {
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
   const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
-  const claimLinkCountdown = useActionStepCountdown(
-    claimState === "claiming",
-    ACTION_STEP_TIMING.claimTimeoutMs
-  );
-  const claimRedirectCountdown = useActionStepCountdown(
-    claimState === "claimed",
-    ACTION_STEP_TIMING.claimSuccessRedirectMs
-  );
-  const nfcListenCountdown = useActionStepCountdown(
-    nfcSealScanBusy,
-    ACTION_STEP_TIMING.nfcScanListenMs
-  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -478,9 +466,7 @@ export default function StartClient() {
     ) {
       const endsAt = redirectStartedAtRef.current + NFC_FLOW_TIMING.successRedirectMs;
       if (visibleSecondsRemaining(endsAt, now) > 0) {
-        return (
-          <NfcSyncedCountdown label={nfcHoldCopy.redirectCountdownPrefix} endsAt={endsAt} />
-        );
+        return <p style={styles.minimalHint}>{START_PAGE_EN.openingHavenLine}</p>;
       }
     }
 
@@ -1314,10 +1300,12 @@ export default function StartClient() {
               {ringTapError}
             </p>
           ) : null}
-          {nfcSealScanBusy && nfcListenCountdown.isActive ? (
-            <NfcSyncedCountdown
-              label={nfcHoldCopy.listeningCountdownPrefix}
-              endsAt={nfcListenCountdown.endsAt}
+          {nfcSealScanBusy ? (
+            <IndeterminateStepStatus
+              active
+              label={nfcHoldCopy.listeningStatusLine}
+              slowLabel={nfcHoldCopy.stillListeningLine}
+              style={styles.minimalHint}
             />
           ) : null}
           {copy.showOAuth ? (
@@ -1539,17 +1527,16 @@ export default function StartClient() {
                     ? "Sign in to continue."
                     : "Linking ring..."}
               </p>
-              {claimState === "claiming" && claimLinkCountdown.isActive ? (
-                <NfcSyncedCountdown
-                  label={nfcHoldCopy.linkingCountdownPrefix}
-                  endsAt={claimLinkCountdown.endsAt}
+              {claimState === "claiming" ? (
+                <IndeterminateStepStatus
+                  active
+                  label={nfcHoldCopy.linkingStatusLine}
+                  slowLabel={nfcHoldCopy.stillLinkingLine}
+                  style={styles.minimalHint}
                 />
               ) : null}
-              {claimState === "claimed" && claimRedirectCountdown.isActive ? (
-                <NfcSyncedCountdown
-                  label={nfcHoldCopy.redirectCountdownPrefix}
-                  endsAt={claimRedirectCountdown.endsAt}
-                />
+              {claimState === "claimed" ? (
+                <p style={styles.minimalHint}>{START_PAGE_EN.openingHavenLine}</p>
               ) : null}
               {claimState === "failed" ? (
                 <button

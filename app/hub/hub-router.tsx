@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { getPreferredLocale, getTranslator } from "@/lib/i18n";
-import { ACTION_STEP_TIMING, visibleSecondsRemaining } from "@/lib/nfc-flow-timing";
-import { ActionStepCountdown } from "@/src/components/NfcSyncedCountdown";
+import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
+import { getNfcHoldGuideCopy } from "@/src/content/havenCopy";
 import {
   hydrateHavenStore,
   useHavenStore,
@@ -149,15 +149,7 @@ export function HubRouter() {
       ? { kind: "deciding", scene: "reading" }
       : { kind: "error", message: t("hub.error.missing_token") }
   );
-  const hubStartedAtRef = useRef(Date.now());
-  const [hubTick, setHubTick] = useState(0);
-
-  useEffect(() => {
-    if (state.kind !== "deciding") return undefined;
-    hubStartedAtRef.current = Date.now();
-    const id = window.setInterval(() => setHubTick((n) => n + 1), 200);
-    return () => window.clearInterval(id);
-  }, [state.kind, state.kind === "deciding" ? state.scene : ""]);
+  const hubStatusCopy = useMemo(() => getNfcHoldGuideCopy("other"), []);
   const didRun = useRef(false);
 
   const clearPending = useHavenStore((s) => s.clearPending);
@@ -350,23 +342,14 @@ export function HubRouter() {
           <p className="mt-2 text-sm leading-relaxed text-white/70">
             {(HUB_SCENE_COPY[locale as keyof typeof HUB_SCENE_COPY] || HUB_SCENE_COPY.en)[state.scene].body}
           </p>
-          {(() => {
-            void hubTick;
-            const endsAt = hubStartedAtRef.current + ACTION_STEP_TIMING.hubReadingMinMs;
-            const remaining = visibleSecondsRemaining(endsAt);
-            if (remaining <= 0) {
-              return (
-                <p className="mt-3 text-sm text-white/55" role="status">
-                  Still checking… keep this page open.
-                </p>
-              );
-            }
-            return (
-              <div className="mt-3 flex justify-center">
-                <ActionStepCountdown label="Checking" endsAt={endsAt} />
-              </div>
-            );
-          })()}
+          <div className="mt-3 flex justify-center text-sm text-white/55">
+            <IndeterminateStepStatus
+              active
+              label={hubStatusCopy.checkingStatusLine}
+              slowLabel={`${hubStatusCopy.stillCheckingLine} Keep this page open.`}
+              style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, textAlign: "center" }}
+            />
+          </div>
         </motion.div>
       )}
 

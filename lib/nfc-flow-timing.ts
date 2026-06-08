@@ -17,6 +17,8 @@ export const ACTION_STEP_TIMING = {
   bindOperationMs: 15_000,
   hubReadingMinMs: 2500,
   authCheckHintMs: 8000,
+  /** When to switch from primary status to "Still …" without showing seconds. */
+  slowStatusHintMs: 3000,
 } as const;
 
 export const RING_WAIT_QUERY = "ring_wait";

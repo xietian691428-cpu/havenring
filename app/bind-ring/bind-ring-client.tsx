@@ -26,11 +26,10 @@ import {
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
-import { ActionStepCountdown } from "@/src/components/NfcSyncedCountdown";
+import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
+import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
 import { getNfcHoldGuideCopy, type HavenPlatform } from "@/src/content/havenCopy";
 import { usePlatform } from "@/src/hooks/usePlatform";
-import { useActionStepCountdown } from "@/src/hooks/useActionStepCountdown";
-import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
 
 type AuthState = "checking" | "signed_out" | "ready";
 type BindState = "idle" | "binding" | "success" | "error";
@@ -100,14 +99,6 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [message, setMessage] = useState("");
   const [uidLink, setUidLink] = useState<UidLinkState>("idle");
   const [inviteKeyPackage, setInviteKeyPackage] = useState("");
-  const bindCountdown = useActionStepCountdown(
-    bindState === "binding",
-    ACTION_STEP_TIMING.bindOperationMs
-  );
-  const checkingCountdown = useActionStepCountdown(
-    authState === "checking" || uidLink === "checking",
-    ACTION_STEP_TIMING.authCheckHintMs
-  );
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
@@ -384,15 +375,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         </div>
 
         {uidLink === "checking" ? (
-          <div style={styles.stack}>
-            <p style={styles.muted}>Checking ring…</p>
-            {checkingCountdown.isActive ? (
-              <ActionStepCountdown
-                label={holdCopy.checkingCountdownPrefix}
-                endsAt={checkingCountdown.endsAt}
-              />
-            ) : null}
-          </div>
+          <IndeterminateStepStatus
+            active
+            label={holdCopy.checkingStatusLine}
+            slowLabel={holdCopy.stillCheckingLine}
+            style={styles.muted}
+          />
         ) : null}
         {uidLink !== "idle" && uidLink !== "checking" ? (
           <div
@@ -422,15 +410,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         ) : null}
 
         {authState === "checking" ? (
-          <div style={styles.stack}>
-            <p style={styles.muted}>Checking sign-in…</p>
-            {checkingCountdown.isActive ? (
-              <ActionStepCountdown
-                label={holdCopy.checkingCountdownPrefix}
-                endsAt={checkingCountdown.endsAt}
-              />
-            ) : null}
-          </div>
+          <IndeterminateStepStatus
+            active
+            label={holdCopy.checkingStatusLine}
+            slowLabel={holdCopy.stillCheckingLine}
+            style={styles.muted}
+          />
         ) : signedOut ? (
           <div style={styles.stack}>
             <p style={styles.notice}>
@@ -497,10 +482,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                   ? "Join Haven and bind my ring"
                   : "Create Haven with this ring"}
             </button>
-            {bindState === "binding" && bindCountdown.isActive ? (
-              <ActionStepCountdown
-                label={holdCopy.bindingCountdownPrefix}
-                endsAt={bindCountdown.endsAt}
+            {bindState === "binding" ? (
+              <IndeterminateStepStatus
+                active
+                label={holdCopy.bindingStatusLine}
+                slowLabel={holdCopy.stillBindingLine}
+                style={styles.muted}
               />
             ) : null}
           </div>

@@ -494,6 +494,14 @@ export type NfcHoldGuideCopy = {
   linkingCountdownPrefix: string;
   checkingCountdownPrefix: string;
   bindingCountdownPrefix: string;
+  listeningStatusLine: string;
+  stillListeningLine: string;
+  linkingStatusLine: string;
+  stillLinkingLine: string;
+  checkingStatusLine: string;
+  stillCheckingLine: string;
+  bindingStatusLine: string;
+  stillBindingLine: string;
 };
 
 const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
@@ -522,6 +530,14 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
+    listeningStatusLine: "Listening for your ring…",
+    stillListeningLine: "Still listening… keep your ring on the phone.",
+    linkingStatusLine: "Linking your ring…",
+    stillLinkingLine: "Still linking… this can take a moment.",
+    checkingStatusLine: "Checking…",
+    stillCheckingLine: "Still checking…",
+    bindingStatusLine: "Binding your ring…",
+    stillBindingLine: "Still binding…",
   },
   android: {
     waitTitle: "Tap your ring",
@@ -548,6 +564,14 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
+    listeningStatusLine: "Listening for your ring…",
+    stillListeningLine: "Still listening… keep your ring on the phone.",
+    linkingStatusLine: "Linking your ring…",
+    stillLinkingLine: "Still linking… this can take a moment.",
+    checkingStatusLine: "Checking…",
+    stillCheckingLine: "Still checking…",
+    bindingStatusLine: "Binding your ring…",
+    stillBindingLine: "Still binding…",
   },
   other: {
     waitTitle: "Tap your ring",
@@ -574,6 +598,14 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     linkingCountdownPrefix: "Linking",
     checkingCountdownPrefix: "Checking",
     bindingCountdownPrefix: "Binding",
+    listeningStatusLine: "Listening for your ring…",
+    stillListeningLine: "Still listening… keep your ring on the phone.",
+    linkingStatusLine: "Linking your ring…",
+    stillLinkingLine: "Still linking… this can take a moment.",
+    checkingStatusLine: "Checking…",
+    stillCheckingLine: "Still checking…",
+    bindingStatusLine: "Binding your ring…",
+    stillBindingLine: "Still binding…",
   },
 };
 
@@ -594,6 +626,7 @@ export const START_PAGE_EN = {
   ringVerifyFailedNotice: "We could not finish that tap.",
   footerSecurityReminder: "",
   sealCountdownPrefix: "Time left",
+  openingHavenLine: "Opening Haven…",
   sealWaitTitle: "Tap your ring",
   sealWaitBody: "",
   sealWaitFinishingTitle: "Sealing your memory...",
