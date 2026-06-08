@@ -14,6 +14,7 @@ import {
 } from "@/src/services/ringRegistryService";
 import {
   getSecuritySummary,
+  initializeSecurity,
   verifyAndTrustCurrentDevice,
 } from "@/src/services/deviceTrustService";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
@@ -112,7 +113,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [busyProvider, setBusyProvider] = useState<"apple" | "google" | "">("");
   const [nickname, setNickname] = useState("Ring");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
+  const [securityReady, setSecurityReady] = useState(() =>
+    typeof window !== "undefined" ? getSecuritySummary().initialized : false
+  );
+  const [shownRecoveryCode, setShownRecoveryCode] = useState("");
   const [bindState, setBindState] = useState<BindState>("idle");
   const [message, setMessage] = useState("");
   const [uidLink, setUidLink] = useState<UidLinkState>("idle");
@@ -307,6 +313,34 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     }
   }
 
+  async function ensureDeviceSecurityReady(): Promise<boolean> {
+    if (securityReady) return true;
+    const pwd = password.trim();
+    const confirm = confirmPassword.trim();
+    if (pwd.length < 6) {
+      setBindState("error");
+      setMessage(copy.passwordTooShort);
+      return false;
+    }
+    if (pwd !== confirm) {
+      setBindState("error");
+      setMessage(copy.passwordMismatch);
+      return false;
+    }
+    try {
+      const { recoveryCode: code } = await initializeSecurity(pwd);
+      setSecurityReady(true);
+      if (code) {
+        setShownRecoveryCode(code);
+      }
+      return true;
+    } catch {
+      setBindState("error");
+      setMessage(copy.securitySetupFailed);
+      return false;
+    }
+  }
+
   async function handleBind() {
     if (!uid) {
       setBindState("error");
@@ -320,16 +354,16 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       return;
     }
 
-    const security = getSecuritySummary();
-    if (!security.initialized) {
-      setBindState("error");
-      setMessage(copy.verifyDeviceFirst);
-      return;
-    }
-
     setBindState("binding");
     setMessage("");
     try {
+      if (!securityReady) {
+        const ready = await ensureDeviceSecurityReady();
+        if (!ready) {
+          setBindState("error");
+          return;
+        }
+      }
       await verifyAndTrustCurrentDevice({ password, recoveryCode });
       const pendingKeyPackage = inviteCode
         ? inviteKeyPackage || readPendingInviteKeyPackage()
@@ -387,11 +421,23 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       window.setTimeout(() => {
         window.location.href = `/bind-success?trial=${trial}&role=${role}`;
       }, ACTION_STEP_TIMING.bindSuccessRedirectMs);
-    } catch {
+    } catch (error) {
       setBindState("error");
-      setMessage(copy.bindFailed);
+      const msg = error instanceof Error ? error.message : "";
+      setMessage(
+        msg === "Verification failed." ? copy.passwordVerifyFailed : copy.bindFailed
+      );
     }
   }
+
+  const needsPasswordSetup = !securityReady;
+  const primaryBindLabel = inviteCode
+    ? needsPasswordSetup
+      ? copy.joinBindCtaSetup
+      : copy.joinBindCta
+    : needsPasswordSetup
+      ? copy.createHavenCtaSetup
+      : copy.createHavenCta;
 
   if (!uid) {
     const signedOutInvite =
@@ -559,37 +605,58 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                 placeholder="Ring"
               />
             </label>
+            <p style={styles.notice}>
+              {needsPasswordSetup ? copy.devicePasswordCreateHint : copy.devicePasswordEnterHint}
+            </p>
             <label style={styles.label}>
-              {copy.devicePasswordLabel}
+              {needsPasswordSetup ? copy.devicePasswordCreateLabel : copy.devicePasswordLabel}
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 style={styles.input}
-                autoComplete="current-password"
+                autoComplete={needsPasswordSetup ? "new-password" : "current-password"}
+                minLength={needsPasswordSetup ? 6 : undefined}
               />
             </label>
-            <label style={styles.label}>
-              {copy.recoveryCodeLabel}
-              <input
-                type="text"
-                value={recoveryCode}
-                onChange={(event) => setRecoveryCode(event.target.value)}
-                style={styles.input}
-                placeholder={copy.recoveryOptional}
-              />
-            </label>
+            {needsPasswordSetup ? (
+              <label style={styles.label}>
+                {copy.devicePasswordConfirmLabel}
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  style={styles.input}
+                  autoComplete="new-password"
+                  minLength={6}
+                />
+              </label>
+            ) : (
+              <label style={styles.label}>
+                {copy.recoveryCodeLabel}
+                <input
+                  type="text"
+                  value={recoveryCode}
+                  onChange={(event) => setRecoveryCode(event.target.value)}
+                  style={styles.input}
+                  placeholder={copy.recoveryOptional}
+                />
+              </label>
+            )}
+            {shownRecoveryCode ? (
+              <div style={styles.recoveryBox} role="status">
+                <p style={styles.recoveryTitle}>{copy.recoveryTitle}</p>
+                <p style={styles.recoveryCode}>{shownRecoveryCode}</p>
+                <p style={styles.recoveryHint}>{copy.recoveryHint}</p>
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => void handleBind()}
               disabled={bindState === "binding" || blockNewBind}
               style={styles.primaryButton}
             >
-              {bindState === "binding"
-                ? copy.binding
-                : inviteCode
-                  ? copy.joinBindCta
-                  : copy.createHavenCta}
+              {bindState === "binding" ? copy.binding : primaryBindLabel}
             </button>
             {bindState === "binding" ? (
               <IndeterminateStepStatus
@@ -793,5 +860,32 @@ const styles: Record<string, CSSProperties> = {
     color: "#d4e8dc",
     fontSize: 14,
     lineHeight: 1.5,
+  },
+  recoveryBox: {
+    padding: "14px 16px",
+    borderRadius: 14,
+    border: "1px solid rgba(217, 166, 122, 0.55)",
+    background: "rgba(48, 36, 24, 0.72)",
+    display: "grid",
+    gap: 8,
+  },
+  recoveryTitle: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 650,
+    color: "#f0c29e",
+  },
+  recoveryCode: {
+    margin: 0,
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    fontSize: 20,
+    letterSpacing: "0.12em",
+    color: "#f8efe7",
+  },
+  recoveryHint: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#a8988c",
   },
 };
