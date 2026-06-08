@@ -76,12 +76,18 @@ interface BindRingClientProps {
   initialInviteCode?: string;
 }
 
-function redirectUrlFor(uid: string, inviteCode = "") {
+function redirectUrlFor(uid: string, inviteCode = "", keyToken = "") {
   const params = new URLSearchParams();
   params.set("uid", uid);
   if (inviteCode) params.set("invite", inviteCode);
+  if (keyToken) params.set("kt", keyToken);
   const origin = canonicalAuthOriginFromLocation();
   return `${origin}/bind-ring?${params.toString()}`;
+}
+
+function readInviteKeyTokenFromLocation(): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get("kt") || "").trim();
 }
 
 export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingClientProps) {
@@ -104,14 +110,55 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
-    const fromHash = readInviteKeyPackageFromLocation();
-    const fromStorage = readPendingInviteKeyPackage();
-    const encodedPackage = fromHash || fromStorage;
-    savePendingPartnerInvite(inviteCode, encodedPackage);
-    setInviteKeyPackage(encodedPackage);
-    if (fromHash) {
-      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
-    }
+    let active = true;
+
+    void (async () => {
+      const fromHash = readInviteKeyPackageFromLocation();
+      const fromStorage = readPendingInviteKeyPackage();
+      const cachedPackage = fromHash || fromStorage;
+      if (cachedPackage) {
+        savePendingPartnerInvite(inviteCode, cachedPackage);
+        setInviteKeyPackage(cachedPackage);
+        if (fromHash) {
+          window.history.replaceState(
+            {},
+            "",
+            `${window.location.pathname}${window.location.search}`
+          );
+        }
+        return;
+      }
+
+      const keyToken = readInviteKeyTokenFromLocation();
+      if (!keyToken) return;
+
+      try {
+        const res = await fetch(
+          `/api/haven/invite/key?invite=${encodeURIComponent(inviteCode)}&kt=${encodeURIComponent(keyToken)}`
+        );
+        const payload = (await res.json().catch(() => ({}))) as {
+          keyPackage?: string;
+          error?: string;
+        };
+        if (!active) return;
+        if (!res.ok || !payload.keyPackage) {
+          setMessage(
+            payload.error || "Invite key missing. Ask your partner to create a fresh invite."
+          );
+          return;
+        }
+        savePendingPartnerInvite(inviteCode, payload.keyPackage);
+        setInviteKeyPackage(payload.keyPackage);
+      } catch {
+        if (active) {
+          setMessage("Invite key missing. Ask your partner to create a fresh invite.");
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [inviteCode]);
 
   useEffect(() => {
@@ -199,7 +246,9 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: redirectUrlFor(uid, inviteCode) },
+        options: {
+          redirectTo: redirectUrlFor(uid, inviteCode, readInviteKeyTokenFromLocation()),
+        },
       });
       if (error) {
         setMessage(copy.signInFailed);

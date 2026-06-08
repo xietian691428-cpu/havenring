@@ -119,16 +119,27 @@ check("dual-account migration enforces Haven membership and non-transferability"
 
 check("invite revoke and shared key flows are wired", () => {
   const inviteRoute = readRepoFile("app/api/haven/invite/route.ts");
+  const inviteDelivery = readRepoFile("app/api/haven/invite/delivery/route.ts");
+  const inviteKey = readRepoFile("app/api/haven/invite/key/route.ts");
+  const inviteStatus = readRepoFile("app/api/haven/invite/status/route.ts");
   const bindClient = readRepoFile("app/bind-ring/bind-ring-client.tsx");
   const ringsPage = readRepoFile("src/views/RingsPage.js");
+  const invitePanel = readRepoFile("src/components/PartnerInvitePanel.js");
   const keyService = readRepoFile("src/services/havenKeyService.js");
+  const shareInvite = readRepoFile("lib/shareInviteLink.ts");
   assert.match(inviteRoute, /24 \* 60 \* 60 \* 1000/);
   assert.match(inviteRoute, /export async function DELETE/);
-  assert.match(ringsPage, /createInviteKeyPackage/);
-  assert.match(ringsPage, /handleRevokeInvite/);
+  assert.match(inviteDelivery, /key_package/);
+  assert.match(inviteKey, /keyPackage/);
+  assert.match(inviteStatus, /partnerJoined/);
+  assert.match(ringsPage, /PartnerInvitePanel/);
+  assert.match(invitePanel, /inviteShareCta/);
+  assert.match(readRepoFile("src/content/ringsPageContent.js"), /Share Invite Link/);
+  assert.match(bindClient, /\/api\/haven\/invite\/key/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);
   assert.match(bindClient, /uploadWrappedHavenKey/);
   assert.match(keyService, /RSA-OAEP/);
+  assert.match(shareInvite, /navigator\.share/);
 });
 
 check("daily access routes by Haven membership", () => {

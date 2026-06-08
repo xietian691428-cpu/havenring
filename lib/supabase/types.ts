@@ -92,6 +92,8 @@ export type RingInviteRow = {
   consumed_at: string | null;
   cancelled_at: string | null;
   created_at: string;
+  key_token_hash: string | null;
+  key_package: string | null;
 };
 
 export type RingEventAction =
