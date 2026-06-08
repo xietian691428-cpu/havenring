@@ -2,6 +2,7 @@ import { get, set } from "idb-keyval";
 
 export const PARTNER_INVITE_STORAGE_KEY = "haven.partner_invite_code.v1";
 export const PARTNER_INVITE_KEY_PACKAGE_STORAGE_KEY = "haven.partner_invite_key_package.v1";
+export const PARTNER_INVITE_KEY_TOKEN_STORAGE_KEY = "haven.partner_invite_key_token.v1";
 
 const MEMBER_KEYPAIR_ID = "haven.member_rsa_oaep_keypair.v1";
 const HAVEN_KEY_PREFIX = "haven.shared_aes_key.v1:";
@@ -165,12 +166,21 @@ export function decodeInviteKeyPackage(encoded) {
   return JSON.parse(text);
 }
 
-export function savePendingPartnerInvite(inviteCode, encodedPackage) {
+export function savePendingPartnerInvite(inviteCode, encodedPackage, keyToken = "") {
   if (typeof window === "undefined") return;
   if (inviteCode) window.localStorage.setItem(PARTNER_INVITE_STORAGE_KEY, inviteCode);
   if (encodedPackage) {
     window.localStorage.setItem(PARTNER_INVITE_KEY_PACKAGE_STORAGE_KEY, encodedPackage);
   }
+  const kt = String(keyToken || "").trim();
+  if (kt) {
+    window.localStorage.setItem(PARTNER_INVITE_KEY_TOKEN_STORAGE_KEY, kt);
+  }
+}
+
+export function readPendingInviteKeyToken() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(PARTNER_INVITE_KEY_TOKEN_STORAGE_KEY) || "";
 }
 
 export function readInviteKeyPackageFromLocation() {
@@ -188,6 +198,7 @@ export function clearPendingPartnerInvite() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(PARTNER_INVITE_STORAGE_KEY);
   window.localStorage.removeItem(PARTNER_INVITE_KEY_PACKAGE_STORAGE_KEY);
+  window.localStorage.removeItem(PARTNER_INVITE_KEY_TOKEN_STORAGE_KEY);
 }
 
 export async function importHavenKeyFromInvitePackage(havenId, inviteCode, encodedPackage) {

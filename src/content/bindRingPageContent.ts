@@ -1,5 +1,6 @@
 export const BIND_RING_PAGE_EN = {
   kicker: "Bind ring",
+  joinKicker: "Join Haven",
   signInFailed: "Sign-in could not start. Please try again.",
   signInRequired: "Sign in to continue.",
   verifyDeviceFirst: "Verify this device first.",
@@ -16,4 +17,14 @@ export const BIND_RING_PAGE_EN = {
   recoveryCodeLabel: "Recovery code",
   recoveryOptional: "Optional",
   binding: "Binding…",
+  joinStep1Title: "Step 1 — Sign in",
+  joinStep1Body: "Use your own Apple or Google account. Not your partner's.",
+  joinStep2Title: "Step 2 — Tap your ring once",
+  joinStep2Body:
+    "After you sign in, hold your ring near the top of your iPhone once. You won't need to tap it again on the next screen.",
+  joinStep2BodySignedIn:
+    "Hold your ring near the top of your iPhone once. When the next screen opens, finish joining — no need to tap again.",
+  joinNoRetap: "Ring detected. Finish joining below — no need to tap your ring again.",
+  joinBindCta: "Join Haven and bind my ring",
+  createHavenCta: "Create Haven with this ring",
 } as const;

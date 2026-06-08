@@ -69,7 +69,7 @@ import {
 } from "@/lib/appAuthGate";
 
 const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
-const PARTNER_INVITE_STORAGE_KEY = "haven.partner_invite_code.v1";
+import { buildBindRingUrl, hasPendingPartnerInvite } from "@/lib/partner-invite-pending";
 
 function isSealNfcLaunchSearch(search: string): boolean {
   return hasSdmSearch(search);
@@ -91,7 +91,7 @@ function buildOAuthReturnUrl(safeOrigin: string): string {
   }
   const uidOnly = (sp.get("uid") || "").trim();
   if (uidOnly && !sp.get("cmac")) {
-    return `${safeOrigin}/bind-ring?uid=${encodeURIComponent(uidOnly)}`;
+    return buildBindRingUrl(safeOrigin, uidOnly);
   }
   if (isSealNfcLaunchSearch(rawSearch)) {
     const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
@@ -777,6 +777,16 @@ export default function StartClient() {
         );
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         clearRingWaitReason();
+        const resolvedUid = typeof data.uid === "string" ? data.uid.trim() : "";
+        if (resolvedUid && scene === "new_ring_binding") {
+          try {
+            const u = new URL(window.location.href);
+            u.searchParams.set("uid", resolvedUid);
+            window.history.replaceState({}, "", `${u.pathname}${u.search}`);
+          } catch {
+            /* ignore */
+          }
+        }
         setSdmState({
           kind: "ready",
           scene,
@@ -784,6 +794,7 @@ export default function StartClient() {
           ownerId: data.ownerId || null,
           viewerUserId,
           currentUserIsHavenMember: Boolean(data.currentUserIsHavenMember),
+          resolvedUid: resolvedUid || null,
         });
         setNotice(
           scene === "new_ring_binding"
@@ -1012,13 +1023,23 @@ export default function StartClient() {
     };
   }, [claimRingWithToken, claimToken]);
 
+  function readUidForPartnerBind(state: StartSdmStateForCopy): string {
+    if (typeof window === "undefined") return "";
+    const fromUrl = (new URLSearchParams(window.location.search).get("uid") || "").trim();
+    if (fromUrl) return fromUrl;
+    if (state.kind === "ready" && state.resolvedUid) {
+      return String(state.resolvedUid).trim();
+    }
+    return "";
+  }
+
   useEffect(() => {
     if (sdmState.kind !== "ready" || sdmState.scene !== "new_ring_binding") {
       bindRingRedirectDoneRef.current = false;
       return;
     }
     if (typeof window === "undefined") return;
-    const uid = (new URLSearchParams(window.location.search).get("uid") || "").trim();
+    const uid = readUidForPartnerBind(sdmState);
     if (!uid) return;
 
     const supabase = getSupabaseBrowserClient();
@@ -1029,10 +1050,8 @@ export default function StartClient() {
       if (!session?.access_token) return;
       bindRingRedirectDoneRef.current = true;
       setNotice("Opening ring setup...");
-      const params = new URLSearchParams({ uid });
-      const inviteCode = window.localStorage.getItem(PARTNER_INVITE_STORAGE_KEY) || "";
-      if (inviteCode) params.set("invite", inviteCode);
-      window.location.assign(`/bind-ring?${params.toString()}`);
+      const origin = window.location.origin;
+      window.location.assign(buildBindRingUrl(origin, uid));
     }
 
     void supabase.auth.getSession().then(({ data }) => go(data.session ?? null));
@@ -1153,13 +1172,12 @@ export default function StartClient() {
 
   function bindCurrentRing() {
     if (typeof window === "undefined") return;
-    const uid = (new URLSearchParams(window.location.search).get("uid") || "").trim();
-    const params = new URLSearchParams();
-    if (uid) params.set("uid", uid);
-    const inviteCode = window.localStorage.getItem(PARTNER_INVITE_STORAGE_KEY) || "";
-    if (inviteCode) params.set("invite", inviteCode);
-    const suffix = params.toString();
-    window.location.assign(suffix ? `/bind-ring?${suffix}` : "/bind-ring");
+    const uid = readUidForPartnerBind(sdmState);
+    if (!uid) {
+      setNotice("We could not read this ring. Hold it steady near the top of your phone and try once more.");
+      return;
+    }
+    window.location.assign(buildBindRingUrl(window.location.origin, uid));
   }
 
   const needsDailySignIn =
@@ -1230,12 +1248,16 @@ export default function StartClient() {
       };
     }
     if (sdmState.kind === "ready" && sdmState.scene === "new_ring_binding") {
+      const partnerJoin = hasPendingPartnerInvite();
       return {
-        title: "Bind this ring to your account?",
-        subtitle: nfcHoldCopy.waitSubtitle,
+        title: partnerJoin ? "Join Haven with this ring" : "Bind this ring to your account?",
+        subtitle: partnerJoin
+          ? "Sign in with your own account, then finish on the next screen. No need to tap the ring again."
+          : nfcHoldCopy.waitSubtitle,
         showGuide: false,
-        button: "Bind Ring",
+        button: partnerJoin ? "Continue" : "Bind Ring",
         onAction: bindCurrentRing,
+        showOAuth: partnerJoin,
       };
     }
     if (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation") {
@@ -1312,7 +1334,11 @@ export default function StartClient() {
             <div style={styles.minimalOAuthStack}>
               <button
                 type="button"
-                onClick={() => void signInForRingAccess("apple")}
+                onClick={() =>
+                  void (hasPendingPartnerInvite()
+                    ? signInWith("apple")
+                    : signInForRingAccess("apple"))
+                }
                 disabled={Boolean(busyProvider) || !appleProviderReady}
                 style={styles.minimalPrimary}
               >
@@ -1324,14 +1350,19 @@ export default function StartClient() {
               </button>
               <button
                 type="button"
-                onClick={() => void signInForRingAccess("google")}
+                onClick={() =>
+                  void (hasPendingPartnerInvite()
+                    ? signInWith("google")
+                    : signInForRingAccess("google"))
+                }
                 disabled={Boolean(busyProvider)}
                 style={styles.minimalSecondary}
               >
                 {busyProvider === "google" ? "Opening..." : "Continue with Google"}
               </button>
             </div>
-          ) : copy.button && copy.onAction ? (
+          ) : null}
+          {copy.button && copy.onAction ? (
             <button type="button" onClick={() => copy.onAction?.()} style={styles.minimalPrimary}>
               {copy.button}
             </button>

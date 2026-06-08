@@ -22,6 +22,7 @@ import {
   importHavenKeyFromInvitePackage,
   readInviteKeyPackageFromLocation,
   readPendingInviteKeyPackage,
+  readPendingInviteKeyToken,
   savePendingPartnerInvite,
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
@@ -76,18 +77,27 @@ interface BindRingClientProps {
   initialInviteCode?: string;
 }
 
-function redirectUrlFor(uid: string, inviteCode = "", keyToken = "") {
-  const params = new URLSearchParams();
-  params.set("uid", uid);
-  if (inviteCode) params.set("invite", inviteCode);
-  if (keyToken) params.set("kt", keyToken);
-  const origin = canonicalAuthOriginFromLocation();
-  return `${origin}/bind-ring?${params.toString()}`;
-}
-
 function readInviteKeyTokenFromLocation(): string {
   if (typeof window === "undefined") return "";
-  return (new URLSearchParams(window.location.search).get("kt") || "").trim();
+  return (
+    (new URLSearchParams(window.location.search).get("kt") || "").trim() ||
+    readPendingInviteKeyToken()
+  );
+}
+
+function oauthReturnUrlForBind(uid: string, inviteCode: string) {
+  const origin = canonicalAuthOriginFromLocation();
+  const keyToken = readInviteKeyTokenFromLocation();
+  if (uid) {
+    const params = new URLSearchParams({ uid });
+    if (inviteCode) params.set("invite", inviteCode);
+    if (keyToken) params.set("kt", keyToken);
+    return `${origin}/bind-ring?${params.toString()}`;
+  }
+  if (!inviteCode) return `${origin}/bind-ring`;
+  const params = new URLSearchParams({ invite: inviteCode });
+  if (keyToken) params.set("kt", keyToken);
+  return `${origin}/bind-ring?${params.toString()}`;
 }
 
 export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingClientProps) {
@@ -113,11 +123,17 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     let active = true;
 
     void (async () => {
+      const ktFromUrl = (new URLSearchParams(window.location.search).get("kt") || "").trim();
+      if (ktFromUrl) {
+        savePendingPartnerInvite(inviteCode, readPendingInviteKeyPackage(), ktFromUrl);
+      }
+
       const fromHash = readInviteKeyPackageFromLocation();
       const fromStorage = readPendingInviteKeyPackage();
       const cachedPackage = fromHash || fromStorage;
+      const keyToken = readInviteKeyTokenFromLocation();
       if (cachedPackage) {
-        savePendingPartnerInvite(inviteCode, cachedPackage);
+        savePendingPartnerInvite(inviteCode, cachedPackage, keyToken);
         setInviteKeyPackage(cachedPackage);
         if (fromHash) {
           window.history.replaceState(
@@ -129,12 +145,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         return;
       }
 
-      const keyToken = readInviteKeyTokenFromLocation();
-      if (!keyToken) return;
+      const keyTokenFromUrl = readInviteKeyTokenFromLocation();
+      if (!keyTokenFromUrl) return;
 
       try {
         const res = await fetch(
-          `/api/haven/invite/key?invite=${encodeURIComponent(inviteCode)}&kt=${encodeURIComponent(keyToken)}`
+          `/api/haven/invite/key?invite=${encodeURIComponent(inviteCode)}&kt=${encodeURIComponent(keyTokenFromUrl)}`
         );
         const payload = (await res.json().catch(() => ({}))) as {
           keyPackage?: string;
@@ -147,7 +163,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
           );
           return;
         }
-        savePendingPartnerInvite(inviteCode, payload.keyPackage);
+        savePendingPartnerInvite(inviteCode, payload.keyPackage, keyTokenFromUrl);
         setInviteKeyPackage(payload.keyPackage);
       } catch {
         if (active) {
@@ -239,7 +255,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }, [uid, session]);
 
   async function signInWith(provider: "apple" | "google") {
-    if (!uid) return;
+    if (!uid && !inviteCode) return;
     setBusyProvider(provider);
     setMessage("");
     try {
@@ -247,7 +263,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: redirectUrlFor(uid, inviteCode, readInviteKeyTokenFromLocation()),
+          redirectTo: oauthReturnUrlForBind(uid, inviteCode),
         },
       });
       if (error) {
@@ -378,17 +394,60 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }
 
   if (!uid) {
+    const signedOutInvite =
+      inviteCode && (authState === "signed_out" || !isPermanentSupabaseSession(session));
     return (
       <main style={styles.page}>
         <section style={styles.card}>
-          <p style={styles.kicker}>Join Haven</p>
-          <h1 style={styles.title}>{inviteCode ? "Now tap your ring" : holdCopy.waitTitle}</h1>
+          <p style={styles.kicker}>{inviteCode ? copy.joinKicker : copy.kicker}</p>
+          <h1 style={styles.title}>
+            {inviteCode ? copy.joinStep1Title : holdCopy.waitTitle}
+          </h1>
           <p style={styles.body}>
-            {inviteCode
-              ? "Invite saved. Sign in, then tap your ring."
-              : holdCopy.waitSubtitle}
+            {inviteCode ? copy.joinStep1Body : holdCopy.waitSubtitle}
           </p>
-          {!inviteCode ? <NfcHoldGuide platform={platform} /> : null}
+          {inviteCode ? (
+            <div style={styles.stepCard}>
+              <p style={styles.stepLabel}>Next</p>
+              <p style={styles.stepText}>{copy.joinStep2Body}</p>
+            </div>
+          ) : (
+            <NfcHoldGuide platform={platform} />
+          )}
+          {authState === "checking" ? (
+            <IndeterminateStepStatus
+              active
+              label={holdCopy.checkingStatusLine}
+              slowLabel={holdCopy.stillCheckingLine}
+              style={styles.muted}
+            />
+          ) : signedOutInvite ? (
+            <div style={styles.stack}>
+              <button
+                type="button"
+                onClick={() => void signInWith("apple")}
+                disabled={Boolean(busyProvider)}
+                style={styles.primaryButton}
+              >
+                {busyProvider === "apple" ? copy.openingSignIn : copy.signInApple}
+              </button>
+              <button
+                type="button"
+                onClick={() => void signInWith("google")}
+                disabled={Boolean(busyProvider)}
+                style={styles.secondaryButton}
+              >
+                {busyProvider === "google" ? copy.openingSignIn : copy.signInGoogle}
+              </button>
+            </div>
+          ) : inviteCode ? (
+            <p style={styles.notice}>{copy.joinStep2BodySignedIn}</p>
+          ) : null}
+          {message ? (
+            <p style={styles.status} role="alert">
+              {message}
+            </p>
+          ) : null}
           <button type="button" onClick={() => window.history.back()} style={styles.secondaryButton}>
             Back
           </button>
@@ -415,9 +474,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             : "Bind your ring. Invite your partner later."}
         </p>
         {inviteCode ? (
-          <div style={styles.uidBox}>
-            <span style={styles.uidLabel}>Partner invite</span>
-            <span style={styles.uidValue}>{inviteCode}</span>
+          <div style={styles.noticeBanner} role="status">
+            {copy.joinNoRetap}
           </div>
         ) : null}
         <div style={styles.uidBox}>
@@ -530,8 +588,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               {bindState === "binding"
                 ? copy.binding
                 : inviteCode
-                  ? "Join Haven and bind my ring"
-                  : "Create Haven with this ring"}
+                  ? copy.joinBindCta
+                  : copy.createHavenCta}
             </button>
             {bindState === "binding" ? (
               <IndeterminateStepStatus
@@ -702,6 +760,37 @@ const styles: Record<string, CSSProperties> = {
   },
   status: {
     margin: 0,
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  stepCard: {
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(90, 59, 48, 0.7)",
+    background: "rgba(23, 18, 16, 0.72)",
+    display: "grid",
+    gap: 6,
+  },
+  stepLabel: {
+    margin: 0,
+    color: "#a8988c",
+    fontSize: 11,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+  },
+  stepText: {
+    margin: 0,
+    color: "#e4ccbc",
+    fontSize: 14,
+    lineHeight: 1.5,
+  },
+  noticeBanner: {
+    margin: 0,
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(120, 200, 160, 0.45)",
+    background: "rgba(28, 48, 36, 0.45)",
+    color: "#d4e8dc",
     fontSize: 14,
     lineHeight: 1.5,
   },

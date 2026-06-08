@@ -284,6 +284,7 @@ export type StartSdmStateForCopy =
       ownerId: string | null;
       viewerUserId: string | null;
       currentUserIsHavenMember?: boolean;
+      resolvedUid?: string | null;
     };
 
 export type StartSdmCardCopy = {

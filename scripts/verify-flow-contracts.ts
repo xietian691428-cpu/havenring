@@ -136,6 +136,8 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(invitePanel, /inviteShareCta/);
   assert.match(readRepoFile("src/content/ringsPageContent.js"), /Share Invite Link/);
   assert.match(bindClient, /\/api\/haven\/invite\/key/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /resolvedUid/);
+  assert.match(readRepoFile("lib/partner-invite-pending.ts"), /buildBindRingUrl/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);
   assert.match(bindClient, /uploadWrappedHavenKey/);
   assert.match(keyService, /RSA-OAEP/);
