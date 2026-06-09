@@ -186,6 +186,7 @@ check("timeline sync does not fail when optional cloud backup is off", () => {
   assert.match(sync, /if \(!cloudBackupReady\)/);
   assert.match(sync, /clearRingSyncQueue/);
   assert.match(sync, /isCriticalSyncIssue/);
+  assert.match(sync, /ring-scoped cache sync skipped/);
   assert.match(sync, /\/api\/sync\/moments/);
   assert.match(readRepoFile("app/api/sync/moments/route.ts"), /requireAuthenticatedUser/);
 });
@@ -197,6 +198,10 @@ check("seal commit persists memories to local timeline", () => {
   assert.match(sealFlow, /removeDraftItem/);
   assert.match(sealFlow, /clearComposerSnapshot/);
   assert.match(sealFlow, /createMemory/);
+  assert.match(sealFlow, /is_sealed: true/);
+  const recovery = readRepoFile("src/features/seal/sealComposerRecovery.ts");
+  assert.match(recovery, /existingPhotos/);
+  assert.match(recovery, /pendingBeforeSnapshot/);
 });
 
 console.log("\nAll flow contract checks passed.");

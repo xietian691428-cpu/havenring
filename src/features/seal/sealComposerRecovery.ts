@@ -3,7 +3,7 @@
  * explicitly pressing Seal (text-only localStorage snapshot → idb draft + seal arm).
  */
 
-import { saveDraftItem } from "../memories/draftBoxStore";
+import { getDraftItem, saveDraftItem } from "../memories/draftBoxStore";
 import { armSealFlowWithPersistence, isSealFlowArmed } from "../../../lib/seal-flow";
 import {
   primeSealPrepAfterDraftPersisted,
@@ -46,13 +46,21 @@ export async function recoverComposerSnapshotToDraft(
     ? Date.parse(String(snapshot.releaseAtInput))
     : 0;
 
+  const draftId = preferredId || readPendingSealDraftIds()[0] || undefined;
+  const existing = draftId ? await getDraftItem(draftId) : null;
+  const existingPhotos = Array.isArray(existing?.photo) ? existing.photo : [];
+  const existingAttachments = Array.isArray(existing?.attachments)
+    ? existing.attachments
+    : [];
+
   const item = await saveDraftItem({
-    id: preferredId || readPendingSealDraftIds()[0] || undefined,
+    id: draftId,
     title: String(snapshot?.title || "").trim() || "Untitled memory",
     story: String(snapshot?.story || "").trim(),
-    photo: [],
-    attachments: [],
+    photo: existingPhotos,
+    attachments: existingAttachments,
     releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
+    createdAt: existing?.createdAt,
   });
   return item.id;
 }
@@ -85,6 +93,12 @@ export async function tryRecoverSealPrepFromComposerSnapshot(): Promise<boolean>
 export async function forceArmSealForCurrentUser(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (isSealFlowArmed()) return true;
+
+  const pendingBeforeSnapshot = readPendingSealDraftIds();
+  if (pendingBeforeSnapshot.length) {
+    armSealFlowWithPersistence(pendingBeforeSnapshot);
+    return true;
+  }
 
   if (composerSnapshotHasTextContent()) {
     const fromSnapshot = await recoverComposerSnapshotToDraft();

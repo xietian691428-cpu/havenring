@@ -247,6 +247,7 @@ async function persistSealedDraftsLocally(draftIds: string[]) {
       releaseAt: Number(item.releaseAt || 0) || 0,
       createdAt: Number(item.createdAt || now) || now,
       tags: [] as unknown[],
+      is_sealed: true,
     };
     const existing = await getMemoryById(id);
     if (existing) {

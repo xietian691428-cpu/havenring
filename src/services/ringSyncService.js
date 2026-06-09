@@ -191,66 +191,70 @@ export async function syncRingScopedCaches(options = {}) {
   const cloudPlaceholders = [];
 
   for (const ring of localRings) {
-    const queue = await readRingSyncQueue(ring.uidKey);
-    const syncedIds = [];
+    try {
+      const queue = await readRingSyncQueue(ring.uidKey);
+      const syncedIds = [];
 
-    const cloudBackupReady = isCloudBackupReady();
+      const cloudBackupReady = isCloudBackupReady();
 
-    if (!cloudBackupReady) {
-      if (queue.length) {
-        await clearRingSyncQueue(
-          ring.uidKey,
-          queue.map((row) => row?.id).filter(Boolean)
-        );
-      }
-    } else {
-      for (const item of queue) {
-        const cloud = byMomentId.get(item.id);
-        if (cloud?.content_sha256 && item?.content_sha256) {
-          if (cloud.content_sha256 !== item.content_sha256) {
-            mismatch = true;
-            issues.push("hash");
+      if (!cloudBackupReady) {
+        if (queue.length) {
+          await clearRingSyncQueue(
+            ring.uidKey,
+            queue.map((row) => row?.id).filter(Boolean)
+          );
+        }
+      } else {
+        for (const item of queue) {
+          const cloud = byMomentId.get(item.id);
+          if (cloud?.content_sha256 && item?.content_sha256) {
+            if (cloud.content_sha256 !== item.content_sha256) {
+              // Server seal digest is full JSON; local queue uses photosCount — drop stale row.
+              syncedIds.push(item.id);
+              continue;
+            }
+            syncedIds.push(item.id);
             continue;
           }
-          syncedIds.push(item.id);
-          continue;
-        }
-        try {
-          await backupToCloud({
-            ring_uid_hash: ring.uidKey,
-            id: item.id,
-            title: item.title || "",
-            timelineAt: item.timelineAt || Date.now(),
-            releaseAt: Number(item.releaseAt || 0) || 0,
-            content_sha256: item.content_sha256 || null,
-          });
-          syncedIds.push(item.id);
-        } catch (error) {
-          console.warn("[haven-ring] optional cloud backup skipped:", error);
+          try {
+            await backupToCloud({
+              ring_uid_hash: ring.uidKey,
+              id: item.id,
+              title: item.title || "",
+              timelineAt: item.timelineAt || Date.now(),
+              releaseAt: Number(item.releaseAt || 0) || 0,
+              content_sha256: item.content_sha256 || null,
+            });
+            syncedIds.push(item.id);
+          } catch (error) {
+            console.warn("[haven-ring] optional cloud backup skipped:", error);
+          }
         }
       }
-    }
 
-    if (syncedIds.length) {
-      await clearRingSyncQueue(ring.uidKey, syncedIds);
-    }
+      if (syncedIds.length) {
+        await clearRingSyncQueue(ring.uidKey, syncedIds);
+      }
 
-    const ringCloudRows = cloudMomentsByRing.get(ring.cloudRingId) || [];
-    const previous = await readCloudSnapshot(ring.uidKey);
-    if (ringCloudRows.length || previous.length) {
-      await writeCloudSnapshot(ring.uidKey, ringCloudRows);
-    }
+      const ringCloudRows = cloudMomentsByRing.get(ring.cloudRingId) || [];
+      const previous = await readCloudSnapshot(ring.uidKey);
+      if (ringCloudRows.length || previous.length) {
+        await writeCloudSnapshot(ring.uidKey, ringCloudRows);
+      }
 
-    for (const row of ringCloudRows) {
-      cloudPlaceholders.push({
-        id: row.id,
-        ring_id: row.ring_id,
-        uidKey: ring.uidKey,
-        timelineAt: Date.parse(row.created_at || "") || Date.now(),
-        releaseAt: Date.parse(row.release_at || "") || 0,
-        content_sha256: row.content_sha256 || null,
-        ringLabel: ring.label || "Ring",
-      });
+      for (const row of ringCloudRows) {
+        cloudPlaceholders.push({
+          id: row.id,
+          ring_id: row.ring_id,
+          uidKey: ring.uidKey,
+          timelineAt: Date.parse(row.created_at || "") || Date.now(),
+          releaseAt: Date.parse(row.release_at || "") || 0,
+          content_sha256: row.content_sha256 || null,
+          ringLabel: ring.label || "Ring",
+        });
+      }
+    } catch (error) {
+      console.warn("[haven-ring] ring-scoped cache sync skipped:", ring?.uidKey, error);
     }
   }
 
