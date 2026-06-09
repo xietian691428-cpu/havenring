@@ -73,6 +73,11 @@ export {
   readFreshSealNfcTapHref,
 } from "./sealNfcTapRelay";
 export {
+  clearSealDraftRelay,
+  readSealDraftRelay,
+  writeSealDraftRelay,
+} from "./sealDraftRelay";
+export {
   hasLocalSealPrep,
   isAuxiliarySealTapTab,
   isPrimarySealWaitPage,

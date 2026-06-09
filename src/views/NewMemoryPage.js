@@ -612,7 +612,7 @@ export function NewMemoryPage({
         setEditingDraftId("");
       }
       if (openSealPromptOnSuccess) {
-        primeSealPrepAfterDraftPersisted(savedDraft.id);
+        await primeSealPrepAfterDraftPersisted(savedDraft.id);
         navigateToSealWaitPage();
         return;
       } else if (typeof onSaveMemory === "function") {
@@ -693,7 +693,7 @@ export function NewMemoryPage({
     setSealPreparingOverlay(true);
     try {
       const savedDraft = await persistDraftForSealPrep();
-      primeSealPrepAfterDraftPersisted(savedDraft.id);
+      await primeSealPrepAfterDraftPersisted(savedDraft.id);
       setEditingDraftId(savedDraft.id);
       navigateToSealWaitPage();
     } catch (error) {

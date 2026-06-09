@@ -41,6 +41,11 @@ import {
 } from "./sealCrossTab";
 import { clearSealNfcTapHref } from "./sealNfcTapRelay";
 import { clearComposerSnapshot } from "./composerSnapshotSafe";
+import {
+  clearSealDraftRelay,
+  readSealDraftRelay,
+  writeSealDraftRelay,
+} from "./sealDraftRelay";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -170,6 +175,7 @@ export function syncSealPrepWithSessionArm() {
 /** Drops session arm + pending draft id list /used when abandoning composer prep. */
 export function clearSealPrepState() {
   clearPendingSealDraftIds();
+  clearSealDraftRelay();
   clearSealFlowArm();
 }
 
@@ -205,27 +211,36 @@ function slimMediaForSealFinalize(items: unknown[]): unknown[] {
   return slim;
 }
 
+function sealPayloadFromDraftItem(
+  item: Awaited<ReturnType<typeof getDraftItem>>
+): SealDraftFinalizePayload | null {
+  if (!item) return null;
+  return {
+    id: item.id,
+    title: String(item.title || "Untitled memory"),
+    story: String(item.story || ""),
+    photo: slimMediaForSealFinalize(Array.isArray(item.photo) ? item.photo : []),
+    attachments: slimMediaForSealFinalize(
+      Array.isArray(item.attachments) ? item.attachments : []
+    ),
+    releaseAt: Number(item.releaseAt || 0) || 0,
+  };
+}
+
 export async function collectDraftPayloadsForSeal(
   draftIds: string[]
 ): Promise<SealDraftFinalizePayload[]> {
   const payloads: SealDraftFinalizePayload[] = [];
   for (const id of draftIds) {
-    const item = await getDraftItem(id);
-    if (!item) continue;
-    const photo = slimMediaForSealFinalize(
-      Array.isArray(item.photo) ? item.photo : []
-    );
-    const attachments = slimMediaForSealFinalize(
-      Array.isArray(item.attachments) ? item.attachments : []
-    );
-    payloads.push({
-      id,
-      title: String(item.title || "Untitled memory"),
-      story: String(item.story || ""),
-      photo,
-      attachments,
-      releaseAt: Number(item.releaseAt || 0) || 0,
-    });
+    const fromIdb = sealPayloadFromDraftItem(await getDraftItem(id));
+    if (fromIdb) {
+      payloads.push(fromIdb);
+      continue;
+    }
+    const relay = readSealDraftRelay(id);
+    if (relay) {
+      payloads.push(relay);
+    }
   }
   return payloads;
 }
@@ -235,17 +250,26 @@ async function persistSealedDraftsLocally(draftIds: string[]) {
   const now = Date.now();
   for (const id of draftIds) {
     const item = await getDraftItem(id);
-    if (!item) continue;
+    const relay = !item ? readSealDraftRelay(id) : null;
+    const source = item ?? relay;
+    if (!source) continue;
     const payload = {
-      id: item.id,
-      title: String(item.title || "").trim() || "Untitled memory",
-      story: String(item.story || ""),
-      photo: Array.isArray(item.photo) && item.photo.length ? item.photo : null,
+      id: source.id || id,
+      title: String(source.title || "").trim() || "Untitled memory",
+      story: String(source.story || ""),
+      photo:
+        Array.isArray(source.photo) && source.photo.length ? source.photo : null,
       voice: null,
-      attachments: Array.isArray(item.attachments) ? item.attachments : [],
-      timelineAt: Number(item.updatedAt || item.createdAt || now) || now,
-      releaseAt: Number(item.releaseAt || 0) || 0,
-      createdAt: Number(item.createdAt || now) || now,
+      attachments: Array.isArray(source.attachments) ? source.attachments : [],
+      timelineAt:
+        Number(
+          ("updatedAt" in source ? source.updatedAt : 0) ||
+            ("createdAt" in source ? source.createdAt : 0) ||
+            now
+        ) || now,
+      releaseAt: Number(source.releaseAt || 0) || 0,
+      createdAt:
+        Number(("createdAt" in source ? source.createdAt : 0) || now) || now,
       tags: [] as unknown[],
       is_sealed: true,
     };
@@ -283,7 +307,7 @@ export async function finalizeSealWithTicket(
   const draftPayloads = await collectDraftPayloadsForSeal(draftIds);
   if (draftPayloads.length !== draftIds.length) {
     throw new Error(
-      "Your saved draft could not be found. Return to the memory page and try again."
+      "Your saved draft could not be found. If you use Safari Private Browsing, switch to a normal tab or Add to Home Screen, then tap Seal with Ring again."
     );
   }
 
@@ -346,7 +370,7 @@ export async function finalizeSealWithTicket(
 }
 
 /** Called after composing & persisting draft to idb, before prompting for ring tap. */
-export function primeSealPrepAfterDraftPersisted(draftId: string) {
+export async function primeSealPrepAfterDraftPersisted(draftId: string) {
   const id = String(draftId || "").trim();
   if (!id) return;
   clearSealCompleteRelay();
@@ -355,6 +379,10 @@ export function primeSealPrepAfterDraftPersisted(draftId: string) {
   const ids = [id];
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids);
+  const payload = sealPayloadFromDraftItem(await getDraftItem(id));
+  if (payload) {
+    writeSealDraftRelay(payload);
+  }
 }
 
 /** SDM resolver body fields on `/start` when the seal arm window is active (cross-tab safe). */

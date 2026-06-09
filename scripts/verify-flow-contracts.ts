@@ -79,6 +79,7 @@ check("storage keys aligned for seal flow", () => {
   assert.equal(PENDING_SEAL_DRAFT_IDS_KEY, STORAGE_KEYS.pendingSealDraftIds);
   assert.equal(COMPOSER_SNAPSHOT_KEY, STORAGE_KEYS.composerSnapshot);
   assert.equal(typeof STORAGE_KEYS.sealWaitTabActive, "string");
+  assert.equal(STORAGE_KEYS.sealDraftRelay, "haven.seal.draft.relay.v1");
 });
 
 check("seal prep has cross-tab persistence keys", () => {
@@ -205,6 +206,8 @@ check("seal commit persists memories to local timeline", () => {
   assert.match(sealFlow, /clearComposerSnapshot/);
   assert.match(sealFlow, /createMemory/);
   assert.match(sealFlow, /is_sealed: true/);
+  assert.match(sealFlow, /readSealDraftRelay/);
+  assert.match(readRepoFile("src/features/seal/sealDraftRelay.ts"), /writeSealDraftRelay/);
   const recovery = readRepoFile("src/features/seal/sealComposerRecovery.ts");
   assert.match(recovery, /existingPhotos/);
   assert.match(recovery, /pendingBeforeSnapshot/);

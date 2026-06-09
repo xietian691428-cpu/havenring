@@ -82,7 +82,7 @@ export async function tryRecoverSealPrepFromComposerSnapshot(): Promise<boolean>
   const draftId = await recoverComposerSnapshotToDraft();
   if (!draftId) return false;
 
-  primeSealPrepAfterDraftPersisted(draftId);
+  await primeSealPrepAfterDraftPersisted(draftId);
   return true;
 }
 
@@ -103,7 +103,7 @@ export async function forceArmSealForCurrentUser(): Promise<boolean> {
   if (composerSnapshotHasTextContent()) {
     const fromSnapshot = await recoverComposerSnapshotToDraft();
     if (fromSnapshot) {
-      primeSealPrepAfterDraftPersisted(fromSnapshot);
+      await primeSealPrepAfterDraftPersisted(fromSnapshot);
       if (isSealFlowArmed()) return true;
     }
   }
@@ -120,6 +120,6 @@ export async function forceArmSealForCurrentUser(): Promise<boolean> {
   if (!hasRecoverableComposerContent()) return false;
   const draftId = await recoverComposerSnapshotToDraft();
   if (!draftId) return false;
-  primeSealPrepAfterDraftPersisted(draftId);
+  await primeSealPrepAfterDraftPersisted(draftId);
   return isSealFlowArmed();
 }

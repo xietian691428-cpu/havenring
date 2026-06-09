@@ -518,7 +518,7 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     signInSubtitle: "Your ring is recognized. Continue with your account.",
     sealWaitTitle: "Tap your ring to seal",
     sealWaitSubtitle:
-      "Hold your ring on the top of your iPhone. If a new tab opens, keep holding — do not tap again until sealing finishes.",
+      "Hold your ring on the top of your iPhone. If a new tab opens, keep holding — do not tap again until sealing finishes. Avoid Safari Private Browsing for sealing.",
     failedTitle: "We could not finish that tap",
     failedSubtitle: "Hold your ring steady on the top of your iPhone, then tap again.",
     tryAgainCta: "Try again",
