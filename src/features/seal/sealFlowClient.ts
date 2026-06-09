@@ -54,10 +54,12 @@ import {
   fetchSealStagingPayloads,
   uploadSealStaging,
 } from "./sealStagingClient";
-import { resolveSealTransportMode, type SealTransportMode } from "./sealPlatform";
+import { getSealStrategy, type SealTransportMode } from "./sealPlatform";
+import { SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
 import {
   SEAL_DRAFT_NOT_FOUND,
   SEAL_SESSION_ENDED,
+  SEAL_STAGING_UNAVAILABLE,
 } from "./sealUserMessages";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
@@ -195,7 +197,7 @@ export function clearSealPrepState(accessToken?: string) {
   scheduleStagingCleanup(stagingId, accessToken);
 }
 
-const MAX_SEAL_PAYLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_SEAL_PAYLOAD_BYTES = SEAL_STAGING_MAX_BYTES;
 
 function estimateJsonBytes(value: unknown): number {
   try {
@@ -358,9 +360,13 @@ export async function finalizeSealWithTicket(
   let draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
 
   const platform = resolvePlatformTarget();
-  const transport = resolveSealTransportMode(platform);
+  const strategy = getSealStrategy(platform);
 
-  if (draftPayloads.length !== draftIds.length && transport === "local") {
+  if (
+    draftPayloads.length !== draftIds.length &&
+    strategy.stagingFallbackOnFinalize &&
+    strategy.stagingApiEnabled
+  ) {
     const item = await getDraftItem(draftIds[0]);
     const payload = sealPayloadFromDraftItem(item);
     if (payload) {
@@ -475,12 +481,15 @@ export async function prepareSealForRingTap(opts: {
   }
 
   const platform = resolvePlatformTarget();
-  const mode = resolveSealTransportMode(platform, {
+  const strategy = getSealStrategy(platform, {
     forceStaging: opts.forceStaging,
   });
 
   let stagingId: string | undefined;
-  if (mode === "staging") {
+  if (strategy.stagingOnPrep) {
+    if (!strategy.stagingApiEnabled) {
+      throw new Error(SEAL_STAGING_UNAVAILABLE);
+    }
     stagingId = await uploadSealStaging({
       draftIds: ids,
       payloads: [payload],
@@ -492,7 +501,7 @@ export async function prepareSealForRingTap(opts: {
   armSealFlowWithPersistence(ids, { stagingId });
   writeSealDraftRelay(payload);
 
-  return { mode, stagingId };
+  return { mode: strategy.transport, stagingId };
 }
 
 /** @deprecated Use `prepareSealForRingTap`. */

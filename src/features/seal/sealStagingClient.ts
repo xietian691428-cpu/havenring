@@ -21,9 +21,41 @@ type StagingFetchResponse = {
   ciphertext?: string;
   iv?: string;
   draft_ids?: unknown;
+  delivery?: "inline" | "signed_url";
+  signed_url?: string;
   error?: string;
   error_code?: string;
 };
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+async function resolveStagingCiphertext(
+  json: StagingFetchResponse
+): Promise<{ ciphertext: string; iv: string }> {
+  const iv = typeof json.iv === "string" ? json.iv.trim() : "";
+  if (!iv) {
+    throw new Error("Your memory could not be loaded — tap Seal with Ring and try again.");
+  }
+  if (json.delivery === "signed_url" && typeof json.signed_url === "string") {
+    const blobRes = await fetch(json.signed_url);
+    if (!blobRes.ok) {
+      throw new Error("Your memory could not be loaded — tap Seal with Ring and try again.");
+    }
+    const buf = new Uint8Array(await blobRes.arrayBuffer());
+    return { ciphertext: bytesToBase64(buf), iv };
+  }
+  const ciphertext = typeof json.ciphertext === "string" ? json.ciphertext.trim() : "";
+  if (!ciphertext) {
+    throw new Error("Your memory could not be loaded — tap Seal with Ring and try again.");
+  }
+  return { ciphertext, iv };
+}
 
 function authHeaders(accessToken: string): HeadersInit {
   return {
@@ -73,6 +105,9 @@ export async function uploadSealStaging(opts: {
   });
   const json = (await res.json().catch(() => ({}))) as StagingCreateResponse;
   if (!res.ok || !json.staging_id) {
+    if (json.error_code === "STAGING_DISABLED" || res.status === 503) {
+      throw new Error("Sealing is briefly unavailable — try again in a moment.");
+    }
     throw new Error(
       typeof json.error === "string" && json.error.trim()
         ? json.error.trim()
@@ -93,13 +128,14 @@ export async function fetchSealStagingPayloads(opts: {
     headers: authHeaders(accessToken),
   });
   const json = (await res.json().catch(() => ({}))) as StagingFetchResponse;
-  if (!res.ok || !json.ciphertext || !json.iv) {
+  if (!res.ok) {
     throw new Error(
       typeof json.error === "string" && json.error.trim()
         ? json.error.trim()
         : "Your memory could not be loaded — tap Seal with Ring and try again."
     );
   }
+  const { ciphertext, iv } = await resolveStagingCiphertext(json);
   const draftIds = parseSealStagingDraftIds(json.draft_ids);
   if (expectedDraftIds.length && draftIds.length) {
     const a = [...expectedDraftIds].sort().join(",");
@@ -108,7 +144,7 @@ export async function fetchSealStagingPayloads(opts: {
       throw new Error("Your memory could not be loaded — tap Seal with Ring and try again.");
     }
   }
-  const plaintext = await decryptSealStagingJson(json.ciphertext, json.iv, accessToken);
+  const plaintext = await decryptSealStagingJson(ciphertext, iv, accessToken);
   const parsed = JSON.parse(plaintext) as { payloads?: SealDraftFinalizePayload[] };
   if (!Array.isArray(parsed.payloads) || !parsed.payloads.length) {
     throw new Error("Your memory could not be loaded — tap Seal with Ring and try again.");

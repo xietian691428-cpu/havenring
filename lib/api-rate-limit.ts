@@ -5,6 +5,8 @@ export const API_RATE_POLICIES = {
   sealFinalize: { maxRequests: 10, windowMs: 60_000 },
   sealRingTap: { maxRequests: 45, windowMs: 60_000 },
   sealStaging: { maxRequests: 20, windowMs: 60_000 },
+  sealStagingCreate: { maxRequests: 6, windowMs: 60_000 },
+  sealStagingRead: { maxRequests: 30, windowMs: 60_000 },
   ringMedium: { maxRequests: 45, windowMs: 60_000 },
 } as const;
 
@@ -31,6 +33,31 @@ export async function enforceUserIpRateLimit(opts: {
 }) {
   const ip = getClientIp(opts.req);
   const key = buildKey(opts.scope, opts.userId, ip);
+  const hit = await hitRateLimitWithRedisFallback(
+    key,
+    opts.policy.maxRequests,
+    opts.policy.windowMs
+  );
+  if (hit.allowed) {
+    return null;
+  }
+  return NextResponse.json(
+    {
+      error: "Too many requests. Please try again shortly.",
+      error_code: "RATE_LIMITED",
+      retry_after_ms: Math.max(0, hit.retryAfterMs || 0),
+    },
+    { status: 429 }
+  );
+}
+
+/** Per-user limit (no IP bucket) — tighter control for staging uploads. */
+export async function enforceUserRateLimit(opts: {
+  userId: string;
+  scope: string;
+  policy: RatePolicy;
+}) {
+  const key = `${opts.scope}:user:${opts.userId}`;
   const hit = await hitRateLimitWithRedisFallback(
     key,
     opts.policy.maxRequests,

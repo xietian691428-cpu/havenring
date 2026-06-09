@@ -6,6 +6,9 @@ export const SEAL_STAGING_OFFLINE =
 export const SEAL_STAGING_TOO_LARGE =
   "This memory is too large — remove a photo or shorten the story, then try again.";
 
+export const SEAL_STAGING_UNAVAILABLE =
+  "Sealing is briefly unavailable — try again in a moment.";
+
 export const SEAL_DRAFT_NOT_FOUND =
   "Tap Seal with Ring again, then hold your ring until it finishes.";
 

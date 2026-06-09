@@ -117,8 +117,10 @@ export {
   type SealBroadcastMessage,
 } from "./sealBroadcast";
 export {
+  getSealStrategy,
   resolveSealTransportMode,
   shouldPreferSameTabWebNfc,
+  type SealStrategy,
   type SealTransportMode,
 } from "./sealPlatform";
 export { isEphemeralStorageEnvironment } from "./ephemeralStorage";

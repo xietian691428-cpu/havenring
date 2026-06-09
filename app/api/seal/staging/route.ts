@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  hashSealStagingContent,
-  parseSealStagingDraftIds,
-  sealStagingExpiryIso,
-  SEAL_STAGING_MAX_CIPHERTEXT_BYTES,
-} from "@/lib/seal-staging-shared";
-import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
+import { API_RATE_POLICIES, enforceUserRateLimit } from "@/lib/api-rate-limit";
+import { isSealStagingApiEnabled } from "@/lib/seal-staging-config";
+import { createSealStagingRecord } from "@/lib/seal-staging-server";
+import { recordSealStagingTelemetry } from "@/lib/seal-staging-telemetry";
 import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
   requireBearerToken,
 } from "@/lib/supabase/server";
+import { parseSealStagingDraftIds } from "@/lib/seal-staging-shared";
 
 type StagingBody = {
   draft_ids?: unknown;
@@ -19,14 +17,22 @@ type StagingBody = {
 };
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
   try {
     requireBearerToken(req);
     const user = await requireAuthenticatedUser(req);
-    const limitRes = await enforceUserIpRateLimit({
-      req,
+
+    if (!isSealStagingApiEnabled()) {
+      return NextResponse.json(
+        { error: "Seal staging is temporarily unavailable.", error_code: "STAGING_DISABLED" },
+        { status: 503 }
+      );
+    }
+
+    const limitRes = await enforceUserRateLimit({
       userId: user.id,
       scope: "seal-staging-create",
-      policy: API_RATE_POLICIES.sealStaging,
+      policy: API_RATE_POLICIES.sealStagingCreate,
     });
     if (limitRes) return limitRes;
 
@@ -41,40 +47,41 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (ciphertext.length > SEAL_STAGING_MAX_CIPHERTEXT_BYTES) {
-      return NextResponse.json(
-        { error: "Staging payload too large.", error_code: "STAGING_TOO_LARGE" },
-        { status: 413 }
-      );
-    }
 
-    const expiresAt = sealStagingExpiryIso();
     const admin = getSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("seal_staging" as never)
-      .insert({
-        user_id: user.id,
-        draft_ids: draftIds,
-        ciphertext,
+    try {
+      const row = await createSealStagingRecord({
+        userId: user.id,
+        draftIds,
+        ciphertextB64: ciphertext,
         iv,
-        content_sha256: hashSealStagingContent(ciphertext),
-        expires_at: expiresAt,
-      } as never)
-      .select("id, expires_at")
-      .single();
-
-    if (error || !data) {
+      });
+      return NextResponse.json({
+        staging_id: row.id,
+        expires_at: row.expires_at,
+        storage_backend: row.storage_backend,
+        byte_size: row.byte_size,
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "STAGING_CREATE_FAILED";
+      if (code === "STAGING_TOO_LARGE") {
+        return NextResponse.json(
+          { error: "Staging payload too large.", error_code: "STAGING_TOO_LARGE" },
+          { status: 413 }
+        );
+      }
+      await recordSealStagingTelemetry(admin, {
+        user_id: user.id,
+        phase: "create",
+        outcome: "error",
+        error_code: code,
+        latency_ms: Date.now() - startedAt,
+      });
       return NextResponse.json(
-        { error: "Could not create staging.", error_code: "STAGING_CREATE_FAILED" },
+        { error: "Could not create staging.", error_code: code },
         { status: 500 }
       );
     }
-
-    const row = data as { id: string; expires_at: string };
-    return NextResponse.json({
-      staging_id: row.id,
-      expires_at: row.expires_at,
-    });
   } catch {
     return NextResponse.json(
       { error: "Unauthorized.", error_code: "UNAUTHORIZED" },

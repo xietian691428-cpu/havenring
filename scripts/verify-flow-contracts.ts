@@ -234,6 +234,32 @@ check("seal staging API and encrypted cross-tab handoff", () => {
   assert.doesNotMatch(readRepoFile("src/content/havenCopy.ts"), /Avoid Safari Private/);
 });
 
+check("seal staging phase 3: storage split, cron purge, strategy + limits", () => {
+  const config = readRepoFile("lib/seal-staging-config.ts");
+  const server = readRepoFile("lib/seal-staging-server.ts");
+  const migration = readRepoFile("supabase/migrations/0020_seal_staging_storage.sql");
+  const cronRoute = readRepoFile("app/api/cron/purge-seal-staging/route.ts");
+  const vercel = readRepoFile("vercel.json");
+  const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
+  const rateLimit = readRepoFile("lib/api-rate-limit.ts");
+  assert.match(config, /SEAL_STAGING_MAX_BYTES = 2 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 256 \* 1024/);
+  assert.match(config, /SEAL_STAGING_FALLBACK_ENABLED/);
+  assert.match(server, /createSealStagingRecord/);
+  assert.match(server, /resolveSealStagingCiphertext/);
+  assert.match(server, /purgeExpiredSealStaging/);
+  assert.match(migration, /storage_backend/);
+  assert.match(migration, /seal-staging/);
+  assert.match(cronRoute, /purgeExpiredSealStaging/);
+  assert.match(vercel, /purge-seal-staging/);
+  assert.match(sealPlatform, /getSealStrategy/);
+  assert.match(sealPlatform, /platform === "ios"/);
+  assert.match(rateLimit, /enforceUserRateLimit/);
+  assert.match(rateLimit, /sealStagingCreate/);
+  assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /signed_url/);
+  assert.match(readRepoFile("lib/seal-staging-telemetry.ts"), /endpoint: "staging"/);
+});
+
 check("seal session boundary: no background auto-arm; step-up before re-seal", () => {
   const newMemory = readRepoFile("src/views/NewMemoryPage.js");
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");

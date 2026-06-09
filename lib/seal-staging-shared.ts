@@ -4,7 +4,10 @@ import { MAX_SEAL_DRAFT_IDS } from "./seal-shared";
 /** Ephemeral seal buffer TTL — align with product (10 minutes). */
 export const SEAL_STAGING_TTL_MS = 10 * 60 * 1000;
 
-export const SEAL_STAGING_MAX_CIPHERTEXT_BYTES = 4 * 1024 * 1024;
+/** @deprecated Use SEAL_STAGING_MAX_BYTES from seal-staging-config. */
+export const SEAL_STAGING_MAX_CIPHERTEXT_BYTES = 2 * 1024 * 1024;
+
+export { SEAL_STAGING_MAX_BYTES } from "./seal-staging-config";
 
 export const SEAL_STAGING_HKDF_SALT = "haven-seal-staging-v1";
 export const SEAL_STAGING_HKDF_INFO = "seal-staging-dek";

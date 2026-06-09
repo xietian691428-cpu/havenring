@@ -1,41 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
+import { API_RATE_POLICIES, enforceUserRateLimit } from "@/lib/api-rate-limit";
+import {
+  consumeSealStagingById,
+  loadSealStagingRow,
+  resolveSealStagingCiphertext,
+} from "@/lib/seal-staging-server";
+import { recordSealStagingTelemetry } from "@/lib/seal-staging-telemetry";
 import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
   requireBearerToken,
 } from "@/lib/supabase/server";
 
-type StagingRow = {
-  id: string;
-  user_id: string;
-  draft_ids: unknown;
-  ciphertext: string;
-  iv: string;
-  expires_at: string;
-  consumed_at: string | null;
-};
-
-async function loadOwnedStaging(id: string, userId: string) {
-  const admin = getSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("seal_staging" as never)
-    .select("id, user_id, draft_ids, ciphertext, iv, expires_at, consumed_at")
-    .eq("id", id)
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) return { row: null as StagingRow | null, error: "lookup_failed" as const };
-  return { row: (data as StagingRow | null) ?? null, error: null };
-}
-
-function isExpired(row: StagingRow): boolean {
-  return Date.parse(String(row.expires_at || "")) <= Date.now();
+function isExpired(expiresAt: string): boolean {
+  return Date.parse(String(expiresAt || "")) <= Date.now();
 }
 
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  const startedAt = Date.now();
   try {
     requireBearerToken(req);
     const user = await requireAuthenticatedUser(req);
@@ -47,33 +32,47 @@ export async function GET(
         { status: 400 }
       );
     }
-    const limitRes = await enforceUserIpRateLimit({
-      req,
+    const limitRes = await enforceUserRateLimit({
       userId: user.id,
       scope: "seal-staging-read",
-      policy: API_RATE_POLICIES.sealStaging,
+      policy: API_RATE_POLICIES.sealStagingRead,
     });
     if (limitRes) return limitRes;
 
-    const { row, error } = await loadOwnedStaging(stagingId, user.id);
-    if (error || !row) {
+    const admin = getSupabaseAdminClient();
+    const row = await loadSealStagingRow(stagingId, user.id);
+    if (!row) {
       return NextResponse.json(
         { error: "Staging not found.", error_code: "STAGING_NOT_FOUND" },
         { status: 404 }
       );
     }
-    if (row.consumed_at || isExpired(row)) {
+    if (row.consumed_at || isExpired(row.expires_at)) {
       return NextResponse.json(
         { error: "Staging expired.", error_code: "STAGING_EXPIRED" },
         { status: 410 }
       );
     }
 
+    const delivery = await resolveSealStagingCiphertext(row);
+    await recordSealStagingTelemetry(admin, {
+      user_id: user.id,
+      phase: "read",
+      outcome: "success",
+      storage_backend: row.storage_backend,
+      byte_size: row.byte_size,
+      latency_ms: Date.now() - startedAt,
+    });
+
     return NextResponse.json({
       staging_id: row.id,
       draft_ids: row.draft_ids,
-      ciphertext: row.ciphertext,
       iv: row.iv,
+      byte_size: row.byte_size,
+      storage_backend: row.storage_backend,
+      delivery: delivery.delivery,
+      ciphertext: delivery.ciphertext,
+      signed_url: delivery.signed_url,
       expires_at: row.expires_at,
     });
   } catch {
@@ -88,6 +87,7 @@ export async function DELETE(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  const startedAt = Date.now();
   try {
     requireBearerToken(req);
     const user = await requireAuthenticatedUser(req);
@@ -100,11 +100,13 @@ export async function DELETE(
       );
     }
     const admin = getSupabaseAdminClient();
-    await admin
-      .from("seal_staging" as never)
-      .delete()
-      .eq("id", stagingId)
-      .eq("user_id", user.id);
+    await consumeSealStagingById(stagingId, user.id);
+    await recordSealStagingTelemetry(admin, {
+      user_id: user.id,
+      phase: "delete",
+      outcome: "success",
+      latency_ms: Date.now() - startedAt,
+    });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(
@@ -113,4 +115,3 @@ export async function DELETE(
     );
   }
 }
-
