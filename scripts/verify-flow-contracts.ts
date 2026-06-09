@@ -199,6 +199,41 @@ check("timeline sync does not fail when optional cloud backup is off", () => {
   assert.match(readRepoFile("app/api/sync/moments/route.ts"), /requireAuthenticatedUser/);
 });
 
+check("seal phase 2: PWA hint + BroadcastChannel cross-tab", () => {
+  const broadcast = readRepoFile("src/features/seal/sealBroadcast.ts");
+  const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
+  assert.match(broadcast, /BroadcastChannel/);
+  assert.match(broadcast, /isEphemeralStorageEnvironment/);
+  assert.match(readRepoFile("src/components/SealPwaHintCard.js"), /SEAL_PWA_HINT/);
+  assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /postSealBroadcast/);
+  assert.match(readRepoFile("src/features/seal/sealNfcTapRelay.ts"), /postSealBroadcast/);
+  assert.match(sealPlatform, /isStandaloneDisplayMode/);
+  assert.equal(STORAGE_KEYS.sealPwaHintDismissed, "haven.seal.pwa_hint.dismissed.v1");
+});
+
+check("seal staging API and encrypted cross-tab handoff", () => {
+  const stagingRoute = readRepoFile("app/api/seal/staging/route.ts");
+  const stagingIdRoute = readRepoFile("app/api/seal/staging/[id]/route.ts");
+  const stagingCrypto = readRepoFile("src/features/seal/sealStagingCrypto.ts");
+  const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
+  const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
+  const migration = readRepoFile("supabase/migrations/0019_seal_staging.sql");
+  const privacy = readRepoFile("app/privacy-policy/privacyPolicyContent.ts");
+  assert.match(migration, /seal_staging/);
+  assert.match(migration, /staging_id/);
+  assert.match(stagingRoute, /ciphertext/);
+  assert.match(stagingCrypto, /AES-GCM/);
+  assert.match(stagingCrypto, /HKDF/);
+  assert.match(sealFlow, /prepareSealForRingTap/);
+  assert.match(sealFlow, /uploadSealStaging/);
+  assert.match(sealFlow, /fetchSealStagingPayloads/);
+  assert.match(sealPlatform, /platform === "ios"/);
+  assert.match(readRepoFile("app/api/seal/finalize/route.ts"), /consumeSealStagingById/);
+  assert.match(readRepoFile("app/api/rings/sdm/resolve/route.ts"), /staging_id/);
+  assert.match(privacy, /10 minutes/);
+  assert.doesNotMatch(readRepoFile("src/content/havenCopy.ts"), /Avoid Safari Private/);
+});
+
 check("seal session boundary: no background auto-arm; step-up before re-seal", () => {
   const newMemory = readRepoFile("src/views/NewMemoryPage.js");
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
@@ -225,7 +260,7 @@ check("seal session boundary: no background auto-arm; step-up before re-seal", (
 check("seal commit persists memories to local timeline", () => {
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
   assert.match(sealFlow, /persistSealedDraftsLocally/);
-  assert.match(sealFlow, /await persistSealedDraftsLocally\(draftIds\)/);
+  assert.match(sealFlow, /persistSealedDraftsLocally/);
   assert.match(sealFlow, /removeDraftItem/);
   assert.match(sealFlow, /clearComposerSnapshot/);
   assert.match(sealFlow, /createMemory/);

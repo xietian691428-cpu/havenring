@@ -7,6 +7,7 @@ import {
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import { hashSealTicketSecret, MAX_SEAL_DRAFT_IDS, parseSealDraftIdsSorted } from "@/lib/seal-shared";
 import { recordSealTelemetry } from "@/lib/sealTelemetry";
+import { consumeSealStagingById } from "@/lib/seal-staging-server";
 
 type FinalizeBody = {
   seal_ticket?: unknown;
@@ -30,6 +31,7 @@ type SealTicketRow = {
   ring_uid_hash: string | null;
   ring_id: string | null;
   haven_id: string | null;
+  staging_id: string | null;
   expires_at: string | null;
   consumed_at: string | null;
 };
@@ -108,7 +110,9 @@ export async function POST(req: NextRequest) {
     const admin = getSupabaseAdminClient();
     const { data: ticketRow, error: findErr } = await admin
       .from("seal_tickets" as never)
-      .select("id, draft_ids, ring_uid_hash, ring_id, haven_id, expires_at, consumed_at")
+      .select(
+        "id, draft_ids, ring_uid_hash, ring_id, haven_id, staging_id, expires_at, consumed_at"
+      )
       .eq("ticket_hash", ticketHash)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -301,6 +305,9 @@ export async function POST(req: NextRequest) {
       const firstRow = (
         Array.isArray(rpcData) ? rpcData[0] : rpcData
       ) as SealFinalizeAtomicResult | null;
+      if (row.staging_id) {
+        await consumeSealStagingById(row.staging_id, user.id);
+      }
       await recordSealTelemetry(admin, {
         user_id: user.id,
         endpoint: "finalize",

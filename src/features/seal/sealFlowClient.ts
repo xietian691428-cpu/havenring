@@ -7,6 +7,7 @@ import {
   armSealFlowWithPersistence,
   clearSealFlowArm,
   getArmedSealDraftIds,
+  getArmedSealStagingId,
   isSealFlowArmed,
 } from "../../../lib/seal-flow";
 import { getDraftItem, removeDraftItem } from "../memories/draftBoxStore";
@@ -18,6 +19,7 @@ import {
 import { markFirstMemoryCompleted } from "../../services/firstRunTelemetryService";
 import { clearRingSyncQueue } from "../../services/ringScopedCacheService";
 import { getActiveRingOrFirst } from "../../services/ringRegistryService";
+import { resolvePlatformTarget } from "../../hooks/usePlatformTarget";
 import {
   MAX_SEAL_DRAFT_IDS,
   PENDING_SEAL_DRAFT_IDS_KEY,
@@ -47,6 +49,16 @@ import {
   writeSealDraftRelay,
 } from "./sealDraftRelay";
 import { requiresSealStepUp } from "../../services/deviceTrustService";
+import {
+  deleteSealStaging,
+  fetchSealStagingPayloads,
+  uploadSealStaging,
+} from "./sealStagingClient";
+import { resolveSealTransportMode, type SealTransportMode } from "./sealPlatform";
+import {
+  SEAL_DRAFT_NOT_FOUND,
+  SEAL_SESSION_ENDED,
+} from "./sealUserMessages";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -60,6 +72,7 @@ export {
   clearSealFlowArmIfExpired,
   readActiveSealArmedPayload,
 } from "../../../lib/seal-flow";
+export { getArmedSealStagingId } from "../../../lib/seal-flow";
 
 function sealCookieOptions(maxAgeSeconds: number): string {
   const secure =
@@ -161,20 +174,25 @@ export function clearPendingSealDraftIds() {
   writePendingSealDraftIdsCookie([]);
 }
 
-/**
- * Clears orphan pending draft ids when the seal arm window is missing or expired.
- */
 export function syncSealPrepWithSessionArm() {
   if (typeof window === "undefined") return;
   if (isSealFlowArmed()) return;
   clearPendingSealDraftIds();
 }
 
-/** Drops session arm + pending draft id list /used when abandoning composer prep. */
-export function clearSealPrepState() {
+function scheduleStagingCleanup(stagingId: string | null, accessToken?: string) {
+  const id = String(stagingId || "").trim();
+  if (!id || !accessToken) return;
+  void deleteSealStaging(id, accessToken);
+}
+
+/** Drops session arm + pending draft id list when abandoning composer prep. */
+export function clearSealPrepState(accessToken?: string) {
+  const stagingId = getArmedSealStagingId();
   clearPendingSealDraftIds();
   clearSealDraftRelay();
   clearSealFlowArm();
+  scheduleStagingCleanup(stagingId, accessToken);
 }
 
 const MAX_SEAL_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -209,7 +227,7 @@ function slimMediaForSealFinalize(items: unknown[]): unknown[] {
   return slim;
 }
 
-function sealPayloadFromDraftItem(
+export function sealPayloadFromDraftItem(
   item: Awaited<ReturnType<typeof getDraftItem>>
 ): SealDraftFinalizePayload | null {
   if (!item) return null;
@@ -225,7 +243,7 @@ function sealPayloadFromDraftItem(
   };
 }
 
-export async function collectDraftPayloadsForSeal(
+async function payloadsFromLocalSources(
   draftIds: string[]
 ): Promise<SealDraftFinalizePayload[]> {
   const payloads: SealDraftFinalizePayload[] = [];
@@ -243,13 +261,47 @@ export async function collectDraftPayloadsForSeal(
   return payloads;
 }
 
-/** Timeline reads local IndexedDB; seal commit only writes Supabase until this runs. */
-async function persistSealedDraftsLocally(draftIds: string[]) {
+export async function collectDraftPayloadsForSeal(
+  draftIds: string[],
+  accessToken?: string
+): Promise<SealDraftFinalizePayload[]> {
+  const local = await payloadsFromLocalSources(draftIds);
+  if (local.length === draftIds.length) {
+    return local;
+  }
+
+  const stagingId = getArmedSealStagingId();
+  if (stagingId && accessToken) {
+    try {
+      const staged = await fetchSealStagingPayloads({
+        stagingId,
+        accessToken,
+        expectedDraftIds: draftIds,
+      });
+      if (staged.length === draftIds.length) {
+        return staged;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return local;
+}
+
+async function persistSealedDraftsLocally(
+  draftIds: string[],
+  sealedPayloads?: SealDraftFinalizePayload[]
+) {
   const now = Date.now();
+  const byId = new Map(
+    (sealedPayloads || []).map((row) => [String(row.id), row])
+  );
   for (const id of draftIds) {
-    const item = await getDraftItem(id);
-    const relay = !item ? readSealDraftRelay(id) : null;
-    const source = item ?? relay;
+    const staged = byId.get(id);
+    const item = staged ? null : await getDraftItem(id);
+    const relay = !item && !staged ? readSealDraftRelay(id) : null;
+    const source = staged ?? item ?? relay;
     if (!source) continue;
     const payload = {
       id: source.id || id,
@@ -289,9 +341,6 @@ async function persistSealedDraftsLocally(draftIds: string[]) {
   }
 }
 
-/**
- * Bearer-authenticated finalize: `precheck` then `commit` with draft payloads from idb drafts.
- */
 export async function finalizeSealWithTicket(
   opts: FinalizeSealWithTicketOptions
 ): Promise<void> {
@@ -303,16 +352,30 @@ export async function finalizeSealWithTicket(
   ensureBrowserOnlineForSealFinalize();
 
   if (!isSealFlowArmed()) {
-    throw new Error(
-      "Seal session ended. Open your draft and tap Seal with Ring again."
-    );
+    throw new Error(SEAL_SESSION_ENDED);
   }
 
-  const draftPayloads = await collectDraftPayloadsForSeal(draftIds);
+  let draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+
+  const platform = resolvePlatformTarget();
+  const transport = resolveSealTransportMode(platform);
+
+  if (draftPayloads.length !== draftIds.length && transport === "local") {
+    const item = await getDraftItem(draftIds[0]);
+    const payload = sealPayloadFromDraftItem(item);
+    if (payload) {
+      const stagingId = await uploadSealStaging({
+        draftIds,
+        payloads: [payload],
+        accessToken,
+      });
+      armSealFlowWithPersistence(draftIds, { stagingId });
+      draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+    }
+  }
+
   if (draftPayloads.length !== draftIds.length) {
-    throw new Error(
-      "Your saved draft could not be found. If you use Safari Private Browsing, switch to a normal tab or Add to Home Screen, then tap Seal with Ring again."
-    );
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
 
   const headers = {
@@ -368,33 +431,92 @@ export async function finalizeSealWithTicket(
     );
   }
 
-  await persistSealedDraftsLocally(draftIds);
+  await persistSealedDraftsLocally(draftIds, draftPayloads);
   await Promise.all(draftIds.map((id) => removeDraftItem(id)));
   clearComposerSnapshot();
+  scheduleStagingCleanup(getArmedSealStagingId(), accessToken);
 }
 
-/** Called after composing & persisting draft to idb, before prompting for ring tap. */
 export const SEAL_STEP_UP_REQUIRED = "SEAL_STEP_UP_REQUIRED";
 
-export async function primeSealPrepAfterDraftPersisted(draftId: string) {
-  const id = String(draftId || "").trim();
-  if (!id) return;
+export type PrepareSealForRingTapResult = {
+  mode: SealTransportMode;
+  stagingId?: string;
+};
+
+/**
+ * Platform-aware seal prep: iOS/ephemeral → encrypted staging; Android → local + relay fallback.
+ */
+export async function prepareSealForRingTap(opts: {
+  draftId: string;
+  accessToken: string;
+  forceStaging?: boolean;
+}): Promise<PrepareSealForRingTapResult> {
+  const id = String(opts.draftId || "").trim();
+  if (!id) {
+    throw new Error("Missing draft.");
+  }
   if (requiresSealStepUp()) {
     throw new Error(SEAL_STEP_UP_REQUIRED);
   }
+  if (!opts.accessToken) {
+    throw new Error("Sign in to seal with your ring.");
+  }
+
   clearSealCompleteRelay();
   clearSealWaitTabActive();
   clearSealNfcTapHref();
+
   const ids = [id];
-  writePendingSealDraftIds(ids);
-  armSealFlowWithPersistence(ids);
-  const payload = sealPayloadFromDraftItem(await getDraftItem(id));
-  if (payload) {
-    writeSealDraftRelay(payload);
+  const item = await getDraftItem(id);
+  const payload = sealPayloadFromDraftItem(item);
+  if (!payload) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
+
+  const platform = resolvePlatformTarget();
+  const mode = resolveSealTransportMode(platform, {
+    forceStaging: opts.forceStaging,
+  });
+
+  let stagingId: string | undefined;
+  if (mode === "staging") {
+    stagingId = await uploadSealStaging({
+      draftIds: ids,
+      payloads: [payload],
+      accessToken: opts.accessToken,
+    });
+  }
+
+  writePendingSealDraftIds(ids);
+  armSealFlowWithPersistence(ids, { stagingId });
+  writeSealDraftRelay(payload);
+
+  return { mode, stagingId };
 }
 
-/** SDM resolver body fields on `/start` when the seal arm window is active (cross-tab safe). */
+/** @deprecated Use `prepareSealForRingTap`. */
+export async function primeSealPrepAfterDraftPersisted(
+  draftId: string,
+  accessToken?: string
+) {
+  if (!accessToken) {
+    const id = String(draftId || "").trim();
+    if (!id) return;
+    if (requiresSealStepUp()) throw new Error(SEAL_STEP_UP_REQUIRED);
+    clearSealCompleteRelay();
+    clearSealWaitTabActive();
+    clearSealNfcTapHref();
+    const ids = [id];
+    writePendingSealDraftIds(ids);
+    armSealFlowWithPersistence(ids);
+    const payload = sealPayloadFromDraftItem(await getDraftItem(id));
+    if (payload) writeSealDraftRelay(payload);
+    return;
+  }
+  await prepareSealForRingTap({ draftId, accessToken });
+}
+
 export function getSealSdmContextPayload(): SealSdmContextPayload {
   if (!isSealFlowArmed()) {
     syncSealPrepWithSessionArm();
@@ -405,23 +527,29 @@ export function getSealSdmContextPayload(): SealSdmContextPayload {
   if (fromArm.length) {
     writePendingSealDraftIds(fromArm);
   }
+  const stagingId = getArmedSealStagingId();
   const context = pending.length ? SEAL_SDM_CONTEXT : "";
-  return { context, draft_ids: pending };
+  return {
+    context,
+    draft_ids: pending,
+    ...(stagingId ? { staging_id: stagingId } : {}),
+  };
 }
 
 export function abandonInProgressSealOnStartPage() {
   clearSealPrepState();
 }
 
-/**
- * Run after `/api/rings/sdm/resolve` returns `seal_confirmation` + seal ticket plaintext.
- */
 export async function finalizeSealChainFromSdmResponse(
   opts: FinalizeSealWithTicketOptions
 ): Promise<void> {
   await finalizeSealWithTicket(opts);
   requestStoragePersistenceFromUserGesture();
-  clearSealPrepState();
+  const stagingId = getArmedSealStagingId();
+  clearSealPrepState(opts.accessToken);
+  if (stagingId && opts.accessToken) {
+    scheduleStagingCleanup(stagingId, opts.accessToken);
+  }
   clearSealWaitTabActive();
   broadcastSealComplete();
   if (typeof window !== "undefined") {

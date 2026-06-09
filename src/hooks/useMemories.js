@@ -383,7 +383,18 @@ export function useMemories() {
       }
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    let unsubBroadcast = () => undefined;
+    void import("../features/seal/sealBroadcast").then((mod) => {
+      unsubBroadcast = mod.subscribeSealBroadcast((message) => {
+        if (message.type === "seal_complete") {
+          void refresh();
+        }
+      });
+    });
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      unsubBroadcast();
+    };
   }, [refresh]);
 
   useEffect(() => {

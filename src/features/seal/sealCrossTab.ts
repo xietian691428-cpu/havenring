@@ -1,5 +1,6 @@
 import { SEAL_ARM_TTL_MS } from "@/lib/seal-flow";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { postSealBroadcast } from "./sealBroadcast";
 
 const LOCK_TTL_MS = 20_000;
 const COMPLETE_TTL_MS = 90_000;
@@ -94,15 +95,8 @@ export function releaseSealResolveLock(lockId: string | null | undefined) {
 
 export function broadcastSealComplete() {
   if (typeof window === "undefined") return;
-  try {
-    const payload: SealCompleteRelay = { ts: Date.now() };
-    window.localStorage.setItem(
-      STORAGE_KEYS.sealCompleteRelay,
-      JSON.stringify(payload)
-    );
-  } catch {
-    /* ignore */
-  }
+  const ts = Date.now();
+  postSealBroadcast({ type: "seal_complete", ts });
 }
 
 export function wasSealRecentlyCompleted(maxAgeMs = COMPLETE_TTL_MS): boolean {

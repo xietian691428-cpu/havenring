@@ -24,11 +24,14 @@ import {
   isSealFlowArmed,
   navigateToSealWaitPage,
   listenForSealRingTapOnce,
-  primeSealPrepAfterDraftPersisted,
+  prepareSealForRingTap,
   readComposerSnapshotTextOnly,
   SEAL_STEP_UP_REQUIRED,
+  shouldPreferSameTabWebNfc,
+  subscribeSealBroadcast,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
+import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
@@ -43,6 +46,7 @@ import {
   verifyAndTrustCurrentDevice,
 } from "../services/deviceTrustService";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
+import { SealPwaHintCard } from "../components/SealPwaHintCard";
 
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
@@ -373,9 +377,13 @@ export function NewMemoryPage({
       if (event.key === SEAL_ARMED_KEY) syncSealFinishedElsewhere();
     };
     window.addEventListener("storage", onStorage);
+    const unsubBroadcast = subscribeSealBroadcast((message) => {
+      if (message.type === "seal_complete") syncSealFinishedElsewhere();
+    });
     const pollId = window.setInterval(syncSealFinishedElsewhere, 2500);
     return () => {
       window.removeEventListener("storage", onStorage);
+      unsubBroadcast();
       window.clearInterval(pollId);
     };
   }, [sealPromptOpen, sealFlow.sealCompletedElsewhere]);
@@ -675,10 +683,25 @@ export function NewMemoryPage({
   async function runSealNowAfterVerified() {
     setSealPreparingOverlay(true);
     try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token || "";
+      if (!accessToken) {
+        setSealFinalizeError("Sign in to seal with your ring.");
+        setFeedback("Sign in to seal with your ring.");
+        return;
+      }
       const savedDraft = await persistDraftForSealPrep();
-      await primeSealPrepAfterDraftPersisted(savedDraft.id);
+      await prepareSealForRingTap({
+        draftId: savedDraft.id,
+        accessToken,
+      });
       setEditingDraftId(savedDraft.id);
       setSealPromptOpen(true);
+      if (shouldPreferSameTabWebNfc(platform) && webNfcAvailable) {
+        await handleSealRingScan();
+        return;
+      }
       navigateToSealWaitPage();
     } catch (error) {
       if (error instanceof Error && error.message === SEAL_STEP_UP_REQUIRED) {
@@ -904,6 +927,7 @@ export function NewMemoryPage({
       </header>
 
       <div style={styles.scrollBody}>
+        <SealPwaHintCard />
         {autoSealMode && !sealPromptOpen ? (
           <p style={styles.autoSealHint} aria-live="polite">
             {sealFlow.autoSealHint}

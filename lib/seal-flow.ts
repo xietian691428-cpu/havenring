@@ -12,6 +12,8 @@ export type SealArmedPayload = {
   expiresAt: number;
   draftIds: string[];
   timestamp: number;
+  /** Encrypted ephemeral staging handoff (iOS / private browsing). */
+  stagingId?: string;
   /** @deprecated Legacy field — prefer `timestamp`. */
   armedAt?: number;
 };
@@ -37,6 +39,10 @@ function parseArmedPayload(raw: string | null): SealArmedPayload | null {
     const draftIds = Array.isArray(parsed.draftIds)
       ? normalizeDraftIds(parsed.draftIds)
       : [];
+    const stagingId =
+      typeof parsed.stagingId === "string" && parsed.stagingId.trim()
+        ? parsed.stagingId.trim()
+        : undefined;
     const timestamp =
       typeof parsed.timestamp === "number"
         ? parsed.timestamp
@@ -46,6 +52,7 @@ function parseArmedPayload(raw: string | null): SealArmedPayload | null {
     return {
       expiresAt: parsed.expiresAt,
       draftIds,
+      stagingId,
       timestamp,
     };
   } catch {
@@ -191,12 +198,20 @@ export function readActiveSealArmedPayload(): SealArmedPayload | null {
 /**
  * Arm the seal window with draft ids persisted in both storages (fixes ring tap opening a new tab).
  */
-export function armSealFlowWithPersistence(draftIds: string[] = []) {
+export function armSealFlowWithPersistence(
+  draftIds: string[] = [],
+  opts: { stagingId?: string } = {}
+) {
   if (typeof window === "undefined") return;
   const expiresAt = Date.now() + SEAL_ARM_TTL_MS;
+  const stagingId =
+    typeof opts.stagingId === "string" && opts.stagingId.trim()
+      ? opts.stagingId.trim()
+      : undefined;
   const data: SealArmedPayload = {
     expiresAt,
     draftIds: normalizeDraftIds(draftIds),
+    stagingId,
     timestamp: Date.now(),
   };
   writeArmedPayload(data);
@@ -219,6 +234,12 @@ export function isSealFlowArmed(): boolean {
 export function getArmedSealDraftIds(): string[] {
   const payload = readActiveSealArmedPayload();
   return payload?.draftIds ?? [];
+}
+
+export function getArmedSealStagingId(): string | null {
+  const payload = readActiveSealArmedPayload();
+  const id = payload?.stagingId;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
 /** Milliseconds until the armed seal window ends (0 if not armed or expired). */

@@ -61,7 +61,9 @@ import {
   syncHydrateSealPrepFromStorage,
   tryAcquireSealResolveLockForSealTap,
   wasSealRecentlyCompleted,
+  subscribeSealBroadcast,
 } from "@/src/features/seal";
+import { SealPwaHintCard } from "@/src/components/SealPwaHintCard";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
 import {
   consumeDeferredAppEntry,
@@ -544,6 +546,12 @@ export default function StartClient() {
         goSuccess();
       }
     };
+    const unsubBroadcast = subscribeSealBroadcast((message) => {
+      if (message.type === "nfc_tap") followSealTap();
+      if (message.type === "seal_complete" && wasSealRecentlyCompleted()) {
+        goSuccess();
+      }
+    });
     const onVisible = () => {
       if (document.visibilityState === "visible") followSealTap();
     };
@@ -555,6 +563,7 @@ export default function StartClient() {
       window.clearInterval(poll);
       window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisible);
+      unsubBroadcast();
     };
   }, [sealWaitMode]);
 
@@ -690,7 +699,11 @@ export default function StartClient() {
         syncHydrateSealPrepFromStorage();
         setSealPrepRevision((n) => n + 1);
 
-        const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
+        const {
+          context,
+          draft_ids: pendingSealDraftIds,
+          staging_id: pendingSealStagingId,
+        } = getSealSdmContextPayload();
         pendingSealTapRef.current =
           Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
         setSealLeaveGuard(pendingSealTapRef.current);
@@ -765,6 +778,7 @@ export default function StartClient() {
               picc,
               context,
               draft_ids: pendingSealDraftIds,
+              ...(pendingSealStagingId ? { staging_id: pendingSealStagingId } : {}),
             }),
           });
         } catch (error) {
@@ -1451,6 +1465,7 @@ export default function StartClient() {
               ← {START_PAGE_EN.backToHaven}
             </Link>
           </header>
+          {sealContextActive ? <SealPwaHintCard /> : null}
 
           <StartRingGlyphPulse />
 

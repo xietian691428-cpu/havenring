@@ -5,8 +5,9 @@ export type SealFinalizeResponseBody = {
   error_code?: unknown;
 };
 
-const MSG_OFFLINE_PREP =
-  "You're offline — final seal can't reach Haven right now. Your draft stays safely on this device. Go online and run Seal with Ring again.";
+import { SEAL_STAGING_OFFLINE } from "./sealUserMessages";
+
+const MSG_OFFLINE_PREP = SEAL_STAGING_OFFLINE;
 
 export function ensureBrowserOnlineForSealFinalize(): void {
   if (typeof navigator === "undefined") return;
@@ -25,26 +26,26 @@ export function userMessageFromFinalizeResponse(
 
   switch (code) {
     case "TICKET_EXPIRED":
-      return `${apiMsg || "Seal confirmation expired."} Tap Seal with Ring again — your draft is still local.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "TICKET_ALREADY_USED":
-      return `${apiMsg || "This confirmation was already used."} Tap the ring flow again from Capture. Drafts remain on-device.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "INVALID_TICKET":
-      return `${apiMsg || "Invalid seal confirmation."} Return to Capture and start Seal with Ring again.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "MISSING_SEAL_DATA":
-      return `${apiMsg || "Missing seal data."} Your draft should still be in the Draft Box — try seal again.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "DRAFT_SET_MISMATCH":
     case "DRAFT_PAYLOAD_MISMATCH":
     case "SEAL_COMMIT_REJECTED":
-      return `${apiMsg || "Seal could not confirm this draft bundle."} Edits stayed local — save again, then retry ring seal.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "MISSING_DRAFT_PAYLOADS":
-      return `${apiMsg || "Seal payload incomplete."} Re-save from Capture, then retry.`;
+      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "UNAUTHORIZED":
-      return "Sign in again, then reopen the ring seal link or tap Seal once more.";
+      return "Sign in, then tap Seal with Ring again.";
     default:
       return apiMsg || fallback;
   }
 }
 
 export function sealFinalizeFetchFailedMessage(): string {
-  return "Network interrupted while sealing — your drafts are still saved on this device. Reconnect and try the ring seal again.";
+  return "You're offline — connect, then tap your ring again.";
 }

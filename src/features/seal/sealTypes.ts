@@ -26,6 +26,7 @@ export type SealDraftFinalizePayload = {
 export type SealSdmContextPayload = {
   context: typeof SEAL_SDM_CONTEXT | "";
   draft_ids: string[];
+  staging_id?: string;
 };
 
 export type FinalizeSealWithTicketOptions = {

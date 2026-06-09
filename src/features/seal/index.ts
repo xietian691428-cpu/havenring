@@ -33,7 +33,9 @@ export {
   clearPendingSealDraftIds,
   clearSealPrepState,
   primeSealPrepAfterDraftPersisted,
+  prepareSealForRingTap,
   collectDraftPayloadsForSeal,
+  sealPayloadFromDraftItem,
   finalizeSealWithTicket,
   getSealSdmContextPayload,
   syncHydrateSealPrepFromStorage,
@@ -108,3 +110,23 @@ export {
   abandonSealPrepOnSessionBoundary,
   bindSealSessionBoundaryListeners,
 } from "./sealSessionBoundary";
+export {
+  postSealBroadcast,
+  subscribeSealBroadcast,
+  closeSealBroadcastChannel,
+  type SealBroadcastMessage,
+} from "./sealBroadcast";
+export {
+  resolveSealTransportMode,
+  shouldPreferSameTabWebNfc,
+  type SealTransportMode,
+} from "./sealPlatform";
+export { isEphemeralStorageEnvironment } from "./ephemeralStorage";
+export {
+  SEAL_DRAFT_NOT_FOUND,
+  SEAL_PWA_HINT,
+  SEAL_RETRY_RING,
+  SEAL_SESSION_ENDED,
+  SEAL_STAGING_OFFLINE,
+  SEAL_STAGING_TOO_LARGE,
+} from "./sealUserMessages";

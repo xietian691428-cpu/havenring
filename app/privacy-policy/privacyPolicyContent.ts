@@ -33,6 +33,7 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
       heading: "2. Data Storage",
       bullets: [
         "Free plan: memories stay on your device only, in encrypted local storage (IndexedDB).",
+        "Seal with Ring: while you complete a seal, an encrypted copy of your draft may be held on our servers for up to 10 minutes, then deleted automatically after the ring confirms or if the seal is cancelled.",
         "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync for your private pair where available.",
         "For a shared Haven, each partner uses their own account. Members of the same Haven may access shared sealed memories according to the product's ring and device-verification rules.",
         "We cannot access your memory content where client-side encryption applies.",

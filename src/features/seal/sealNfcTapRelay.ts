@@ -1,6 +1,7 @@
 import { isSealFlowArmed } from "@/lib/seal-flow";
 import { hasSdmInUrlSearch } from "./parseRingTapUrl";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { postSealBroadcast } from "./sealBroadcast";
 
 /** Cross-tab: Android often opens a second Chrome tab with SDM query params. */
 export const SEAL_NFC_TAP_STORAGE_KEY = STORAGE_KEYS.sealNfcTapRelay;
@@ -15,9 +16,8 @@ export function recordSealNfcTapHref(href: string): void {
     if (isSealFlowArmed() && !url.searchParams.get("intent")) {
       url.searchParams.set("intent", "seal");
     }
-    const payload = JSON.stringify({ href: url.href, ts: Date.now() });
-    window.sessionStorage.setItem(SEAL_NFC_TAP_STORAGE_KEY, payload);
-    window.localStorage.setItem(SEAL_NFC_TAP_STORAGE_KEY, payload);
+    const ts = Date.now();
+    postSealBroadcast({ type: "nfc_tap", href: url.href, ts });
   } catch {
     /* ignore */
   }

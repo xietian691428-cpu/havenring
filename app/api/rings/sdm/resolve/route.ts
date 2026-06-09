@@ -25,6 +25,7 @@ type ResolveBody = {
   picc_data?: unknown;
   context?: unknown;
   draft_ids?: unknown;
+  staging_id?: unknown;
 };
 
 type SdmVerification = {
@@ -156,17 +157,20 @@ async function issueSealTicket(opts: {
   ringId: string;
   havenId: string | null;
   draftIds: string[];
+  stagingId?: string | null;
 }) {
   if (!opts.draftIds.length) return null;
   const admin = getSupabaseAdminClient();
   const ticket = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
   const expiresAt = new Date(Date.now() + sealTicketExpiryMs()).toISOString();
+  const stagingId = String(opts.stagingId || "").trim() || null;
   const { error } = await admin.from("seal_tickets" as never).insert({
     user_id: opts.userId,
     ring_uid_hash: opts.uidHash,
     ring_id: opts.ringId,
     haven_id: opts.havenId,
     draft_ids: opts.draftIds,
+    staging_id: stagingId,
     ticket_hash: hashSealTicketSecret(ticket),
     expires_at: expiresAt,
   } as never);
@@ -280,12 +284,15 @@ export async function POST(req: NextRequest) {
     let sealTicket: { ticket: string; expiresAt: string } | null = null;
     if (scene === SEAL_CONFIRMATION_CONTEXT && currentUserId && ring) {
       try {
+        const stagingId =
+          typeof body.staging_id === "string" ? body.staging_id.trim() : "";
         sealTicket = await issueSealTicket({
           userId: currentUserId,
           uidHash,
           ringId: ring.id,
           havenId: ring.haven_id,
           draftIds: parseSealDraftIds(body.draft_ids),
+          stagingId: stagingId || null,
         });
       } catch (error) {
         const code = error instanceof Error ? error.message : "SEAL_TICKET_ISSUE_FAILED";

@@ -4,6 +4,7 @@ import { hitRateLimitWithRedisFallback } from "@/lib/rate-limit";
 export const API_RATE_POLICIES = {
   sealFinalize: { maxRequests: 10, windowMs: 60_000 },
   sealRingTap: { maxRequests: 45, windowMs: 60_000 },
+  sealStaging: { maxRequests: 20, windowMs: 60_000 },
   ringMedium: { maxRequests: 45, windowMs: 60_000 },
 } as const;
 

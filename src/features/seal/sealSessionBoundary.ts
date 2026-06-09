@@ -3,13 +3,21 @@
  * the armed window so a later ring tap opens Haven (daily_access), not seal.
  */
 
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { clearSealWaitTabActive } from "./sealCrossTab";
 import { clearSealPrepState } from "./sealFlowClient";
 import { markSealStepUpRequired } from "../../services/deviceTrustService";
 
 export function abandonSealPrepOnSessionBoundary(): void {
   if (typeof window === "undefined") return;
-  clearSealPrepState();
+  void getSupabaseBrowserClient()
+    .auth.getSession()
+    .then(({ data }) => {
+      clearSealPrepState(data.session?.access_token);
+    })
+    .catch(() => {
+      clearSealPrepState();
+    });
   clearSealWaitTabActive();
   markSealStepUpRequired();
 }
