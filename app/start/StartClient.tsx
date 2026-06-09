@@ -17,7 +17,7 @@ import {
   writeRingWaitReason,
   type RingWaitReason,
 } from "@/lib/nfc-flow-timing";
-import { hasSdmSearch } from "@/lib/nfc-intent";
+import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { usePlatform } from "@/src/hooks/usePlatform";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
@@ -39,13 +39,16 @@ import {
   clearSealWaitTabActive,
   clearSealNfcTapHref,
   consumeFreshSealNfcTapHref,
+  readFreshSealNfcTapHref,
   finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
+  hasLocalSealPrep,
   hasRecoverableComposerContent,
   isPrimarySealWaitPage,
   isRingTapSealLandingPage,
   isSealFlowArmed,
+  isSealWaitTabActive,
   isSealWaitSearch,
   listenForSealRingTapOnce,
   markSealWaitTabActive,
@@ -57,7 +60,8 @@ import {
   SEAL_SUCCESS_PATH,
   forceArmSealForCurrentUser,
   shouldDeferSdmResolveToOwnerTab,
-  tryAcquireSealResolveLock,
+  syncHydrateSealPrepFromStorage,
+  tryAcquireSealResolveLockForSealTap,
   tryRecoverSealPrepFromComposerSnapshot,
   wasSealRecentlyCompleted,
 } from "@/src/features/seal";
@@ -530,6 +534,15 @@ export default function StartClient() {
       if (wasSealRecentlyCompleted()) {
         return goSuccess();
       }
+      // iOS opens NFC in a foreground sibling tab — do not navigate this hidden wait tab.
+      if (document.visibilityState === "hidden") {
+        const relay = readFreshSealNfcTapHref();
+        if (relay) {
+          setSealRemoteFinishing(true);
+          setNotice(START_PAGE_EN.sealWaitFinishingTitle);
+        }
+        return false;
+      }
       if (isSealNfcLaunchSearch(window.location.search)) {
         const u = new URL(window.location.href);
         u.searchParams.delete("seal_wait");
@@ -629,6 +642,23 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
+    syncHydrateSealPrepFromStorage();
+    if (isSealWaitTabActive() || hasLocalSealPrep()) {
+      try {
+        const u = new URL(window.location.href);
+        if (!u.searchParams.get("intent")) {
+          u.searchParams.set("intent", "seal");
+          window.history.replaceState({}, "", `${u.pathname}${u.search}${u.hash}`);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    pendingSealTapRef.current =
+      hasLocalSealPrep() || isSealWaitTabActive() || readNfcIntent(search) === "seal";
+    if (pendingSealTapRef.current) {
+      setSealLeaveGuard(true);
+    }
     resolveStartedAtRef.current = Date.now();
     recordSealNfcTapHref(window.location.href);
     const myGen = ++nfcSdmResolveGenerationRef.current;
@@ -676,6 +706,7 @@ export default function StartClient() {
           setNotice(START_PAGE_EN.preparingMemory);
           await forceArmSealForCurrentUser();
         }
+        syncHydrateSealPrepFromStorage();
         setSealPrepRevision((n) => n + 1);
 
         const { context, draft_ids: pendingSealDraftIds } = getSealSdmContextPayload();
@@ -686,7 +717,7 @@ export default function StartClient() {
         const isSealAttempt =
           pendingSealTapRef.current || isRingTapSealLandingPage(search);
         if (isSealAttempt) {
-          sealLockId = tryAcquireSealResolveLock();
+          sealLockId = tryAcquireSealResolveLockForSealTap();
           if (!sealLockId) {
             setNfcSealBootstrapping(false);
             setSdmState({ kind: "resolving" });
@@ -769,7 +800,9 @@ export default function StartClient() {
         }
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         if (scene === "daily_access" && pendingSealTapRef.current) {
-          throw new Error("Open your memory first.");
+          throw new Error(
+            "Seal did not start. Return to your memory, tap Seal with Ring, then hold your ring on this screen until it finishes."
+          );
         }
         const viewerUserId = sessionData.session?.user?.id ?? null;
         await sleepMs(

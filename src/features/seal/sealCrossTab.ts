@@ -26,6 +26,21 @@ function readLock(): SealResolveLock | null {
   }
 }
 
+/** Drop resolve lock when the owning tab likely died (stuck "Reading your ring…" on iOS). */
+export function clearStaleSealResolveLock(maxHeldMs = 4_000): boolean {
+  if (typeof window === "undefined") return false;
+  const existing = readLock();
+  if (!existing) return false;
+  const heldMs = Date.now() - (existing.expiresAt - LOCK_TTL_MS);
+  if (heldMs < maxHeldMs) return false;
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.sealResolveLock);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** One tab owns SDM resolve at a time (prevents replay when wait tab also navigates). */
 export function tryAcquireSealResolveLock(): string | null {
   if (typeof window === "undefined") return null;
@@ -40,6 +55,14 @@ export function tryAcquireSealResolveLock(): string | null {
   } catch {
     return null;
   }
+}
+
+/** Prefer for NFC seal taps: clear a stale lock once, then acquire. */
+export function tryAcquireSealResolveLockForSealTap(): string | null {
+  const acquired = tryAcquireSealResolveLock();
+  if (acquired) return acquired;
+  if (!clearStaleSealResolveLock()) return null;
+  return tryAcquireSealResolveLock();
 }
 
 export function releaseSealResolveLock(lockId: string | null | undefined) {

@@ -36,6 +36,7 @@ export {
   collectDraftPayloadsForSeal,
   finalizeSealWithTicket,
   getSealSdmContextPayload,
+  syncHydrateSealPrepFromStorage,
   syncSealPrepWithSessionArm,
   abandonInProgressSealOnStartPage,
   finalizeSealChainFromSdmResponse,
@@ -88,9 +89,11 @@ export {
   clearSealWaitTabActive,
   isSealWaitTabActive,
   markSealWaitTabActive,
+  clearStaleSealResolveLock,
   releaseSealResolveLock,
   SEAL_COMPLETE_STORAGE_KEY,
   tryAcquireSealResolveLock,
+  tryAcquireSealResolveLockForSealTap,
   wasSealRecentlyCompleted,
 } from "./sealCrossTab";
 export { listenForSealRingTapOnce } from "./sealRingNfcListen";

@@ -138,6 +138,11 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(bindClient, /\/api\/haven\/invite\/key/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /resolvedUid/);
   assert.match(readRepoFile("lib/partner-invite-pending.ts"), /buildBindRingUrl/);
+  const sealNavigate = readRepoFile("src/features/seal/sealNavigate.ts");
+  assert.match(sealNavigate, /isSealWaitTabActive\(\)\) return false/);
+  assert.match(readRepoFile("src/features/seal/sealFlowClient.ts"), /syncHydrateSealPrepFromStorage/);
+  assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /tryAcquireSealResolveLockForSealTap/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /document\.visibilityState === "hidden"/);
   assert.match(bindClient, /initializeSecurity/);
   assert.match(bindClient, /joinBindCtaSetup/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);

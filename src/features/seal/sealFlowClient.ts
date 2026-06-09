@@ -105,6 +105,16 @@ function writePendingSealDraftIdsCookie(ids: string[]) {
   }
 }
 
+/** Sync rehydrate seal arm from cross-tab storage before SDM resolve (iOS NFC tab). */
+export function syncHydrateSealPrepFromStorage(): void {
+  if (typeof window === "undefined") return;
+  if (isSealFlowArmed()) return;
+  const pending = readPendingSealDraftIds();
+  if (pending.length) {
+    armSealFlowWithPersistence(pending);
+  }
+}
+
 export function readPendingSealDraftIds(): string[] {
   if (typeof window === "undefined") return [];
   try {

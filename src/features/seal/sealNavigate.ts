@@ -21,15 +21,17 @@ export function hasLocalSealPrep(): boolean {
 }
 
 /**
- * NFC opened a bare /start?sdm tab without draft arm in this context while the wait page
- * is active — relay only; let the wait tab navigate and resolve with seal prep.
+ * NFC opened a bare /start?sdm tab while a seal-wait tab is active.
+ * Always resolve on the NFC (foreground) tab — iOS Safari throttles background wait
+ * tabs so defer+relay deadlocks and users see endless "Reading your ring…" tabs.
  */
 export function shouldDeferSdmResolveToOwnerTab(search: string = ""): boolean {
   const q = normalizeSearch(search);
   if (!hasSdmSearch(q)) return false;
   if (hasLocalSealPrep()) return false;
   if (isSealWaitSearch(q) || readNfcIntent(q) === "seal") return false;
-  return isSealWaitTabActive();
+  if (isSealWaitTabActive()) return false;
+  return false;
 }
 
 export function sealRelayNavigateHref(relayHref: string): string {
