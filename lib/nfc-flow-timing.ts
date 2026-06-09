@@ -5,6 +5,14 @@ export const NFC_FLOW_TIMING = {
   minFailedBeforeRetryMs: 8000,
   /** Let success copy land before redirect. */
   successRedirectMs: 2000,
+  /** Client-side cap so iOS Safari does not sit on "Still reading…" forever. */
+  sdmResolveFetchTimeoutMs: 22_000,
+  /** Auth/session prep during NFC resolve. */
+  sdmResolveAuthTimeoutMs: 8_000,
+  /** Foreground NFC tab may retry lock acquisition before failing. */
+  sealLockRetryMs: 12_000,
+  /** Hard watchdog — force failed UI if resolve never finishes. */
+  sdmResolveWatchdogMs: 35_000,
 } as const;
 
 /** Timers for other user-action steps (NFC listen, claim, bind, hub, sync). */
@@ -63,6 +71,25 @@ export function clearRingWaitReason() {
 export function sleepMs(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/** Reject when `promise` does not settle within `ms` (iOS Safari auth/session stalls). */
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message = "Request timed out."
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** Whole seconds left until `endsAt`, for on-page countdowns synced with internal timers. */

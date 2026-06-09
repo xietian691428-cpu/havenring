@@ -90,6 +90,7 @@ export {
   isSealWaitTabActive,
   markSealWaitTabActive,
   clearStaleSealResolveLock,
+  forceClearSealResolveLock,
   releaseSealResolveLock,
   SEAL_COMPLETE_STORAGE_KEY,
   tryAcquireSealResolveLock,

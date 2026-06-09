@@ -93,6 +93,7 @@ async function verifySdmPayload(body: ResolveBody): Promise<SdmVerification> {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
   });
   const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   const backendError = typeof payload.error === "string" ? payload.error.trim() : "";

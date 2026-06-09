@@ -142,7 +142,10 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(sealNavigate, /isSealWaitTabActive\(\)\) return false/);
   assert.match(readRepoFile("src/features/seal/sealFlowClient.ts"), /syncHydrateSealPrepFromStorage/);
   assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /tryAcquireSealResolveLockForSealTap/);
+  assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /forceClearSealResolveLock/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /document\.visibilityState === "hidden"/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /sdmResolveWatchdogMs/);
+  assert.match(readRepoFile("lib/nfc-flow-timing.ts"), /withTimeout/);
   assert.match(bindClient, /initializeSecurity/);
   assert.match(bindClient, /joinBindCtaSetup/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);

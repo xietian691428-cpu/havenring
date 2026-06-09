@@ -14,6 +14,7 @@ import {
   readRingWaitReason,
   sleepMs,
   visibleSecondsRemaining,
+  withTimeout,
   writeRingWaitReason,
   type RingWaitReason,
 } from "@/lib/nfc-flow-timing";
@@ -281,6 +282,7 @@ export default function StartClient() {
   );
   const [failedRetryReady, setFailedRetryReady] = useState(false);
   const resolveStartedAtRef = useRef(0);
+  const nfcResolveInFlightRef = useRef(false);
   const failedStartedAtRef = useRef(0);
   const redirectStartedAtRef = useRef(0);
   const [nfcUiTick, setNfcUiTick] = useState(0);
@@ -689,7 +691,23 @@ export default function StartClient() {
 
     void (async () => {
       resolveStartedAtRef.current = Date.now();
+      nfcResolveInFlightRef.current = true;
       setNfcSealBootstrapping(true);
+      setSdmState({ kind: "resolving" });
+      const watchdogId = window.setTimeout(() => {
+        if (!nfcResolveInFlightRef.current || myGen !== nfcSdmResolveGenerationRef.current) {
+          return;
+        }
+        nfcResolveInFlightRef.current = false;
+        controller.abort();
+        setNfcSealBootstrapping(false);
+        setSdmState({
+          kind: "failed",
+          message:
+            "This is taking too long. Return to your memory, tap Seal with Ring once, then hold your ring here until it finishes.",
+        });
+        setNotice(START_PAGE_EN.ringVerifyFailedNotice);
+      }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
       if (hasRecoverableComposerContent()) {
         setNotice(START_PAGE_EN.preparingMemory);
       }
@@ -717,26 +735,40 @@ export default function StartClient() {
         const isSealAttempt =
           pendingSealTapRef.current || isRingTapSealLandingPage(search);
         if (isSealAttempt) {
-          sealLockId = tryAcquireSealResolveLockForSealTap();
+          const lockDeadline = Date.now() + NFC_FLOW_TIMING.sealLockRetryMs;
+          while (!sealLockId && Date.now() < lockDeadline) {
+            if (wasSealRecentlyCompleted()) {
+              clearSealWaitTabActive();
+              window.location.assign(SEAL_SUCCESS_PATH);
+              return;
+            }
+            sealLockId = tryAcquireSealResolveLockForSealTap({
+              foreground: document.visibilityState === "visible",
+            });
+            if (sealLockId) break;
+            await sleepMs(400);
+          }
           if (!sealLockId) {
-            setNfcSealBootstrapping(false);
-            setSdmState({ kind: "resolving" });
-            setNotice(START_PAGE_EN.sealWaitFinishingTitle);
-            completePollId = window.setInterval(() => {
-              if (wasSealRecentlyCompleted()) {
-                window.location.assign(SEAL_SUCCESS_PATH);
-              }
-            }, 400);
-            return;
+            throw new Error(
+              "Another tab is still finishing a seal. Close extra Haven tabs, then tap Seal with Ring and try once more."
+            );
           }
         }
 
         try {
-          await supabase.auth.initialize();
+          await withTimeout(
+            supabase.auth.initialize(),
+            NFC_FLOW_TIMING.sdmResolveAuthTimeoutMs,
+            "Sign-in check timed out."
+          );
         } catch {
-          /* offline */
+          /* offline or timeout — continue; resolve may still work */
         }
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await withTimeout(
+          supabase.auth.getSession(),
+          NFC_FLOW_TIMING.sdmResolveAuthTimeoutMs,
+          "Sign-in check timed out."
+        );
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
 
         const accessToken = sessionData.session?.access_token || "";
@@ -753,6 +785,10 @@ export default function StartClient() {
           return;
         }
 
+        const fetchTimeoutId = window.setTimeout(
+          () => controller.abort(),
+          NFC_FLOW_TIMING.sdmResolveFetchTimeoutMs
+        );
         let res: Response;
         try {
           res = await fetch("/api/rings/sdm/resolve", {
@@ -768,8 +804,17 @@ export default function StartClient() {
               draft_ids: pendingSealDraftIds,
             }),
           });
-        } catch {
-          throw new Error("We could not finish that tap.");
+        } catch (error) {
+          const aborted = controller.signal.aborted;
+          throw new Error(
+            aborted
+              ? "Ring verification timed out. Check your network, then tap Seal with Ring and try once more."
+              : error instanceof Error
+                ? error.message
+                : "We could not finish that tap."
+          );
+        } finally {
+          window.clearTimeout(fetchTimeoutId);
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
@@ -852,11 +897,15 @@ export default function StartClient() {
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
           setNotice("Sealing your memory...");
-          const finalizeResult = await finalizeSealChainFromSdmResponseSafe({
-            sealTicket: String(data.sealTicket),
-            draftIds: pendingSealDraftIds,
-            accessToken,
-          });
+          const finalizeResult = await withTimeout(
+            finalizeSealChainFromSdmResponseSafe({
+              sealTicket: String(data.sealTicket),
+              draftIds: pendingSealDraftIds,
+              accessToken,
+            }),
+            NFC_FLOW_TIMING.sdmResolveFetchTimeoutMs,
+            "Sealing timed out. Your draft is still saved — tap Seal with Ring and try once more."
+          );
           if (!finalizeResult.ok) {
             throw new Error(finalizeResult.message);
           }
@@ -865,7 +914,6 @@ export default function StartClient() {
         // eslint-disable-next-line no-console
         console.error("=== START NFC RESOLVE FAILED ===", error);
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
-        if (controller.signal.aborted) return;
         await sleepMs(
           Math.max(0, NFC_FLOW_TIMING.minResolvingMs - (Date.now() - resolveStartedAtRef.current))
         );
@@ -878,10 +926,12 @@ export default function StartClient() {
         });
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       } finally {
-        if (sealLockId) releaseSealResolveLock(sealLockId);
+        window.clearTimeout(watchdogId);
         if (myGen === nfcSdmResolveGenerationRef.current) {
+          nfcResolveInFlightRef.current = false;
           setNfcSealBootstrapping(false);
         }
+        if (sealLockId) releaseSealResolveLock(sealLockId);
       }
     })();
 

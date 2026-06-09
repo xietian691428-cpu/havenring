@@ -57,10 +57,25 @@ export function tryAcquireSealResolveLock(): string | null {
   }
 }
 
+export function forceClearSealResolveLock(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.sealResolveLock);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Prefer for NFC seal taps: clear a stale lock once, then acquire. */
-export function tryAcquireSealResolveLockForSealTap(): string | null {
+export function tryAcquireSealResolveLockForSealTap(
+  opts: { foreground?: boolean } = {}
+): string | null {
   const acquired = tryAcquireSealResolveLock();
   if (acquired) return acquired;
+  if (opts.foreground) {
+    forceClearSealResolveLock();
+    return tryAcquireSealResolveLock();
+  }
   if (!clearStaleSealResolveLock()) return null;
   return tryAcquireSealResolveLock();
 }
