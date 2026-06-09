@@ -46,6 +46,7 @@ import {
   readSealDraftRelay,
   writeSealDraftRelay,
 } from "./sealDraftRelay";
+import { requiresSealStepUp } from "../../services/deviceTrustService";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -110,14 +111,11 @@ function writePendingSealDraftIdsCookie(ids: string[]) {
   }
 }
 
-/** Sync rehydrate seal arm from cross-tab storage before SDM resolve (iOS NFC tab). */
+/** Re-read armed payload from cross-tab storage (does not arm from orphan draft ids). */
 export function syncHydrateSealPrepFromStorage(): void {
   if (typeof window === "undefined") return;
   if (isSealFlowArmed()) return;
-  const pending = readPendingSealDraftIds();
-  if (pending.length) {
-    armSealFlowWithPersistence(pending);
-  }
+  syncSealPrepWithSessionArm();
 }
 
 export function readPendingSealDraftIds(): string[] {
@@ -304,6 +302,12 @@ export async function finalizeSealWithTicket(
 
   ensureBrowserOnlineForSealFinalize();
 
+  if (!isSealFlowArmed()) {
+    throw new Error(
+      "Seal session ended. Open your draft and tap Seal with Ring again."
+    );
+  }
+
   const draftPayloads = await collectDraftPayloadsForSeal(draftIds);
   if (draftPayloads.length !== draftIds.length) {
     throw new Error(
@@ -370,9 +374,14 @@ export async function finalizeSealWithTicket(
 }
 
 /** Called after composing & persisting draft to idb, before prompting for ring tap. */
+export const SEAL_STEP_UP_REQUIRED = "SEAL_STEP_UP_REQUIRED";
+
 export async function primeSealPrepAfterDraftPersisted(draftId: string) {
   const id = String(draftId || "").trim();
   if (!id) return;
+  if (requiresSealStepUp()) {
+    throw new Error(SEAL_STEP_UP_REQUIRED);
+  }
   clearSealCompleteRelay();
   clearSealWaitTabActive();
   clearSealNfcTapHref();
@@ -388,13 +397,8 @@ export async function primeSealPrepAfterDraftPersisted(draftId: string) {
 /** SDM resolver body fields on `/start` when the seal arm window is active (cross-tab safe). */
 export function getSealSdmContextPayload(): SealSdmContextPayload {
   if (!isSealFlowArmed()) {
-    const pendingOnly = readPendingSealDraftIds();
-    if (pendingOnly.length) {
-      armSealFlowWithPersistence(pendingOnly);
-    } else {
-      syncSealPrepWithSessionArm();
-      return { context: "", draft_ids: [] };
-    }
+    syncSealPrepWithSessionArm();
+    return { context: "", draft_ids: [] };
   }
   const fromArm = getArmedSealDraftIds();
   const pending = fromArm.length ? fromArm : readPendingSealDraftIds();

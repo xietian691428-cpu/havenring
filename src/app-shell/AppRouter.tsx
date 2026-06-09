@@ -41,7 +41,10 @@ import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelec
 import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
-import { syncSealPrepWithSessionArm } from "../features/seal";
+import {
+  bindSealSessionBoundaryListeners,
+  syncSealPrepWithSessionArm,
+} from "../features/seal";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   isTemporaryDeviceModeEnabled,
@@ -398,16 +401,18 @@ export function AppRouter() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sync = () => {
-      syncSealPrepWithSessionArm();
+    if (typeof window === "undefined") return undefined;
+    const unbindBoundary = bindSealSessionBoundaryListeners();
+    const syncOrphans = () => {
+      if (document.visibilityState === "visible") {
+        syncSealPrepWithSessionArm();
+      }
     };
-    document.addEventListener("visibilitychange", sync);
-    window.addEventListener("pagehide", sync);
-    sync();
+    document.addEventListener("visibilitychange", syncOrphans);
+    syncSealPrepWithSessionArm();
     return () => {
-      document.removeEventListener("visibilitychange", sync);
-      window.removeEventListener("pagehide", sync);
+      unbindBoundary();
+      document.removeEventListener("visibilitychange", syncOrphans);
     };
   }, []);
 

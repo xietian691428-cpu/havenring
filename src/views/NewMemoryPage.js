@@ -26,6 +26,7 @@ import {
   listenForSealRingTapOnce,
   primeSealPrepAfterDraftPersisted,
   readComposerSnapshotTextOnly,
+  SEAL_STEP_UP_REQUIRED,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
 import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
@@ -36,6 +37,12 @@ import { getNewMemoryPageCopy, getNfcHoldGuideCopy, getSealFlowCopy } from "../c
 import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { getBoundRingCount } from "../services/ringRegistryService";
+import {
+  isSecurityInitialized,
+  requiresSealStepUp,
+  verifyAndTrustCurrentDevice,
+} from "../services/deviceTrustService";
+import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
 
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
@@ -135,6 +142,12 @@ function buildNewMemoryPageCopy(locale, platform, t) {
     upgradeModalDismiss: en.upgradeModalDismiss,
     upgradeModalSubscribe: en.upgradeModalSubscribe,
     upgradeModalPricingHint: en.upgradeModalPricingHint,
+    sealStepUpSetupRequired: en.sealStepUpSetupRequired,
+    sealVerifyTitle: en.sealVerifyTitle,
+    sealVerifyHint: en.sealVerifyHint,
+    sealVerifyConfirm: en.sealVerifyConfirm,
+    sealVerifyCancel: en.sealVerifyCancel,
+    backgroundDraftSaved: en.backgroundDraftSaved,
   };
 }
 
@@ -205,6 +218,11 @@ export function NewMemoryPage({
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [sealPreparingOverlay, setSealPreparingOverlay] = useState(false);
   const [sealFinalizeError, setSealFinalizeError] = useState("");
+  const [sealVerifyOpen, setSealVerifyOpen] = useState(false);
+  const [sealVerifyPassword, setSealVerifyPassword] = useState("");
+  const [sealVerifyRecovery, setSealVerifyRecovery] = useState("");
+  const [sealVerifyError, setSealVerifyError] = useState("");
+  const [sealVerifyBusy, setSealVerifyBusy] = useState(false);
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
@@ -220,10 +238,7 @@ export function NewMemoryPage({
   const handleSaveRef = useRef(null);
   const autoArmBusyRef = useRef(false);
 
-  function redirectToSealWaitIfArmed() {
-    if (!isSealFlowArmed()) return;
-    navigateToSealWaitPage();
-  }
+  const ringsCopy = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
 
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -364,12 +379,6 @@ export function NewMemoryPage({
       window.clearInterval(pollId);
     };
   }, [sealPromptOpen, sealFlow.sealCompletedElsewhere]);
-
-  useEffect(() => {
-    if (sealPromptOpen) {
-      redirectToSealWaitIfArmed();
-    }
-  }, [sealPromptOpen]);
 
   useEffect(() => {
     const firstDone = isFirstMemoryCompleted();
@@ -564,8 +573,7 @@ export function NewMemoryPage({
     });
   }
 
-  async function handleSave(options = {}) {
-    const { openSealPromptOnSuccess = false } = options;
+  async function handleSave() {
     if (
       !title.trim() &&
       !story.trim() &&
@@ -583,21 +591,17 @@ export function NewMemoryPage({
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
       let draftAttachments = [];
-      const savedDraft = openSealPromptOnSuccess
-        ? await persistDraftForSealPrep()
-        : await (async () => {
-            draftAttachments = await prepareAttachmentsForSave(attachments, t);
-            return saveDraftItem({
-              id: editingDraftId || undefined,
-              title: title.trim() || t.untitled,
-              story: story.trim(),
-              photo: photos,
-              attachments: draftAttachments,
-              releaseAt,
-            });
-          })();
+      draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const savedDraft = await saveDraftItem({
+        id: editingDraftId || undefined,
+        title: title.trim() || t.untitled,
+        story: story.trim(),
+        photo: photos,
+        attachments: draftAttachments,
+        releaseAt,
+      });
       setEditingDraftId(savedDraft.id);
-      if (!openSealPromptOnSuccess && typeof onSaveMemory === "function") {
+      if (typeof onSaveMemory === "function") {
         setFeedback(t.feedbackSavingTimeline);
         await onSaveMemory({
           id: savedDraft.id,
@@ -611,11 +615,7 @@ export function NewMemoryPage({
         await removeDraftItem(savedDraft.id);
         setEditingDraftId("");
       }
-      if (openSealPromptOnSuccess) {
-        await primeSealPrepAfterDraftPersisted(savedDraft.id);
-        navigateToSealWaitPage();
-        return;
-      } else if (typeof onSaveMemory === "function") {
+      if (typeof onSaveMemory === "function") {
         setFeedback("");
         setSecureSaveToast(true);
         if (!canSealWithRing && typeof window !== "undefined") {
@@ -631,29 +631,20 @@ export function NewMemoryPage({
       } else {
         setFeedback(t.feedbackSaved);
       }
-      // Keep the compose snapshot only for explicit draft saves.
-      // Seal flow now requires a verified ring event before formal persistence.
-      if (!openSealPromptOnSuccess) {
-        clearDraftSnapshot();
-      }
-      if (!openSealPromptOnSuccess) {
-        triggerSuccessFeedback({
-          soundEnabled,
-          hapticEnabled,
-          allowSound:
-            soundScope === "all_success" || soundScope === "save_only",
+      clearDraftSnapshot();
+      triggerSuccessFeedback({
+        soundEnabled,
+        hapticEnabled,
+        allowSound: soundScope === "all_success" || soundScope === "save_only",
+      });
+      onSaved?.();
+      if (isFirstMemoryMode) {
+        markFirstMemoryCompleted();
+        setIsFirstMemoryMode(false);
+        void trackFirstRunEvent("first_memory_saved", {
+          locale,
+          metadata: { mode: "draft_save" },
         });
-      }
-      if (!openSealPromptOnSuccess) {
-        onSaved?.();
-        if (isFirstMemoryMode) {
-          markFirstMemoryCompleted();
-          setIsFirstMemoryMode(false);
-          void trackFirstRunEvent("first_memory_saved", {
-            locale,
-            metadata: { mode: "draft_save" },
-          });
-        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : t.feedbackSaveFailed;
@@ -681,22 +672,22 @@ export function NewMemoryPage({
     clearDraftSnapshot();
   }
 
-  async function handleSealNow() {
-    if (!canSealWithRing) {
-      setSealPromptOpen(false);
-      setUpgradeModalOpen(true);
-      return;
-    }
-    setRingTapError("");
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
-    setSealFinalizeError("");
+  async function runSealNowAfterVerified() {
     setSealPreparingOverlay(true);
     try {
       const savedDraft = await persistDraftForSealPrep();
       await primeSealPrepAfterDraftPersisted(savedDraft.id);
       setEditingDraftId(savedDraft.id);
+      setSealPromptOpen(true);
       navigateToSealWaitPage();
     } catch (error) {
+      if (error instanceof Error && error.message === SEAL_STEP_UP_REQUIRED) {
+        setSealVerifyError("");
+        setSealVerifyPassword("");
+        setSealVerifyRecovery("");
+        setSealVerifyOpen(true);
+        return;
+      }
       const message =
         error instanceof Error ? error.message : t.feedbackSaveFailed;
       setSealFinalizeError(message);
@@ -707,37 +698,85 @@ export function NewMemoryPage({
     }
   }
 
+  async function handleSealNow() {
+    if (!canSealWithRing) {
+      setSealPromptOpen(false);
+      setUpgradeModalOpen(true);
+      return;
+    }
+    if (!isSecurityInitialized()) {
+      setSealFinalizeError(pageCopy.sealStepUpSetupRequired);
+      setFeedback(pageCopy.sealStepUpSetupRequired);
+      return;
+    }
+    if (requiresSealStepUp()) {
+      setSealVerifyError("");
+      setSealVerifyPassword("");
+      setSealVerifyRecovery("");
+      setSealVerifyOpen(true);
+      return;
+    }
+    setRingTapError("");
+    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSealFinalizeError("");
+    await runSealNowAfterVerified();
+  }
+
+  async function handleConfirmSealVerify() {
+    setSealVerifyBusy(true);
+    setSealVerifyError("");
+    try {
+      await verifyAndTrustCurrentDevice({
+        password: sealVerifyPassword,
+        recoveryCode: sealVerifyRecovery,
+      });
+      setSealVerifyOpen(false);
+      setSealVerifyPassword("");
+      setSealVerifyRecovery("");
+      await runSealNowAfterVerified();
+    } catch {
+      setSealVerifyError(ringsCopy.verifyError);
+    } finally {
+      setSealVerifyBusy(false);
+    }
+  }
+
   handleSaveRef.current = handleSave;
 
-  const triggerAutoSealPrep = useCallback(async () => {
-    if (!canSealWithRing || sealPromptOpen || saving || autoArmBusyRef.current) return;
+  const persistDraftOnBackgroundRef = useRef(null);
+  persistDraftOnBackgroundRef.current = async () => {
+    if (sealPromptOpen || saving || autoArmBusyRef.current) return;
     if (!hasDraftContent) return;
     autoArmBusyRef.current = true;
-    setFeedbackNotice(sealFlow.autoSaving);
     try {
-      await handleSaveRef.current?.({ openSealPromptOnSuccess: true });
+      const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
+      const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const savedDraft = await saveDraftItem({
+        id: editingDraftId || undefined,
+        title: title.trim() || t.untitled,
+        story: story.trim(),
+        photo: photos,
+        attachments: draftAttachments,
+        releaseAt,
+      });
+      setEditingDraftId(savedDraft.id);
+      clearSealPrepState();
+      clearDraftSnapshot();
+      setFeedbackNotice(pageCopy.backgroundDraftSaved);
+    } catch {
+      /* best-effort background save */
     } finally {
       autoArmBusyRef.current = false;
     }
-  }, [canSealWithRing, sealPromptOpen, saving, hasDraftContent, sealFlow.autoSaving]);
+  };
 
   useEffect(() => {
     const onPageHide = () => {
-      void triggerAutoSealPrep();
+      void persistDraftOnBackgroundRef.current?.();
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
-        void triggerAutoSealPrep();
-        return;
-      }
-      if (
-        document.visibilityState === "visible" &&
-        canSealWithRing &&
-        !sealPromptOpen &&
-        !saving &&
-        isSealFlowArmed()
-      ) {
-        redirectToSealWaitIfArmed();
+        void persistDraftOnBackgroundRef.current?.();
       }
     };
     window.addEventListener("pagehide", onPageHide);
@@ -746,30 +785,10 @@ export function NewMemoryPage({
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [
-    triggerAutoSealPrep,
-    canSealWithRing,
-    sealPromptOpen,
-    saving,
-    sealFlow.readyTitle,
-  ]);
-
-  useEffect(() => {
-    if (!canSealWithRing || !hasDraftContent) return undefined;
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (sealPromptOpen || saving || autoArmBusyRef.current || sealPreparingOverlay) {
-        return;
-      }
-      if (isSealFlowArmed()) {
-        redirectToSealWaitIfArmed();
-      }
-    }, 2000);
-    return () => window.clearInterval(id);
-  }, [canSealWithRing, hasDraftContent, sealPromptOpen, saving, sealPreparingOverlay]);
+  }, []);
 
   async function handleSaveSecurelyFallback() {
-    await handleSave({ openSealPromptOnSuccess: false });
+    await handleSave();
   }
 
   function handleCancelSeal() {
@@ -1219,6 +1238,62 @@ export function NewMemoryPage({
           <p style={styles.footerSecurityNote}>{pageCopy.securityDeleteNote}</p>
         ) : null}
       </footer>
+
+      {sealVerifyOpen ? (
+        <div
+          style={styles.upgradeModalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="haven-seal-verify-title"
+          onClick={() => setSealVerifyOpen(false)}
+        >
+          <section
+            style={styles.upgradeModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="haven-seal-verify-title" style={styles.upgradeModalTitle}>
+              {pageCopy.sealVerifyTitle}
+            </h2>
+            <p style={styles.upgradeModalBody}>{pageCopy.sealVerifyHint}</p>
+            <input
+              type="password"
+              value={sealVerifyPassword}
+              onChange={(e) => setSealVerifyPassword(e.target.value)}
+              placeholder={ringsCopy.verifyPassword}
+              style={styles.verifyInput}
+              autoComplete="current-password"
+            />
+            <input
+              type="text"
+              value={sealVerifyRecovery}
+              onChange={(e) => setSealVerifyRecovery(e.target.value)}
+              placeholder={ringsCopy.verifyRecovery}
+              style={styles.verifyInput}
+            />
+            {sealVerifyError ? (
+              <p style={styles.verifyError}>{sealVerifyError}</p>
+            ) : null}
+            <div style={styles.upgradeModalActions}>
+              <button
+                type="button"
+                onClick={() => void handleConfirmSealVerify()}
+                style={styles.upgradeModalSubscribe}
+                disabled={sealVerifyBusy}
+              >
+                {pageCopy.sealVerifyConfirm}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSealVerifyOpen(false)}
+                style={styles.upgradeModalDismiss}
+                disabled={sealVerifyBusy}
+              >
+                {pageCopy.sealVerifyCancel}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {upgradeModalOpen ? (
         <div
@@ -2051,5 +2126,21 @@ const styles = {
     cursor: "pointer",
     justifySelf: "stretch",
     WebkitTapHighlightColor: "transparent",
+  },
+  verifyInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 10,
+    border: "1px solid rgba(90, 72, 62, 0.85)",
+    background: "rgba(12, 10, 9, 0.9)",
+    color: "#faf6f1",
+    padding: "10px 12px",
+    fontSize: 15,
+  },
+  verifyError: {
+    margin: 0,
+    fontSize: 13,
+    color: "#f0a8a0",
+    lineHeight: 1.4,
   },
 };

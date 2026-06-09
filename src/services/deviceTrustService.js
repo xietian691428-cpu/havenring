@@ -11,6 +11,7 @@ const DEFAULT_ACCESS_GRANT_TTL_MS =
 const LONG_ACCESS_GRANT_TTL_MS =
   readPublicEnvMs("NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS", 3650);
 const DEVICE_REVERIFY_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
+const SEAL_STEP_UP_KEY = STORAGE_KEYS.sealStepUpRequired;
 
 function readPublicEnvMs(name, fallbackDays) {
   const fallback = fallbackDays * 24 * 60 * 60 * 1000;
@@ -136,6 +137,35 @@ export function requiresReverificationCurrentDevice() {
   return Date.now() - device.lastVerifiedAt > DEVICE_REVERIFY_IDLE_MS;
 }
 
+/** After lock screen / background — sealing requires device password again. */
+export function markSealStepUpRequired() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SEAL_STEP_UP_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearSealStepUpRequired() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(SEAL_STEP_UP_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function requiresSealStepUp() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.sessionStorage.getItem(SEAL_STEP_UP_KEY) === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  return requiresReverificationCurrentDevice();
+}
+
 function upsertTrustedDevice(profile) {
   const deviceId = getOrCreateDeviceId();
   const now = Date.now();
@@ -209,6 +239,7 @@ export async function verifyAndTrustCurrentDevice({
   }
   profile.devices = upsertTrustedDevice(profile);
   writeProfile(profile);
+  clearSealStepUpRequired();
   return true;
 }
 

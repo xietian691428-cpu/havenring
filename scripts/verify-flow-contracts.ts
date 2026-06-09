@@ -80,6 +80,7 @@ check("storage keys aligned for seal flow", () => {
   assert.equal(COMPOSER_SNAPSHOT_KEY, STORAGE_KEYS.composerSnapshot);
   assert.equal(typeof STORAGE_KEYS.sealWaitTabActive, "string");
   assert.equal(STORAGE_KEYS.sealDraftRelay, "haven.seal.draft.relay.v1");
+  assert.equal(STORAGE_KEYS.sealStepUpRequired, "haven.seal.step_up_required.v1");
 });
 
 check("seal prep has cross-tab persistence keys", () => {
@@ -198,6 +199,29 @@ check("timeline sync does not fail when optional cloud backup is off", () => {
   assert.match(readRepoFile("app/api/sync/moments/route.ts"), /requireAuthenticatedUser/);
 });
 
+check("seal session boundary: no background auto-arm; step-up before re-seal", () => {
+  const newMemory = readRepoFile("src/views/NewMemoryPage.js");
+  const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
+  const sessionBoundary = readRepoFile("src/features/seal/sealSessionBoundary.ts");
+  const appRouter = readRepoFile("src/app-shell/AppRouter.tsx");
+  const deviceTrust = readRepoFile("src/services/deviceTrustService.js");
+  assert.doesNotMatch(newMemory, /triggerAutoSealPrep/);
+  assert.doesNotMatch(newMemory, /redirectToSealWaitIfArmed/);
+  assert.doesNotMatch(newMemory, /openSealPromptOnSuccess/);
+  assert.match(newMemory, /persistDraftOnBackgroundRef/);
+  assert.match(newMemory, /requiresSealStepUp/);
+  assert.match(newMemory, /verifyAndTrustCurrentDevice/);
+  assert.match(sealFlow, /SEAL_STEP_UP_REQUIRED/);
+  assert.match(sealFlow, /requiresSealStepUp\(\)/);
+  assert.match(sessionBoundary, /abandonSealPrepOnSessionBoundary/);
+  assert.match(sessionBoundary, /markSealStepUpRequired/);
+  assert.match(appRouter, /bindSealSessionBoundaryListeners/);
+  assert.match(deviceTrust, /markSealStepUpRequired/);
+  assert.match(deviceTrust, /clearSealStepUpRequired/);
+  const recovery = readRepoFile("src/features/seal/sealComposerRecovery.ts");
+  assert.doesNotMatch(recovery, /armSealFlowWithPersistence/);
+});
+
 check("seal commit persists memories to local timeline", () => {
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
   assert.match(sealFlow, /persistSealedDraftsLocally/);
@@ -210,7 +234,7 @@ check("seal commit persists memories to local timeline", () => {
   assert.match(readRepoFile("src/features/seal/sealDraftRelay.ts"), /writeSealDraftRelay/);
   const recovery = readRepoFile("src/features/seal/sealComposerRecovery.ts");
   assert.match(recovery, /existingPhotos/);
-  assert.match(recovery, /pendingBeforeSnapshot/);
+  assert.match(recovery, /Does NOT arm seal/);
 });
 
 console.log("\nAll flow contract checks passed.");

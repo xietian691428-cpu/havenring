@@ -167,6 +167,14 @@ const HAVEN_NEW_MEMORY_SHARED = {
   sealAfterSecureSaveCta: "Seal this memory now",
   storyRequiredHint: "Add a few words about this moment — it’s required to seal.",
   sealCountdownPrefix: "Time left to touch:",
+  sealStepUpSetupRequired:
+    "Set up your device password in Settings before you can seal with your ring.",
+  sealVerifyTitle: "Confirm it's you",
+  sealVerifyHint:
+    "Your screen was locked or Haven was in the background. Enter your device password or recovery code to seal again.",
+  sealVerifyConfirm: "Verify and seal",
+  sealVerifyCancel: "Cancel",
+  backgroundDraftSaved: "Saved to Draft Box",
 } as const;
 
 const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice> = {
@@ -234,6 +242,12 @@ export type NewMemoryPageCopyEn = NewMemoryHeroCopy & {
   upgradeModalDismiss: string;
   upgradeModalSubscribe: string;
   upgradeModalPricingHint: string;
+  sealStepUpSetupRequired: string;
+  sealVerifyTitle: string;
+  sealVerifyHint: string;
+  sealVerifyConfirm: string;
+  sealVerifyCancel: string;
+  backgroundDraftSaved: string;
 };
 
 function buildNewMemoryPageCopy(platform: HavenPlatform): NewMemoryPageCopyEn {
@@ -656,7 +670,7 @@ export const SEAL_FLOW_EN = {
   successMessage: "",
   successViewMemoriesCta: "View Memories",
   successSealAnotherCta: "Seal Another",
-  autoSaving: "Saving…",
+  autoSaving: "Saved to Draft Box",
   sealArmFailedCta: "Open",
   sealWaitingStep2: "Tap your ring",
   sealWaitingCountdownPrefix: "Time left",

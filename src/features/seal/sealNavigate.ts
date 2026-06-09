@@ -15,9 +15,9 @@ export function isSealWaitSearch(search: string = ""): boolean {
   return sp.get(SEAL_WAIT_QUERY) === "1";
 }
 
-/** User opened `/start?seal_wait=1` from composer before tapping the ring. */
+/** Explicit seal session armed in-app (not orphan draft ids). */
 export function hasLocalSealPrep(): boolean {
-  return isSealFlowArmed() || readPendingSealDraftIds().length > 0;
+  return isSealFlowArmed();
 }
 
 /**
@@ -37,7 +37,7 @@ export function shouldDeferSdmResolveToOwnerTab(search: string = ""): boolean {
 export function sealRelayNavigateHref(relayHref: string): string {
   if (typeof window === "undefined") return relayHref;
   const url = new URL(relayHref, window.location.origin);
-  if (hasLocalSealPrep() || isSealWaitTabActive()) {
+  if (hasLocalSealPrep()) {
     url.searchParams.set("intent", "seal");
   }
   return url.href;

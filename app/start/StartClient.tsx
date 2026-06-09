@@ -45,11 +45,9 @@ import {
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
   hasLocalSealPrep,
-  hasRecoverableComposerContent,
   isPrimarySealWaitPage,
   isRingTapSealLandingPage,
   isSealFlowArmed,
-  isSealWaitTabActive,
   isSealWaitSearch,
   listenForSealRingTapOnce,
   markSealWaitTabActive,
@@ -59,11 +57,9 @@ import {
   SEAL_COMPLETE_STORAGE_KEY,
   SEAL_NFC_TAP_STORAGE_KEY,
   SEAL_SUCCESS_PATH,
-  forceArmSealForCurrentUser,
   shouldDeferSdmResolveToOwnerTab,
   syncHydrateSealPrepFromStorage,
   tryAcquireSealResolveLockForSealTap,
-  tryRecoverSealPrepFromComposerSnapshot,
   wasSealRecentlyCompleted,
 } from "@/src/features/seal";
 import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
@@ -408,44 +404,21 @@ export default function StartClient() {
   const sealArmed = isSealFlowArmed();
   void sealPrepRevision;
 
-  const hasRecoverableContent = useMemo(
-    () => (typeof window !== "undefined" ? hasRecoverableComposerContent() : false),
-    [nfcFlow, sdmState, sealPrepRevision]
-  );
-
-  const showSealArmFailedGuide =
-    nfcFlow &&
-    !sealArmed &&
-    hasRecoverableContent &&
-    !nfcSealBootstrapping &&
-    sdmState.kind === "ready" &&
-    sdmState.scene === "daily_access" &&
-    isDailyMember;
-
-  const showSealPrepGuide =
-    nfcFlow &&
-    !sealArmed &&
-    !hasRecoverableContent &&
-    !nfcSealBootstrapping &&
-    !showSealArmFailedGuide &&
-    sdmState.kind === "resolving";
-
   const showSealConnecting =
     nfcFlow &&
-    !showSealArmFailedGuide &&
-    (sealArmed || hasRecoverableContent || nfcSealBootstrapping) &&
+    (sealArmed || nfcSealBootstrapping) &&
     (sdmState.kind === "resolving" || nfcSealBootstrapping);
 
   useEffect(() => {
-    if (sealWaitMode) return;
-    if (!isDailyMember || showSealPrepGuide || hasRecoverableContent || showSealArmFailedGuide)
-      return;
+    if (sealWaitMode || sealArmed) return undefined;
+    if (!isDailyMember) return undefined;
+    if (sdmState.kind !== "ready" || sdmState.scene !== "daily_access") return undefined;
     redirectStartedAtRef.current = Date.now();
     const t = window.setTimeout(() => {
       window.location.assign("/app");
     }, NFC_FLOW_TIMING.successRedirectMs);
     return () => window.clearTimeout(t);
-  }, [sealWaitMode, isDailyMember, showSealPrepGuide, hasRecoverableContent, showSealArmFailedGuide]);
+  }, [sealWaitMode, sealArmed, isDailyMember, sdmState]);
 
   const showMinimalSyncedCountdown =
     sdmState.kind === "failed" ||
@@ -589,8 +562,7 @@ export default function StartClient() {
     sealWaitMode ||
     sealRemoteFinishing ||
     ringTapSealLanding ||
-    isSealFlowArmed() ||
-    hasRecoverableComposerContent();
+    isSealFlowArmed();
 
   const hideFtuxOAuthDuringSealTouch =
     sealContextActive ||
@@ -645,7 +617,7 @@ export default function StartClient() {
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
     syncHydrateSealPrepFromStorage();
-    if (isSealWaitTabActive() || hasLocalSealPrep()) {
+    if (hasLocalSealPrep()) {
       try {
         const u = new URL(window.location.href);
         if (!u.searchParams.get("intent")) {
@@ -656,8 +628,7 @@ export default function StartClient() {
         /* ignore */
       }
     }
-    pendingSealTapRef.current =
-      hasLocalSealPrep() || isSealWaitTabActive() || readNfcIntent(search) === "seal";
+    pendingSealTapRef.current = hasLocalSealPrep();
     if (pendingSealTapRef.current) {
       setSealLeaveGuard(true);
     }
@@ -708,9 +679,6 @@ export default function StartClient() {
         });
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
-      if (hasRecoverableComposerContent()) {
-        setNotice(START_PAGE_EN.preparingMemory);
-      }
       try {
         // eslint-disable-next-line no-console
         console.log("=== START NFC RESOLVE BEGIN ===", {
@@ -719,11 +687,6 @@ export default function StartClient() {
           hasCmac: Boolean(cmac),
           hasPicc: Boolean(picc),
         });
-        await tryRecoverSealPrepFromComposerSnapshot();
-        if (!isSealFlowArmed() && hasRecoverableComposerContent()) {
-          setNotice(START_PAGE_EN.preparingMemory);
-          await forceArmSealForCurrentUser();
-        }
         syncHydrateSealPrepFromStorage();
         setSealPrepRevision((n) => n + 1);
 
@@ -1553,23 +1516,6 @@ export default function StartClient() {
             <>
               <h1 style={styles.title}>{idleHero.title}</h1>
             </>
-          ) : showSealArmFailedGuide || showSealPrepGuide ? (
-            <p
-              style={{ ...styles.subtitle, fontSize: 17, lineHeight: 1.45, marginTop: 8 }}
-              role={showSealArmFailedGuide ? "alert" : "status"}
-              aria-live="polite"
-            >
-              {sealFlow.sealNotReadyLine}{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.assign("/app?open=new");
-                }}
-                style={styles.sealGuideInlineLink}
-              >
-                {sealFlow.sealArmFailedCta}
-              </button>
-            </p>
           ) : showSealConnecting ? (
             <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8, letterSpacing: "-0.02em" }}>
               {sealFlow.sealingLabel}
@@ -1583,27 +1529,20 @@ export default function StartClient() {
             </>
           ) : null}
 
-          {showSealCountdown &&
-          sealRemainingMs > 0 &&
-          !showSealConnecting &&
-          !showSealArmFailedGuide ? (
+          {showSealCountdown && sealRemainingMs > 0 && !showSealConnecting ? (
             <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
               {START_PAGE_EN.sealCountdownPrefix}{" "}
               <strong>{formatSealCountdown(sealRemainingMs)}</strong>
             </p>
           ) : null}
 
-          {nfcFlow &&
-          sdmCopy &&
-          !showSealPrepGuide &&
-          !showSealConnecting &&
-          !showSealArmFailedGuide ? (
+          {nfcFlow && sdmCopy && !showSealConnecting ? (
             <section
               style={{ ...styles.sdmCard, ...getSdmCardStyle(sdmState) }}
               role={sdmState.kind === "failed" ? "alert" : "status"}
               aria-live="polite"
             >
-              {isDailyMember && !showSealPrepGuide ? (
+              {isDailyMember ? (
                 <p style={styles.sdmSuccessMark} aria-hidden>
                   ✓
                 </p>

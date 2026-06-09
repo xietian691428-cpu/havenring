@@ -1,14 +1,12 @@
 /**
  * Recover in-progress composer content when the user taps their ring before
- * explicitly pressing Seal (text-only localStorage snapshot → idb draft + seal arm).
+ * explicitly pressing Seal (text-only localStorage snapshot → idb draft).
+ * Does NOT arm seal — ring tap without explicit Seal stays daily_access.
  */
 
 import { getDraftItem, saveDraftItem } from "../memories/draftBoxStore";
-import { armSealFlowWithPersistence, isSealFlowArmed } from "../../../lib/seal-flow";
-import {
-  primeSealPrepAfterDraftPersisted,
-  readPendingSealDraftIds,
-} from "./sealFlowClient";
+import { isSealFlowArmed } from "../../../lib/seal-flow";
+import { readPendingSealDraftIds } from "./sealFlowClient";
 import {
   COMPOSER_SNAPSHOT_KEY,
   composerSnapshotHasTextContent,
@@ -66,60 +64,19 @@ export async function recoverComposerSnapshotToDraft(
 }
 
 /**
- * If seal prep is not armed, rehydrate from pending draft ids or composer snapshot.
- * @returns true when the next ring tap can use seal_confirmation.
+ * Rehydrate idb draft from composer snapshot only — never arms seal for NFC.
  */
 export async function tryRecoverSealPrepFromComposerSnapshot(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (isSealFlowArmed()) return true;
-
-  const pending = readPendingSealDraftIds();
-  if (pending.length) {
-    armSealFlowWithPersistence(pending);
-    return true;
-  }
-
   const draftId = await recoverComposerSnapshotToDraft();
-  if (!draftId) return false;
-
-  await primeSealPrepAfterDraftPersisted(draftId);
-  return true;
+  return Boolean(draftId);
 }
 
 /**
- * Last-resort arm before /start SDM resolve when the user has draft content but
- * never pressed Seal — used so a ring tap can still finish as seal_confirmation.
+ * @deprecated Ring taps must not arm seal. Returns true only if already armed.
  */
 export async function forceArmSealForCurrentUser(): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  if (isSealFlowArmed()) return true;
-
-  const pendingBeforeSnapshot = readPendingSealDraftIds();
-  if (pendingBeforeSnapshot.length) {
-    armSealFlowWithPersistence(pendingBeforeSnapshot);
-    return true;
-  }
-
-  if (composerSnapshotHasTextContent()) {
-    const fromSnapshot = await recoverComposerSnapshotToDraft();
-    if (fromSnapshot) {
-      await primeSealPrepAfterDraftPersisted(fromSnapshot);
-      if (isSealFlowArmed()) return true;
-    }
-  }
-
-  const pending = readPendingSealDraftIds();
-  if (pending.length) {
-    armSealFlowWithPersistence(pending);
-    return true;
-  }
-
-  const recovered = await tryRecoverSealPrepFromComposerSnapshot();
-  if (recovered || isSealFlowArmed()) return true;
-
-  if (!hasRecoverableComposerContent()) return false;
-  const draftId = await recoverComposerSnapshotToDraft();
-  if (!draftId) return false;
-  await primeSealPrepAfterDraftPersisted(draftId);
   return isSealFlowArmed();
 }

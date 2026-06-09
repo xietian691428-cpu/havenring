@@ -40,6 +40,7 @@ export {
   syncSealPrepWithSessionArm,
   abandonInProgressSealOnStartPage,
   finalizeSealChainFromSdmResponse,
+  SEAL_STEP_UP_REQUIRED,
 } from "./sealFlowClient";
 export {
   finalizeSealChainFromSdmResponseSafe,
@@ -103,3 +104,7 @@ export {
   wasSealRecentlyCompleted,
 } from "./sealCrossTab";
 export { listenForSealRingTapOnce } from "./sealRingNfcListen";
+export {
+  abandonSealPrepOnSessionBoundary,
+  bindSealSessionBoundaryListeners,
+} from "./sealSessionBoundary";

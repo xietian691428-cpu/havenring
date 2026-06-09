@@ -23,6 +23,7 @@ export const STORAGE_KEYS = {
   sealCompleteRelay: "haven.seal.complete.v1",
   sealWaitTabActive: "haven.seal.wait_tab.v1",
   sealDraftRelay: "haven.seal.draft.relay.v1",
+  sealStepUpRequired: "haven.seal.step_up_required.v1",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

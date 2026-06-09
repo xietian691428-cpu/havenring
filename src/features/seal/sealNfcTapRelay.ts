@@ -1,3 +1,4 @@
+import { isSealFlowArmed } from "@/lib/seal-flow";
 import { hasSdmInUrlSearch } from "./parseRingTapUrl";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
@@ -11,7 +12,7 @@ export function recordSealNfcTapHref(href: string): void {
   try {
     const url = new URL(href, window.location.origin);
     if (!hasSdmInUrlSearch(url.search)) return;
-    if (!url.searchParams.get("intent")) {
+    if (isSealFlowArmed() && !url.searchParams.get("intent")) {
       url.searchParams.set("intent", "seal");
     }
     const payload = JSON.stringify({ href: url.href, ts: Date.now() });
