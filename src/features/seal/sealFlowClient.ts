@@ -259,7 +259,11 @@ async function persistSealedDraftsLocally(draftIds: string[]) {
   markFirstMemoryCompleted();
   const ring = getActiveRingOrFirst();
   if (ring?.uidKey && draftIds.length) {
-    await clearRingSyncQueue(ring.uidKey, draftIds);
+    try {
+      await clearRingSyncQueue(ring.uidKey, draftIds);
+    } catch (error) {
+      console.warn("[haven-ring] ring sync queue clear skipped after seal:", error);
+    }
   }
 }
 

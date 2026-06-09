@@ -7,11 +7,30 @@
 
 import { createStore, del, entries, get, set } from "idb-keyval";
 
-const DB_NAME = "haven-draft-box-v1";
+const DB_NAME = "haven-draft-box-v2";
 const STORE_NAME = "drafts";
 const DRAFT_PREFIX = "draft:";
 
 const store = createStore(DB_NAME, STORE_NAME);
+
+function isMissingObjectStoreError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /object stores? was not found/i.test(message);
+}
+
+async function deleteIndexedDb(name: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  await new Promise<void>((resolve) => {
+    try {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
 
 async function withDraftStoreRetry<T>(fn: () => Promise<T>): Promise<T> {
   let last: unknown;
@@ -20,6 +39,10 @@ async function withDraftStoreRetry<T>(fn: () => Promise<T>): Promise<T> {
       return await fn();
     } catch (e) {
       last = e;
+      if (isMissingObjectStoreError(e) && attempt === 0) {
+        await deleteIndexedDb(DB_NAME);
+        continue;
+      }
       if (attempt === 2) break;
       await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
     }
@@ -60,7 +83,7 @@ export async function saveDraftItem(input: DraftUpsertInput = {}): Promise<Draft
 }
 
 export async function listDraftItems(): Promise<DraftItem[]> {
-  const all = await entries(store);
+  const all = await withDraftStoreRetry(() => entries(store));
   return all
     .filter(([key]) => String(key).startsWith(DRAFT_PREFIX))
     .map(([, value]) => value as DraftItem)
@@ -69,7 +92,11 @@ export async function listDraftItems(): Promise<DraftItem[]> {
 
 export async function getDraftItem(id: string): Promise<DraftItem | null> {
   if (!id) return null;
-  return ((await get(`${DRAFT_PREFIX}${id}`, store)) as DraftItem | undefined) ?? null;
+  return (
+    ((await withDraftStoreRetry(() =>
+      get(`${DRAFT_PREFIX}${id}`, store)
+    )) as DraftItem | undefined) ?? null
+  );
 }
 
 export async function removeDraftItem(id: string): Promise<void> {

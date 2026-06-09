@@ -190,6 +190,9 @@ check("timeline sync does not fail when optional cloud backup is off", () => {
   assert.match(sync, /clearRingSyncQueue/);
   assert.match(sync, /isCriticalSyncIssue/);
   assert.match(sync, /ring-scoped cache sync skipped/);
+  assert.match(readRepoFile("src/services/ringScopedCacheService.js"), /haven-ring-scoped-cache-v2/);
+  assert.match(readRepoFile("src/services/ringScopedCacheService.js"), /scopedKey/);
+  assert.match(readRepoFile("src/features/memories/draftBoxStore.ts"), /haven-draft-box-v2/);
   assert.match(sync, /\/api\/sync\/moments/);
   assert.match(readRepoFile("app/api/sync/moments/route.ts"), /requireAuthenticatedUser/);
 });

@@ -37,7 +37,7 @@ export type MemoryCreatedMeta = Pick<LocalMemory, "id" | "createdAt" | "updatedA
 export type MemorySavedMeta = Pick<LocalMemory, "id" | "updatedAt">;
 
 const DB_NAME = "haven_ring_memories_db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_MEMORIES = "memories";
 
 type EncPayload = {
