@@ -26,7 +26,7 @@ export type AppChromeProps = {
 };
 
 /**
- * Top: minimal glass bar / bottom: 4-tab sanctuary navigation.
+ * iOS-style shell: header + tab bar stay pinned; only the middle pane scrolls.
  */
 export function AppChrome({
   locale = "en",
@@ -74,6 +74,7 @@ export function AppChrome({
 
   return (
     <div
+      className="haven-app-shell"
       style={{
         ...styles.wrapper,
         ...sanctuaryBackgroundStyle(),
@@ -82,7 +83,12 @@ export function AppChrome({
       <header style={styles.topBar}>
         <div style={styles.brandWrap}>
           <p style={styles.brand}>{t.brand}</p>
-          <div style={styles.statusPills} role="status" aria-live="polite">
+          <div
+            className="haven-app-status-pills"
+            style={styles.statusPills}
+            role="status"
+            aria-live="polite"
+          >
             <span style={styles.statusPill}>
               {statusSignedIn ? t.statusSignedIn : t.statusSignedOut}
             </span>
@@ -114,6 +120,7 @@ export function AppChrome({
           </button>
         </div>
       </header>
+
       {showTemporaryBanner ? (
         <div style={styles.temporaryBanner} role="status" aria-live="polite">
           {t.temporaryBanner}
@@ -121,14 +128,12 @@ export function AppChrome({
       ) : null}
 
       <div
+        className="haven-app-main-scroll"
         style={{
           ...styles.mainArea,
-          paddingTop: showTemporaryBanner
-            ? "calc(env(safe-area-inset-top, 0px) + 92px)"
-            : "calc(env(safe-area-inset-top, 0px) + 52px)",
           paddingBottom: showBottomNav
-            ? "calc(60px + env(safe-area-inset-bottom, 0px))"
-            : "20px",
+            ? 0
+            : "max(20px, env(safe-area-inset-bottom, 0px))",
         }}
       >
         {children}
@@ -167,19 +172,18 @@ export function AppChrome({
 
 const styles: Record<string, CSSProperties> = {
   wrapper: {
-    minHeight: "100vh",
+    height: "100dvh",
+    maxHeight: "100dvh",
+    minHeight: 0,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
     position: "relative",
     display: "flex",
     flexDirection: "column",
+    overflow: "hidden",
   },
   temporaryBanner: {
-    position: "fixed",
-    top: "calc(env(safe-area-inset-top, 0px) + 52px)",
-    left: 0,
-    right: 0,
-    zIndex: 35,
+    flexShrink: 0,
     padding: "8px 14px",
     borderBottom: "1px solid rgba(201, 123, 132, 0.35)",
     background: "rgba(72, 36, 34, 0.92)",
@@ -190,11 +194,7 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(12px)",
   },
   topBar: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 40,
+    flexShrink: 0,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -216,11 +216,18 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 6,
     minWidth: 0,
+    flex: 1,
   },
   statusPills: {
     display: "flex",
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     gap: 6,
+    overflowX: "auto",
+    overflowY: "hidden",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    paddingBottom: 2,
   },
   statusPill: {
     fontSize: 10,
@@ -231,10 +238,13 @@ const styles: Record<string, CSSProperties> = {
     color: sanctuaryTheme.ink,
     padding: "4px 8px",
     whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   topActions: {
     display: "flex",
     gap: 4,
+    flexShrink: 0,
+    marginLeft: 8,
   },
   iconBtn: {
     width: 44,
@@ -252,13 +262,13 @@ const styles: Record<string, CSSProperties> = {
   mainArea: {
     flex: 1,
     minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
   },
   tabBar: {
-    position: "fixed",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 50,
+    flexShrink: 0,
     paddingBottom: "env(safe-area-inset-bottom, 0px)",
     background: sanctuaryTheme.tabBarBg,
     backdropFilter: "blur(16px)",

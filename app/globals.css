@@ -281,6 +281,22 @@ body:not(.high-contrast) [style*="linear-gradient(180deg, #e6b48d, #d9a67a)"] {
   }
 }
 
+/* PWA shell (/app): lock document scroll; chrome header + tab bar stay pinned. */
+html.haven-app-route,
+body.haven-app-route {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.haven-app-shell .haven-app-status-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.haven-app-main-scroll {
+  scrollbar-gutter: stable;
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes havenNfcPulse {
     0%,

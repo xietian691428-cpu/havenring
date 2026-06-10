@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { havenCopy } from "../content/havenCopy";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
  * Haven Plus — pricing & comparison (EN copy from havenCopy.pricingPage).
@@ -10,7 +10,7 @@ export function PricingPage({ onBack, onStartTrial, onSubscribe }) {
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={styles.shell}>
         <button type="button" onClick={onBack} style={styles.back}>
           {t.back}
@@ -90,7 +90,7 @@ export function PricingPage({ onBack, onStartTrial, onSubscribe }) {
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "min-content",
     padding: "12px 18px calc(88px + env(safe-area-inset-bottom, 0px))",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { EXPLORE_PAGE_CONTENT } from "../content/explorePageContent";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
  * Explore — On This Day + quiet review prompts (placeholder).
@@ -23,7 +23,7 @@ export function ExplorePage({
   }, [memories]);
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
@@ -64,8 +64,8 @@ export function ExplorePage({
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    padding: "20px 20px calc(28px + env(safe-area-inset-bottom, 0px))",
+    minHeight: "min-content",
+    padding: "20px 20px 28px",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

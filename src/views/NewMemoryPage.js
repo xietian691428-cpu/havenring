@@ -1475,7 +1475,7 @@ async function prepareAttachmentsForSave(attachments, t) {
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "min-content",
     display: "flex",
     flexDirection: "column",
     background: "radial-gradient(circle at 50% 0%, #2a211c 0%, #151210 45%, #0e0c0b 100%)",

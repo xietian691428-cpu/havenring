@@ -3,7 +3,7 @@ import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStora
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
 import { getMemoryDetailUiCopy } from "../content/memoryDetailPageContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 function isVideoMime(mime) {
   return String(mime || "")
@@ -294,7 +294,7 @@ export function MemoryDetailPage({
   const shellGlow = sealed && !isCapsuleLocked ? styles.shellSealed : styles.shell;
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={shellGlow}>
         <nav style={styles.topBar} aria-label="Memory">
           <button type="button" onClick={onBack} style={styles.topBack} aria-label={t.topBackLabel}>
@@ -645,7 +645,7 @@ export function MemoryDetailPage({
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "min-content",
     padding:
       "8px 16px calc(96px + env(safe-area-inset-bottom, 0px))",
     color: sanctuaryTheme.cream,

@@ -9,7 +9,7 @@ import {
   removeBoundRingByCloudId,
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
 import {
   canUseFeature,
@@ -286,7 +286,7 @@ export function RingsPage({
   }
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div style={styles.headerTitleBlock}>
@@ -547,8 +547,8 @@ export function RingsPage({
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    padding: "20px 20px calc(28px + env(safe-area-inset-bottom, 0px))",
+    minHeight: "min-content",
+    padding: "20px 20px 28px",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

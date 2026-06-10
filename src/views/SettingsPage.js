@@ -27,7 +27,7 @@ import {
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
 import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { havenCopy } from "../content/havenCopy";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 
@@ -387,7 +387,7 @@ export function SettingsPage({
   }
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
@@ -790,8 +790,8 @@ function formatBytes(value) {
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    padding: 20,
+    minHeight: "min-content",
+    padding: "16px 20px 24px",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

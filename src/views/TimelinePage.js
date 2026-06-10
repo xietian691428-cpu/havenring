@@ -8,7 +8,7 @@ import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { listDraftItems } from "../services/draftBoxService";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -140,7 +140,7 @@ export function TimelinePage({
     !loading && !searchQuery && !ordered.length && !showPostFtuxBanner;
 
   return (
-    <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+    <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.header}>
           <div style={styles.headerLeft}>
@@ -375,9 +375,8 @@ function isTimelineMemorySealed(memory) {
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    padding:
-      "12px 20px calc(24px + env(safe-area-inset-bottom, 0px))",
+    minHeight: "min-content",
+    padding: "12px 20px 24px",
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

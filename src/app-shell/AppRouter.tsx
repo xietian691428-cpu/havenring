@@ -117,6 +117,16 @@ export function AppRouter() {
   const loginSyncDoneForSessionRef = useRef("");
   const tempWipeStartedRef = useRef(false);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    document.documentElement.classList.add("haven-app-route");
+    document.body.classList.add("haven-app-route");
+    return () => {
+      document.documentElement.classList.remove("haven-app-route");
+      document.body.classList.remove("haven-app-route");
+    };
+  }, []);
+
   function navigateTo(nextRoute: Route, direction: "forward" | "back" = "forward") {
     setTransitionDirection(direction);
     setRoute(nextRoute);
@@ -268,11 +278,14 @@ export function AppRouter() {
   );
 
   function renderWithShell(content: ReactNode) {
-    const dragStyle = {
-      transform: swipeDx > 0 ? `translateX(${swipeDx}px)` : "translateX(0px)",
-      transition: isSwiping ? "none" : "transform 220ms ease-out",
-      willChange: "transform" as const,
-    };
+    const swipeActive = isSwiping || swipeDx > 0;
+    const dragStyle = swipeActive
+      ? {
+          transform: `translateX(${swipeDx}px)`,
+          transition: isSwiping ? "none" : "transform 220ms ease-out",
+          willChange: "transform" as const,
+        }
+      : undefined;
 
     return (
       <div

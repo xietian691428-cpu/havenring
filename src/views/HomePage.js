@@ -542,7 +542,7 @@ export function HomePage({
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "min-content",
     padding: 24,
     display: "grid",
     placeItems: "center",

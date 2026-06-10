@@ -5,7 +5,7 @@ import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { HELP_FAQ } from "../content/helpFaq";
 import { getHelpCenterContent } from "../content/helpCenterContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
-import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 function normalizeSearch(s) {
   return String(s || "")
@@ -152,7 +152,7 @@ export function HelpCenterPage({
 
   return (
     <>
-      <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+      <main style={styles.page}>
         <section style={styles.shell}>
           <header style={styles.header}>
             <div>
@@ -252,7 +252,7 @@ function FaqAccordion({ q, a }) {
 
 const styles = {
   page: {
-    minHeight: "100vh",
+    minHeight: "min-content",
     padding: 20,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
