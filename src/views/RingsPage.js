@@ -10,7 +10,10 @@ import {
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
-import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
+import {
+  fetchSecondaryVerificationToken,
+  verifyAndTrustCurrentDevice,
+} from "../services/deviceTrustService";
 import {
   canUseFeature,
   getPlanBadgeLabel,
@@ -218,13 +221,16 @@ export function RingsPage({
         return;
       }
 
+      const secondaryToken = await fetchSecondaryVerificationToken(
+        session.access_token
+      );
       setBusyCloudRingId(pendingRevoke.cloudRingId);
       const res = await fetch("/api/nfc/revoke", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
-          "X-Haven-Secondary-Verified": "1",
+          "X-Haven-Secondary-Token": secondaryToken,
         },
         body: JSON.stringify({
           ring_id: pendingRevoke.cloudRingId,

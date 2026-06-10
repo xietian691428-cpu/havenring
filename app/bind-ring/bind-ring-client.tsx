@@ -13,6 +13,7 @@ import {
   upsertBoundRingByUidKey,
 } from "@/src/services/ringRegistryService";
 import {
+  fetchSecondaryVerificationToken,
   getSecuritySummary,
   initializeSecurity,
   verifyAndTrustCurrentDevice,
@@ -365,6 +366,9 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         }
       }
       await verifyAndTrustCurrentDevice({ password, recoveryCode });
+      const secondaryToken = await fetchSecondaryVerificationToken(
+        activeSession.access_token
+      );
       const pendingKeyPackage = inviteCode
         ? inviteKeyPackage || readPendingInviteKeyPackage()
         : "";
@@ -379,7 +383,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${activeSession.access_token}`,
-          "X-Haven-Secondary-Verified": "1",
+          "X-Haven-Secondary-Token": secondaryToken,
         },
         body: JSON.stringify({
           nfc_uid: uid,

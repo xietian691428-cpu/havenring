@@ -256,6 +256,7 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(vercel, /0 4 \* \* \*/);
   assert.doesNotMatch(vercel, /\*\/5/);
   assert.match(readRepoFile("lib/cron-auth.ts"), /CRON_ALLOWED_IPS/);
+  assert.match(readRepoFile("lib/cron-auth.ts"), /x-cron-secret/i);
   assert.match(readRepoFile("lib/cron-auth.ts"), /vercel-cron/);
   assert.match(sealPlatform, /getSealStrategy/);
   assert.match(sealPlatform, /platform === "ios"/);

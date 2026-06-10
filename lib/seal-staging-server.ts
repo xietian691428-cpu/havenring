@@ -203,6 +203,7 @@ export async function purgeExpiredSealStaging(opts?: {
 }): Promise<{
   deleted_rows: number;
   deleted_objects: number;
+  staging_rows_remaining: number;
   purged_at: string;
   latency_ms: number;
 }> {
@@ -236,6 +237,10 @@ export async function purgeExpiredSealStaging(opts?: {
     throw error;
   }
 
+  const { count: remaining } = await admin
+    .from("seal_staging" as never)
+    .select("id", { count: "exact", head: true });
+
   const latencyMs = Date.now() - startedAt;
   const purgedAt = new Date().toISOString();
 
@@ -253,6 +258,7 @@ export async function purgeExpiredSealStaging(opts?: {
       source,
       deleted_rows: rows.length,
       deleted_objects: deletedObjects,
+      staging_rows_remaining: remaining ?? 0,
       purged_at: purgedAt,
       latency_ms: latencyMs,
     })
@@ -261,6 +267,7 @@ export async function purgeExpiredSealStaging(opts?: {
   return {
     deleted_rows: rows.length,
     deleted_objects: deletedObjects,
+    staging_rows_remaining: remaining ?? 0,
     purged_at: purgedAt,
     latency_ms: latencyMs,
   };

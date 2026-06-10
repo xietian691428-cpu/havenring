@@ -13,6 +13,7 @@ import {
   upsertBoundRingByUidKey,
 } from "../services/ringRegistryService";
 import {
+  fetchSecondaryVerificationToken,
   getSecuritySummary,
   initializeSecurity,
   verifyAndTrustCurrentDevice,
@@ -366,12 +367,15 @@ export function RingSetupWizard({
         return;
       }
 
+      const secondaryToken = await fetchSecondaryVerificationToken(
+        session.access_token
+      );
       const res = await fetch("/api/nfc/bind", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          "X-Haven-Secondary-Verified": "1",
+          "X-Haven-Secondary-Token": secondaryToken,
         },
         body: JSON.stringify({
           nfc_uid: normalizedUid,

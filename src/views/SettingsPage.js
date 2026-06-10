@@ -13,6 +13,7 @@ import {
 } from "../services/cloudBackupService";
 import { SETTINGS_CONTENT } from "../content/settingsContent";
 import {
+  fetchSecondaryVerificationToken,
   getKeepSignedInPreference,
   getSecuritySummary,
   revokeTrustedDevice,
@@ -332,12 +333,15 @@ export function SettingsPage({
         setStatus(localeCopy.revokeAllNfcNeedSignIn);
         return;
       }
+      const secondaryToken = await fetchSecondaryVerificationToken(
+        session.access_token
+      );
       const res = await fetch("/api/nfc/revoke-all", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
-          "X-Haven-Secondary-Verified": "1",
+          "X-Haven-Secondary-Token": secondaryToken,
         },
         body: JSON.stringify({ privacy_acknowledged: true }),
       });

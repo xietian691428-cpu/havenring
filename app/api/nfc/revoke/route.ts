@@ -5,28 +5,21 @@ import {
   requireAuthenticatedUser,
   requireBearerToken,
 } from "@/lib/supabase/server";
+import { requireSecondaryVerificationToken } from "@/lib/secondary-verification";
 
 type RevokeBody = { ring_id?: unknown; privacy_acknowledged?: unknown };
 
 /**
  * POST /api/nfc/revoke — retire a binding (is_active = false).
  * Retired rings are not released for transfer to another account/Haven.
- * Requires secondary verification header (same contract as bind).
+ * Requires secondary verification token (same contract as bind).
  */
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuthenticatedUser(req);
 
-    const secondary = req.headers.get("x-haven-secondary-verified");
-    if (secondary !== "1") {
-      return NextResponse.json(
-        {
-          error: "Secondary verification required.",
-          code: "secondary_verification_required",
-        },
-        { status: 403 }
-      );
-    }
+    const secondaryRes = await requireSecondaryVerificationToken(req, user.id);
+    if (secondaryRes) return secondaryRes;
 
     const limitRes = await enforceUserIpRateLimit({
       req,

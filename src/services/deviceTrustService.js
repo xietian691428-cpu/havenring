@@ -292,3 +292,18 @@ export async function hasRingAccessGrant(token) {
     return false;
   }
 }
+
+/** Short-lived server token for bind/revoke after local device password check. */
+export async function fetchSecondaryVerificationToken(accessToken) {
+  const res = await fetch("/api/auth/secondary-token", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok || typeof payload.token !== "string" || !payload.token) {
+    throw new Error(payload.error || "secondary_verification_token_failed");
+  }
+  return payload.token;
+}

@@ -11,6 +11,7 @@ import {
   activatePlusTrialForUser,
   getUserSubscriptionStatus,
 } from "@/lib/subscription";
+import { requireSecondaryVerificationToken } from "@/lib/secondary-verification";
 
 type BindBody = {
   nfc_uid?: unknown;
@@ -29,7 +30,7 @@ function sha256(input: string) {
  * First ring creates a one-person Haven. A second ring must use a short-lived
  * partner invite and a separate authenticated account.
  * Requires: Bearer session, explicit privacy acknowledgment, and a secondary
- * verification signal (e.g. after device passcode / passkey) via header.
+ * verification token (minted after local device passcode check).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -49,17 +50,8 @@ export async function POST(req: NextRequest) {
     });
     if (limitRes) return limitRes;
 
-    const secondary = req.headers.get("x-haven-secondary-verified");
-    if (secondary !== "1") {
-      return NextResponse.json(
-        {
-          error: "Please verify your identity first.",
-          code: "secondary_verification_required",
-          hint: "Complete device verification, then set X-Haven-Secondary-Verified: 1.",
-        },
-        { status: 403 }
-      );
-    }
+    const secondaryRes = await requireSecondaryVerificationToken(req, user.id);
+    if (secondaryRes) return secondaryRes;
 
     const body = (await req.json()) as BindBody;
     const rawUid = typeof body.nfc_uid === "string" ? body.nfc_uid : "";
