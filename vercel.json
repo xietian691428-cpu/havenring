@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/purge-seal-staging",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }

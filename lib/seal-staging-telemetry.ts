@@ -6,8 +6,11 @@ export type SealStagingTelemetryInput = {
   outcome: "success" | "error";
   error_code?: string;
   storage_backend?: "db" | "object";
+  /** Purge: deleted DB rows. Create/read: payload bytes. */
   byte_size?: number;
   latency_ms?: number;
+  /** Purge invoke source or storage backend hint. */
+  mode?: string;
 };
 
 export async function recordSealStagingTelemetry(
@@ -20,7 +23,7 @@ export async function recordSealStagingTelemetry(
     phase: input.phase,
     outcome: input.outcome,
     error_code: input.error_code,
-    mode: input.storage_backend || undefined,
+    mode: input.mode || input.storage_backend || undefined,
     latency_ms: input.latency_ms,
     byte_size: input.byte_size,
   });

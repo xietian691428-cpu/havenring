@@ -198,10 +198,16 @@ export async function consumeSealStagingById(
 }
 
 /** Purge expired rows and orphan storage objects (cron). */
-export async function purgeExpiredSealStaging(): Promise<{
+export async function purgeExpiredSealStaging(opts?: {
+  source?: "vercel" | "external";
+}): Promise<{
   deleted_rows: number;
   deleted_objects: number;
+  purged_at: string;
+  latency_ms: number;
 }> {
+  const startedAt = Date.now();
+  const source = opts?.source || "external";
   const admin = getSupabaseAdminClient();
   const now = new Date().toISOString();
   const { data: expired } = await admin
@@ -224,16 +230,38 @@ export async function purgeExpiredSealStaging(): Promise<{
       phase: "purge",
       outcome: "error",
       error_code: "PURGE_FAILED",
+      mode: source,
+      latency_ms: Date.now() - startedAt,
     });
     throw error;
   }
 
+  const latencyMs = Date.now() - startedAt;
+  const purgedAt = new Date().toISOString();
+
   await recordSealStagingTelemetry(admin, {
     phase: "purge",
     outcome: "success",
+    mode: `${source}:objects=${deletedObjects}`,
     byte_size: rows.length,
-    latency_ms: deletedObjects,
+    latency_ms: latencyMs,
   });
 
-  return { deleted_rows: rows.length, deleted_objects: deletedObjects };
+  console.info(
+    "[seal_staging_purge]",
+    JSON.stringify({
+      source,
+      deleted_rows: rows.length,
+      deleted_objects: deletedObjects,
+      purged_at: purgedAt,
+      latency_ms: latencyMs,
+    })
+  );
+
+  return {
+    deleted_rows: rows.length,
+    deleted_objects: deletedObjects,
+    purged_at: purgedAt,
+    latency_ms: latencyMs,
+  };
 }

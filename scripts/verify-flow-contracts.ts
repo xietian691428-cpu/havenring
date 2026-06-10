@@ -251,7 +251,12 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(migration, /storage_backend/);
   assert.match(migration, /seal-staging/);
   assert.match(cronRoute, /purgeExpiredSealStaging/);
+  assert.match(cronRoute, /authorizeCronRequest/);
   assert.match(vercel, /purge-seal-staging/);
+  assert.match(vercel, /0 4 \* \* \*/);
+  assert.doesNotMatch(vercel, /\*\/5/);
+  assert.match(readRepoFile("lib/cron-auth.ts"), /CRON_ALLOWED_IPS/);
+  assert.match(readRepoFile("lib/cron-auth.ts"), /vercel-cron/);
   assert.match(sealPlatform, /getSealStrategy/);
   assert.match(sealPlatform, /platform === "ios"/);
   assert.match(rateLimit, /enforceUserRateLimit/);
