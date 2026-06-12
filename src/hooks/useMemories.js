@@ -226,6 +226,9 @@ export function useMemories() {
       );
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
+      if (outcome?.pairImported > 0) {
+        await refresh();
+      }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,
@@ -305,6 +308,9 @@ export function useMemories() {
       });
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
+      if (outcome?.pairImported > 0) {
+        await refresh();
+      }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,

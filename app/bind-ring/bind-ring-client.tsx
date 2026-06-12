@@ -411,6 +411,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         await importHavenKeyFromInvitePackage(havenId, inviteCode, pendingKeyPackage);
       }
       if (havenId) {
+        const { ensureHavenKey } = await import("@/src/services/havenKeyService");
+        await ensureHavenKey(havenId);
         await uploadWrappedHavenKey({
           accessToken: activeSession.access_token,
           havenId,
@@ -420,10 +422,14 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         clearPendingPartnerInvite();
       }
       setBindState("success");
+      const { setPairSharingEnabled } = await import(
+        "@/src/services/pairSharingService"
+      );
+      setPairSharingEnabled(true);
       const trial = payload.plusTrialActivated ? "1" : "0";
       const role = payload.role === "member" ? "member" : "owner";
       window.setTimeout(() => {
-        window.location.href = `/bind-success?trial=${trial}&role=${role}`;
+        window.location.href = `/bind-success?trial=${trial}&role=${role}&pair=1`;
       }, ACTION_STEP_TIMING.bindSuccessRedirectMs);
     } catch (error) {
       setBindState("error");

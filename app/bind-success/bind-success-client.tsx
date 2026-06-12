@@ -1,16 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { CSSProperties } from "react";
 import { APP_ENTRY_PATH } from "@/lib/site";
 import { BIND_SUCCESS_EN } from "@/src/content/havenCopy";
+import {
+  markPairSharePromptDone,
+  setPairSharingEnabled,
+} from "@/src/services/pairSharingService";
 
 type BindSuccessClientProps = {
   plusTrialActivated?: boolean;
+  showPairPrompt?: boolean;
 };
 
-export function BindSuccessClient({ plusTrialActivated }: BindSuccessClientProps) {
+export function BindSuccessClient({
+  plusTrialActivated,
+  showPairPrompt = true,
+}: BindSuccessClientProps) {
+  const [pairChoice, setPairChoice] = useState<"pending" | "yes" | "no">(
+    showPairPrompt ? "pending" : "yes"
+  );
   const sealFirstHref = `${APP_ENTRY_PATH}?open=new&autoSeal=true`;
+
+  function confirmPairShare(enabled: boolean) {
+    setPairSharingEnabled(enabled);
+    markPairSharePromptDone();
+    setPairChoice(enabled ? "yes" : "no");
+  }
 
   return (
     <main style={styles.page}>
@@ -23,14 +41,42 @@ export function BindSuccessClient({ plusTrialActivated }: BindSuccessClientProps
         {plusTrialActivated ? (
           <p style={styles.trial}>{BIND_SUCCESS_EN.plusTrialNote}</p>
         ) : null}
-        <div style={styles.actions}>
-          <Link href={sealFirstHref} style={styles.primaryButton}>
-            {BIND_SUCCESS_EN.sealFirstMemoryCta}
-          </Link>
-          <Link href={APP_ENTRY_PATH} style={styles.secondaryButton}>
-            {BIND_SUCCESS_EN.goToMemoriesCta}
-          </Link>
-        </div>
+        {pairChoice === "pending" ? (
+          <div style={styles.pairBlock}>
+            <h2 style={styles.pairTitle}>{BIND_SUCCESS_EN.pairPromptTitle}</h2>
+            <p style={styles.pairBody}>{BIND_SUCCESS_EN.pairPromptBody}</p>
+            <div style={styles.pairActions}>
+              <button
+                type="button"
+                style={styles.primaryButton}
+                onClick={() => confirmPairShare(true)}
+              >
+                {BIND_SUCCESS_EN.pairPromptYes}
+              </button>
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                onClick={() => confirmPairShare(false)}
+              >
+                {BIND_SUCCESS_EN.pairPromptNo}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {pairChoice === "yes" ? (
+              <p style={styles.pairNote}>{BIND_SUCCESS_EN.pairActiveNote}</p>
+            ) : null}
+            <div style={styles.actions}>
+              <Link href={sealFirstHref} style={styles.primaryButton}>
+                {BIND_SUCCESS_EN.sealFirstMemoryCta}
+              </Link>
+              <Link href={APP_ENTRY_PATH} style={styles.secondaryButton}>
+                {BIND_SUCCESS_EN.goToMemoriesCta}
+              </Link>
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
@@ -79,17 +125,39 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     lineHeight: 1.2,
   },
-  subtitle: {
-    margin: "0 0 28px",
-    fontSize: 20,
-    lineHeight: 1.45,
-    color: "#e8dcd4",
-  },
   trial: {
     margin: "0 0 20px",
     fontSize: 14,
     lineHeight: 1.5,
     color: "#b7f7c8",
+  },
+  pairBlock: {
+    marginTop: 8,
+    textAlign: "left",
+  },
+  pairTitle: {
+    margin: "0 0 8px",
+    fontSize: 18,
+    fontWeight: 600,
+    textAlign: "center",
+  },
+  pairBody: {
+    margin: "0 0 16px",
+    fontSize: 14,
+    lineHeight: 1.5,
+    color: "#e8dcd4",
+    textAlign: "center",
+  },
+  pairNote: {
+    margin: "0 0 20px",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "#c8b8a8",
+  },
+  pairActions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
   },
   actions: {
     display: "flex",
@@ -105,6 +173,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     fontSize: 17,
     textDecoration: "none",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
   },
   secondaryButton: {
     display: "block",
@@ -114,5 +185,8 @@ const styles: Record<string, CSSProperties> = {
     color: "#f8efe7",
     fontSize: 15,
     textDecoration: "none",
+    background: "transparent",
+    cursor: "pointer",
+    width: "100%",
   },
 };

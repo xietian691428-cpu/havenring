@@ -13,8 +13,9 @@
 ### What Haven is
 
 **Haven is a personal private Memory Sanctuary** — local-first, end-to-end encrypted,
-with an optional NFC ring for a **Seal ritual only**. It is not a couple vault, not a
-shared-login device, and not a “tap ring to open the app” product.
+with an optional NFC ring for a **Seal ritual only**. Optional **Pair mode** (max 2 people,
+2 rings, 2 accounts) shares **sealed** memories automatically; drafts stay private until seal.
+Not a shared-login device and not a “tap ring to open the app” product.
 
 ### Login and unlock
 
@@ -34,10 +35,13 @@ shared-login device, and not a “tap ring to open the app” product.
 
 ### Account and sharing model
 
-- **Strong default:** one person, one account, one ring (binding is per account).
-- Partner / family sharing is **not** “join the same Haven and see everything.”
-- **Target:** explicit **Shared** memories (Plus, E2E encrypted cloud) or manual export/import of chosen items.
-- **Legacy (code still present, product deprecated):** `havens` + `haven_members` + partner invite → full Haven membership sharing. Do **not** build new UX on this model.
+- **Default:** one person, one account, one ring (binding is per account).
+- **Pair mode (lightweight):** invite a partner (separate OAuth account) → max **2** `haven_members`.
+  - **Drafts** stay private on each device until sealed.
+  - **Sealed** memories are visible to both Pair members (imported via `GET /api/sync/pair-bundles`).
+  - Core sealed content is **immutable**; either partner may **append notes** only.
+- **Plus cloud backup** keeps Pair sealed content in sync across devices (primary paid sync path).
+- No multi-person groups, no complex permissions, no shared login.
 
 ### Copy and UX
 
@@ -66,7 +70,7 @@ shared-login device, and not a “tap ring to open the app” product.
 | `daily_access` = “Opening Haven…” / ring unlocks app | OAuth → `/app` Timeline; idle ring tap → short hint to start Seal in app (Phase 1) |
 | Vault / memories **only** via ring tap | Timeline + Memory detail after sign-in |
 | Mandatory **Ring Setup Gate** before using app | Optional bind in Settings / Rings; soft prompt only |
-| **Couple Haven** — members share all sealed content | Personal library + **explicit Shared** (Plus) |
+| Implicit 5-ring family vault | **Pair** (max 2) + personal drafts |
 | Ring as **access credential** / NFC login JWT | Supabase session only |
 | Long ritual copy on `/start` | One line + Help |
 | “No timeline / no history UI” (old §2.1) | Timeline is the primary memory surface |

@@ -14,7 +14,7 @@ export const HAVEN_EN_LAYERED_CORE_LINE =
 
 /** Product model one-liner (landing, pricing, Help). */
 export const HAVEN_PRODUCT_MODEL_EN =
-  "Your private memory sanctuary. Local-first. Ring optional for sealing. Plus: cloud backup and explicit sharing where offered.";
+  "Your private memory sanctuary. Local-first. Optional Pair (2 people): sealed memories shared. Plus: cloud sync for your Pair.";
 
 /** Sealed memories are immutable after the ritual. */
 export const HAVEN_SEAL_IMMUTABLE_EN =
@@ -94,9 +94,15 @@ export const HAVEN_STORAGE_MODE_EN = {
 export const BIND_SUCCESS_EN = {
   title: "Ring linked",
   subtitle: "Your ring is for sealing memories.",
+  pairPromptTitle: "Share sealed memories with your partner?",
+  pairPromptBody:
+    "When you form a Pair (two rings, two accounts), sealed memories appear for both of you. Drafts stay private until you seal.",
+  pairPromptYes: "Yes — share when sealed",
+  pairPromptNo: "Not now",
+  pairActiveNote: "Pair sharing is on. Turn off anytime in Rings.",
   sealFirstMemoryCta: "Write your first memory",
   goToMemoriesCta: "Open memories",
-  plusTrialNote: "Plus trial active — cloud backup optional.",
+  plusTrialNote: "Plus trial active — cloud backup keeps your Pair in sync across devices.",
 } as const;
 
 export const CLOUD_STORAGE_EN = {
@@ -946,6 +952,12 @@ export const HAVEN_MEMORY_DETAIL_EN = {
   exportContinueToVerify: "Continue to verification",
   exportPreparing: "Preparing your export…",
   exportSuccess: "Memory exported successfully. Keep your files safe.",
+  supplementsHeading: "Notes added after sealing",
+  supplementPlaceholder: "Add a short note for your partner…",
+  supplementAddCta: "Add note",
+  supplementSaved: "Note saved.",
+  pairMemoryHint: "Shared in your Pair — core content cannot be edited.",
+  partnerMemoryHint: "Sealed by your partner — you can add notes, not edit the core.",
   sharePlusOnly:
     "Share links are not available yet. We are working on safer sharing for a future update.",
   shareSuccess: "Share links are not available yet.",
@@ -1056,6 +1068,12 @@ export type MemoryDetailPageCopy = {
   noAttachments: string;
   downloadAttachment: string;
   untitledAttachment: string;
+  supplementsHeading: string;
+  supplementPlaceholder: string;
+  supplementAddCta: string;
+  supplementSaved: string;
+  pairMemoryHint: string;
+  partnerMemoryHint: string;
   capsuleLockedTitle: string;
   capsuleLockedBody: string;
   capsuleTypeTime: string;
@@ -1125,6 +1143,12 @@ export function getMemoryDetailPageCopy(platform: HavenPlatform): MemoryDetailPa
     noAttachments: m.noAttachments,
     downloadAttachment: m.downloadAttachment,
     untitledAttachment: m.untitledAttachment,
+    supplementsHeading: m.supplementsHeading,
+    supplementPlaceholder: m.supplementPlaceholder,
+    supplementAddCta: m.supplementAddCta,
+    supplementSaved: m.supplementSaved,
+    pairMemoryHint: m.pairMemoryHint,
+    partnerMemoryHint: m.partnerMemoryHint,
     capsuleLockedTitle: m.capsuleLockedTitle,
     capsuleLockedBody: m.capsuleLockedBody,
     capsuleTypeTime: m.capsuleTypeTime,

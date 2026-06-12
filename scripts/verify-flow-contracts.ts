@@ -195,25 +195,29 @@ check("ring bind is optional not gated", () => {
   assert.match(readRepoFile("src/content/havenCopy.ts"), /Your ring is for sealing/);
 });
 
-check("phase 5 personal-first ring access and legacy invite de-emphasized", () => {
+check("pair model: haven-scoped sync and owner-only seal", () => {
   const access = readRepoFile("lib/haven-access.ts");
   const membership = readRepoFile("lib/haven-membership.ts");
   const syncMoments = readRepoFile("app/api/sync/moments/route.ts");
+  const pairBundles = readRepoFile("app/api/sync/pair-bundles/route.ts");
+  const pairSync = readRepoFile("src/services/pairSharingService.js");
   const sdmResolve = readRepoFile("app/api/rings/sdm/resolve/route.ts");
   const ringTap = readRepoFile("app/api/seal/ring-tap/route.ts");
   const ringsPage = readRepoFile("src/views/RingsPage.js");
   const ringsContent = readRepoFile("src/content/ringsPageContent.js");
-  const migrationManual = readRepoFile("docs/group-haven-migration-manual.md");
+  const coreDef = readRepoFile("docs/core-definition.md");
   assert.match(access, /userCanSealWithRing/);
-  assert.match(access, /isLegacyHavenMember/);
+  assert.match(access, /userCanReadPairMoments/);
   assert.match(membership, /owner-only/);
-  assert.match(syncMoments, /eq\("user_id", user\.id\)/);
-  assert.doesNotMatch(syncMoments, /from\("haven_members"\)/);
+  assert.match(syncMoments, /resolveHavenPairScope/);
+  assert.match(syncMoments, /pair_shared_sealed/);
+  assert.match(pairBundles, /pair-bundles/);
+  assert.match(pairSync, /syncPairMemoriesFromServer/);
   assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
-  assert.match(ringsPage, /legacyCard/);
-  assert.match(ringsContent, /legacySecondRingTitle/);
-  assert.match(migrationManual, /LEGACY — Phase 5/);
+  assert.match(ringsPage, /pairActive/);
+  assert.match(ringsContent, /pairActiveBanner/);
+  assert.match(coreDef, /Pair mode/);
 });
 
 check("cloud backup 50GB quota compress and chunk upload", () => {
@@ -293,7 +297,7 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   const vercel = readRepoFile("vercel.json");
   const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
   const rateLimit = readRepoFile("lib/api-rate-limit.ts");
-  assert.match(config, /SEAL_STAGING_MAX_BYTES = 20 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_STAGING_MAX_BYTES = 50 \* 1024 \* 1024/);
   assert.match(config, /SEAL_LOCAL_MAX_BYTES = 50 \* 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_PLUS_MAX_BYTES/);
   assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 \* 1024/);
@@ -323,6 +327,10 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(readRepoFile("lib/cron-auth.ts"), /vercel-cron/);
   assert.match(sealPlatform, /getSealStrategy/);
   assert.match(sealPlatform, /platform === "ios"/);
+  assert.match(
+    sealPlatform,
+    /preferSameTabWebNfc: false[\s\S]*SDM rings expose picc_data/
+  );
   assert.match(rateLimit, /enforceUserRateLimit/);
   assert.match(rateLimit, /sealStagingCreate/);
   assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /signed_url/);

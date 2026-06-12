@@ -13,7 +13,7 @@ It must stay aligned with `docs/core-definition.md`.
 | **Auth** | Supabase OAuth only: **Apple / Google / Email**. No NFC login. |
 | **Ring** | **Seal ritual + bind only** — not daily unlock or app entry. |
 | **Daily UX** | `/app` → **Timeline** with session; compose → Seal → ring tap. |
-| **Sharing** | **Explicit Shared** memories (Plus, E2E) or export/import — **not** implicit full Haven membership read. |
+| **Sharing** | **Pair mode** (max 2): sealed memories auto-shared in haven; Plus cloud sync. Drafts private until seal. |
 | **Copy** | ≤1 sentence in-flow; detail in Settings / Help. |
 | **`/start`** | NFC bind + Seal confirm only; shrink legacy branches (Phase 1). |
 | **Storage** | Local-first; target **20MB+** local attachments; Plus for larger cloud (code limits may lag). |
@@ -24,7 +24,7 @@ It must stay aligned with `docs/core-definition.md`.
 
 - `daily_access` “Opening Haven…” redirect as primary ring behavior.
 - Mandatory ring setup gate before app use.
-- Couple **Haven pair** as the main sharing metaphor.
+- Multi-person group havens or shared-login partner access.
 - Client NFC silent login (**removed Phase 1**). Legacy ring access grants in `deviceTrustService` may remain until Phase 4.
 - Ring described as access credential in user-facing copy.
 
@@ -105,11 +105,13 @@ lib/
 - **Technical cap (shipping code):** max **2** active rings per user/Haven row (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` = 2). **Product target:** one ring per person for Seal; do not market multi-ring family sharing.
 - Retired rings are **non-transferable** in normal flows.
 
-### Legacy: Haven pair + partner invite
+### Pair model (lightweight)
 
-- DB tables `havens`, `haven_members`, partner invite APIs still exist.
-- **Product direction:** deprecate as the sharing model; replace with per-memory **Shared** (Plus).
-- Do not add features that assume “all Haven members see all moments.”
+- DB: `havens`, `haven_members` (max **2**), `ring_invites` for partner bind.
+- **Sealed** `moments` rows are readable by haven members (RLS); clients import via `/api/sync/pair-bundles`.
+- **Seal** still requires **your** ring (`userCanSealWithRing` = owner only).
+- Plus **cloud backup** uploads full sealed payloads for cross-device recovery.
+- Opt-out: client flag `haven.pair.share_enabled.v1` (Rings page toggle).
 
 ---
 

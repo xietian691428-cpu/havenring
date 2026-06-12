@@ -1,7 +1,7 @@
 /** Seal staging limits and feature flags (server + public client). */
 
 /** Max encrypted staging blob (cross-tab handoff, iOS). */
-export const SEAL_STAGING_MAX_BYTES = 20 * 1024 * 1024;
+export const SEAL_STAGING_MAX_BYTES = 50 * 1024 * 1024;
 
 /** Plus users — larger ephemeral staging for cloud handoff. */
 export const SEAL_STAGING_PLUS_MAX_BYTES = 100 * 1024 * 1024;

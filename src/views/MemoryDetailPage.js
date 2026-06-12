@@ -13,7 +13,11 @@ function isVideoMime(mime) {
 }
 
 function isSealedMemory(memory) {
-  return Boolean(memory?.is_sealed || memory?.ring_id);
+  return Boolean(memory?.is_sealed || memory?.coreLocked || memory?.ring_id);
+}
+
+function isCoreLocked(memory) {
+  return Boolean(memory?.coreLocked || memory?.is_sealed);
 }
 
 function formatLongDate(ts) {
@@ -73,6 +77,7 @@ export function MemoryDetailPage({
   onBack,
   onEdit,
   onDeleteMemory,
+  onMemoryUpdated,
   locale = "en",
 }) {
   const platform = usePlatformTarget();
@@ -90,6 +95,8 @@ export function MemoryDetailPage({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [exportPickerOpen, setExportPickerOpen] = useState(false);
   const [exportMemoryFormat, setExportMemoryFormat] = useState("full");
+  const [supplementDraft, setSupplementDraft] = useState("");
+  const [supplementBusy, setSupplementBusy] = useState(false);
   const menuRef = useRef(null);
 
   const photos = useMemo(() => {
@@ -127,6 +134,8 @@ export function MemoryDetailPage({
   const releaseAt = Number(memory?.releaseAt || 0) || 0;
   const isCapsuleLocked = releaseAt > now;
   const sealed = memory && !isCapsuleLocked ? isSealedMemory(memory) : false;
+  const coreLocked = memory && !isCapsuleLocked ? isCoreLocked(memory) : false;
+  const supplements = Array.isArray(memory?.supplements) ? memory.supplements : [];
 
   const sealTs = memory
     ? Number(memory.timelineAt || memory.updatedAt || memory.createdAt || 0) || 0
@@ -263,8 +272,28 @@ export function MemoryDetailPage({
     }
   }
 
+  async function handleAddSupplement() {
+    if (!memory?.id || supplementBusy) return;
+    setSupplementBusy(true);
+    try {
+      const { appendMemorySupplement } = await import("../services/localStorageService");
+      await appendMemorySupplement(memory.id, supplementDraft);
+      setSupplementDraft("");
+      setToast(t.supplementSaved);
+      await onMemoryUpdated?.();
+      const { getMemoryById } = await import("../services/localStorageService");
+      const { backupPairMemoryToCloud } = await import("../services/pairSharingService");
+      const updated = await getMemoryById(memory.id);
+      if (updated) void backupPairMemoryToCloud(updated);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : t.verifyActionFailed);
+    } finally {
+      setSupplementBusy(false);
+    }
+  }
+
   function handleTitleEditTap() {
-    if (isCapsuleLocked || sealed) return;
+    if (isCapsuleLocked || coreLocked) return;
     handleEditRequest();
   }
 
@@ -320,7 +349,7 @@ export function MemoryDetailPage({
                 </button>
                 {menuOpen ? (
                   <div style={styles.menuDropdown} role="menu">
-                    {!sealed ? (
+                    {!coreLocked ? (
                       <button type="button" role="menuitem" style={styles.menuItem} onClick={handleEditRequest}>
                         {t.menuEdit}
                       </button>
@@ -368,7 +397,7 @@ export function MemoryDetailPage({
           <>
             <header style={styles.hero}>
               <div style={styles.heroTitleRow}>
-                {isCapsuleLocked || sealed ? (
+                {isCapsuleLocked || coreLocked ? (
                   <h1 style={styles.heroTitleStatic}>{memory.title || t.defaultTitle}</h1>
                 ) : (
                   <button
@@ -455,10 +484,50 @@ export function MemoryDetailPage({
                   <h2 id="haven-detail-story" style={styles.sectionTitle}>
                     {t.storyHeading}
                   </h2>
+                  {coreLocked ? (
+                    <p style={styles.hintLine}>
+                      {memory.fromPartner ? t.partnerMemoryHint : t.pairMemoryHint}
+                    </p>
+                  ) : null}
                   <div style={styles.storyBody}>
                     {memory.story?.trim() ? formatStoryRichText(memory.story) : <p style={styles.empty}>{t.noStory}</p>}
                   </div>
                 </section>
+
+                {coreLocked ? (
+                  <section style={styles.card} aria-labelledby="haven-detail-supplements">
+                    <h2 id="haven-detail-supplements" style={styles.sectionTitle}>
+                      {t.supplementsHeading}
+                    </h2>
+                    {supplements.length ? (
+                      <ul style={styles.supplementList}>
+                        {supplements.map((note) => (
+                          <li key={note.id} style={styles.supplementItem}>
+                            <p style={styles.supplementText}>{note.text}</p>
+                            <p style={styles.supplementMeta}>
+                              {formatLongDate(note.createdAt)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <textarea
+                      value={supplementDraft}
+                      onChange={(e) => setSupplementDraft(e.target.value)}
+                      placeholder={t.supplementPlaceholder}
+                      rows={3}
+                      style={styles.supplementInput}
+                    />
+                    <button
+                      type="button"
+                      style={styles.supplementBtn}
+                      disabled={supplementBusy || !supplementDraft.trim()}
+                      onClick={() => void handleAddSupplement()}
+                    >
+                      {t.supplementAddCta}
+                    </button>
+                  </section>
+                ) : null}
 
                 <section style={styles.card} aria-labelledby="haven-detail-media">
                   <h2 id="haven-detail-media" style={styles.sectionTitle}>
@@ -966,6 +1035,57 @@ const styles = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: 12,
     wordBreak: "break-all",
+  },
+  hintLine: {
+    margin: "0 0 10px",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "rgba(248, 239, 231, 0.62)",
+  },
+  supplementList: {
+    listStyle: "none",
+    margin: "0 0 12px",
+    padding: 0,
+    display: "grid",
+    gap: 10,
+  },
+  supplementItem: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(232, 220, 208, 0.08)",
+  },
+  supplementText: {
+    margin: 0,
+    fontSize: 15,
+    lineHeight: 1.5,
+  },
+  supplementMeta: {
+    margin: "6px 0 0",
+    fontSize: 12,
+    color: "rgba(248, 239, 231, 0.5)",
+  },
+  supplementInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 10,
+    border: "1px solid rgba(232, 220, 208, 0.14)",
+    background: "rgba(0,0,0,0.2)",
+    color: "#f8efe7",
+    padding: 10,
+    fontSize: 15,
+    resize: "vertical",
+    fontFamily: "inherit",
+  },
+  supplementBtn: {
+    marginTop: 10,
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(212, 175, 55, 0.35)",
+    background: "rgba(212, 175, 55, 0.12)",
+    color: "#f8efe7",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   securityBar: {
     position: "sticky",

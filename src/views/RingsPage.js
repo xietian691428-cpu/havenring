@@ -24,6 +24,10 @@ import {
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { PartnerInvitePanel } from "../components/PartnerInvitePanel";
+import {
+  isPairSharingEnabled,
+  setPairSharingEnabled,
+} from "../services/pairSharingService";
 
 export function RingsPage({
   locale = "en",
@@ -55,6 +59,9 @@ export function RingsPage({
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
   /** When user has rings: `null` = collapsed by default; `true` = expanded. Ignored when `rings.length === 0`. */
   const [howExplicit, setHowExplicit] = useState(null);
+  const [pairShareEnabled, setPairShareEnabledState] = useState(() =>
+    isPairSharingEnabled()
+  );
 
   const rings = useMemo(() => {
     const local = localRings || [];
@@ -282,6 +289,7 @@ export function RingsPage({
     currentRingCount: rings.length,
   });
   const canInvitePartner = rings.length === 1 && !ringLimitReached;
+  const pairActive = rings.filter((ring) => ring.cloudRingId).length >= 2;
 
   const showHowDetail = rings.length === 0 || (!loading && howExplicit === true);
 
@@ -443,6 +451,24 @@ export function RingsPage({
             ))}
           </ul>
         )}
+
+        {pairActive ? (
+          <section style={styles.legacyCard}>
+            <p style={styles.legacyBody}>{t.pairActiveBanner}</p>
+            <label style={styles.pairToggleRow}>
+              <input
+                type="checkbox"
+                checked={pairShareEnabled}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setPairSharingEnabled(next);
+                  setPairShareEnabledState(next);
+                }}
+              />
+              <span>{t.pairShareToggleLabel}</span>
+            </label>
+          </section>
+        ) : null}
 
         {canInvitePartner ? (
           <section style={styles.legacyCard}>
@@ -714,6 +740,14 @@ const styles = {
     color: "rgba(232, 220, 208, 0.72)",
     letterSpacing: "0.04em",
     textTransform: "uppercase",
+  },
+  pairToggleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 14,
+    color: "rgba(232, 220, 208, 0.88)",
+    cursor: "pointer",
   },
   legacyBody: {
     margin: 0,

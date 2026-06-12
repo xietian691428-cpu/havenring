@@ -11,11 +11,11 @@ export type HavenRingRow = {
 };
 
 /**
- * Phase 5 — personal-first access. `haven_members` remains for legacy pair
- * invite/recovery only; do not use membership for implicit memory sharing.
+ * Pair model — max 2 haven members; sealed memories sync within the Pair.
+ * Personal drafts stay device-local until sealed; seal commits to haven scope.
  */
 
-/** @deprecated Legacy group-haven row; invite/bind recovery only. */
+/** Haven member check for Pair-scoped reads (sync / import). */
 export async function isLegacyHavenMember(
   admin: AdminClient,
   userId: string,
@@ -47,10 +47,16 @@ export function userCanSealWithRing(
   return userOwnsRing(userId, ring);
 }
 
-/**
- * @deprecated Broad haven-pair access (pre–Phase 5). Use for API telemetry /
- * backward-compatible fields only — not for authorizing seal or shared reads.
- */
+/** Pair member may read sealed moments in the same haven (not ring-owner ops). */
+export async function userCanReadPairMoments(
+  admin: AdminClient,
+  userId: string,
+  havenId: string | null | undefined
+): Promise<boolean> {
+  return isLegacyHavenMember(admin, userId, havenId);
+}
+
+/** @deprecated Alias — use userCanReadPairMoments. */
 export async function userHasLegacyHavenAccess(
   admin: AdminClient,
   userId: string,

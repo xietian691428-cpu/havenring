@@ -732,6 +732,9 @@ export function AppRouter() {
               /* useMemories surfaces delete errors via `error` if needed */
             }
           }}
+          onMemoryUpdated={async () => {
+            await refresh().catch(() => null);
+          }}
         />
       </FadePage>
     );

@@ -12,6 +12,13 @@
 import { localCrypto } from "../../services/encryptionService";
 
 /** User-facing decrypted memory shape (timeline / detail UI). */
+export type MemorySupplement = {
+  id: string;
+  text: string;
+  createdAt: number;
+  authorUserId?: string | null;
+};
+
 export type LocalMemory = {
   id: string;
   title: string;
@@ -24,12 +31,25 @@ export type LocalMemory = {
   timelineAt: number;
   releaseAt: number;
   tags: unknown[];
+  is_sealed?: boolean;
+  coreLocked?: boolean;
+  pairShared?: boolean;
+  ring_id?: string | null;
+  haven_id?: string | null;
+  createdByUserId?: string | null;
+  fromPartner?: boolean;
+  supplements?: MemorySupplement[];
 };
 
 export type MemoryUpsertPayload = Partial<LocalMemory> & {
   id?: string;
   /** When false-ish, legacy voice stored as plaintext in record (backward compat). */
   encryptVoice?: boolean;
+};
+
+export type MemorySaveOptions = {
+  /** Allow editing sealed core fields (title/story/media). Default false when coreLocked. */
+  allowCoreEdit?: boolean;
 };
 
 export type MemoryCreatedMeta = Pick<LocalMemory, "id" | "createdAt" | "updatedAt">;
@@ -78,6 +98,14 @@ function normalizeMemoryInput(input: MemoryUpsertPayload = {}) {
     releaseAt: Number(input.releaseAt || 0) || 0,
     tags: Array.isArray(input.tags) ? input.tags : [],
     encryptVoice: input.encryptVoice !== false,
+    is_sealed: Boolean(input.is_sealed),
+    coreLocked: Boolean(input.coreLocked),
+    pairShared: Boolean(input.pairShared),
+    ring_id: input.ring_id ?? null,
+    haven_id: input.haven_id ?? null,
+    createdByUserId: input.createdByUserId ?? null,
+    fromPartner: Boolean(input.fromPartner),
+    supplements: Array.isArray(input.supplements) ? input.supplements : [],
   };
 }
 
@@ -139,6 +167,14 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
       timelineAt: memory.timelineAt,
       releaseAt: memory.releaseAt,
       tags: memory.tags,
+      is_sealed: memory.is_sealed,
+      coreLocked: memory.coreLocked,
+      pairShared: memory.pairShared,
+      ring_id: memory.ring_id,
+      haven_id: memory.haven_id,
+      createdByUserId: memory.createdByUserId,
+      fromPartner: memory.fromPartner,
+      supplements: memory.supplements,
     }),
   ]);
 
@@ -193,6 +229,16 @@ async function decryptRecord(record: MemoryDbRecord): Promise<LocalMemory> {
     timelineAt: Number(metaObj.timelineAt ?? record.timelineAt),
     releaseAt: Number(metaObj.releaseAt || 0) || 0,
     tags: Array.isArray(metaObj.tags) ? metaObj.tags : [],
+    is_sealed: Boolean(metaObj.is_sealed),
+    coreLocked: Boolean(metaObj.coreLocked),
+    pairShared: Boolean(metaObj.pairShared),
+    ring_id: (metaObj.ring_id as string | null) ?? null,
+    haven_id: (metaObj.haven_id as string | null) ?? null,
+    createdByUserId: (metaObj.createdByUserId as string | null) ?? null,
+    fromPartner: Boolean(metaObj.fromPartner),
+    supplements: Array.isArray(metaObj.supplements)
+      ? (metaObj.supplements as MemorySupplement[])
+      : [],
   };
 }
 
@@ -218,8 +264,22 @@ export async function createMemory(
   }
 }
 
-export async function saveMemory(input: MemoryUpsertPayload): Promise<MemorySavedMeta> {
-  const memory = normalizeMemoryInput(input);
+export async function saveMemory(
+  input: MemoryUpsertPayload,
+  opts: MemorySaveOptions = {}
+): Promise<MemorySavedMeta> {
+  let merged = input;
+  if (input.id && !opts.allowCoreEdit) {
+    const existing = await getMemoryById(input.id);
+    if (existing?.coreLocked) {
+      merged = {
+        ...existing,
+        supplements: input.supplements ?? existing.supplements,
+        updatedAt: Date.now(),
+      };
+    }
+  }
+  const memory = normalizeMemoryInput(merged);
   const encrypted = await encryptMemoryFields(memory);
   const record = toRecord(memory, encrypted);
 
@@ -269,6 +329,34 @@ export async function getMemoryById(id: string): Promise<LocalMemory | null> {
   } finally {
     db.close();
   }
+}
+
+export async function appendMemorySupplement(
+  id: string,
+  text: string,
+  authorUserId?: string | null
+): Promise<MemorySavedMeta> {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    throw new Error("Add a few words for your note.");
+  }
+  const existing = await getMemoryById(id);
+  if (!existing) {
+    throw new Error("Memory not found.");
+  }
+  if (!existing.coreLocked && !existing.is_sealed) {
+    throw new Error("Only sealed memories accept append notes.");
+  }
+  const supplements = [
+    ...(Array.isArray(existing.supplements) ? existing.supplements : []),
+    {
+      id: crypto.randomUUID(),
+      text: trimmed,
+      createdAt: Date.now(),
+      authorUserId: authorUserId || null,
+    },
+  ];
+  return saveMemory({ ...existing, supplements });
 }
 
 export async function deleteMemory(id: string): Promise<boolean> {

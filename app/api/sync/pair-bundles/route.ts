@@ -8,8 +8,8 @@ import {
 } from "@/lib/supabase/server";
 
 /**
- * GET /api/sync/moments — sealed-moment metadata for the signed-in account's Pair.
- * Includes all active rings in the user's haven(s) (yours + partner's) for Pair sync.
+ * GET /api/sync/pair-bundles — sealed moment payloads for Pair import (haven members).
+ * Ciphertext vault is server-staged JSON at seal; clients re-encrypt locally with the haven key.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -17,64 +17,54 @@ export async function GET(req: NextRequest) {
     const limitRes = await enforceUserIpRateLimit({
       req,
       userId: user.id,
-      scope: "sync-moments",
+      scope: "sync-pair-bundles",
       policy: API_RATE_POLICIES.ringMedium,
     });
     if (limitRes) return limitRes;
 
-    const ringIdsParam = req.nextUrl.searchParams
-      .get("ring_ids")
-      ?.split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
-
     const admin = getSupabaseAdminClient();
     const scope = await resolveHavenPairScope(admin, user.id);
 
-    const { data: ownedRings } = await admin
-      .from("user_nfc_rings")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("is_active", true);
-
-    const ownedRingIds = new Set(
-      (ownedRings ?? []).map((row) => row.id).filter(Boolean)
-    );
-
-    const scopedRingIds = ringIdsParam?.length
-      ? ringIdsParam.filter((id) => scope.ringIds.includes(id))
-      : scope.ringIds;
-
-    if (!scopedRingIds.length) {
+    if (!scope.havenIds.length || !scope.ringIds.length) {
       return NextResponse.json({
-        moments: [],
+        bundles: [],
         pairActive: scope.pairActive,
-        accessModel: "pair_shared_sealed",
+        havenIds: scope.havenIds,
       });
     }
 
-    const { data, error } = await admin
+    const since = req.nextUrl.searchParams.get("since");
+    let query = admin
       .from("moments")
       .select(
-        "id, ring_id, haven_id, created_by_user_id, created_at, release_at, content_sha256, is_sealed"
+        "id, ring_id, haven_id, created_by_user_id, encrypted_vault, iv, is_sealed, created_at, release_at, content_sha256"
       )
-      .in("ring_id", scopedRingIds)
+      .in("haven_id", scope.havenIds)
+      .eq("is_sealed", true)
       .order("created_at", { ascending: false })
       .limit(200);
 
+    if (since) {
+      const parsed = Date.parse(since);
+      if (Number.isFinite(parsed)) {
+        query = query.gte("created_at", new Date(parsed).toISOString());
+      }
+    }
+
+    const { data, error } = await query;
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const moments = (data ?? []).map((row) => ({
+    const bundles = (data ?? []).map((row) => ({
       ...row,
-      owned_by_you: ownedRingIds.has(row.ring_id),
-      partner_memory: row.created_by_user_id !== user.id,
+      owned_by_you: row.created_by_user_id === user.id,
     }));
 
     return NextResponse.json({
-      moments,
+      bundles,
       pairActive: scope.pairActive,
+      havenIds: scope.havenIds,
       accessModel: "pair_shared_sealed",
     });
   } catch (e) {

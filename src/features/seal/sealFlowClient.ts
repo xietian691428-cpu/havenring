@@ -273,6 +273,7 @@ async function persistSealedDraftsLocally(
   sealedPayloads?: SealDraftFinalizePayload[]
 ) {
   const now = Date.now();
+  const ring = getActiveRingOrFirst();
   const byId = new Map(
     (sealedPayloads || []).map((row) => [String(row.id), row])
   );
@@ -312,16 +313,32 @@ async function persistSealedDraftsLocally(
         Number(("createdAt" in source ? source.createdAt : 0) || now) || now,
       tags: [] as unknown[],
       is_sealed: true,
+      coreLocked: true,
+      pairShared: true,
+      ring_id: ring?.cloudRingId ?? null,
+      haven_id: ring?.havenId ?? null,
+      supplements: [],
     };
     const existing = await getMemoryById(id);
+    let saved;
     if (existing) {
-      await saveMemory({ ...existing, ...payload });
+      saved = await saveMemory(
+        { ...existing, ...payload },
+        { allowCoreEdit: true }
+      );
     } else {
       await createMemory(payload);
+      saved = { id };
+    }
+    const stored = await getMemoryById(saved.id || id);
+    if (stored) {
+      const { backupPairMemoryToCloud } = await import(
+        "../../services/pairSharingService.js"
+      );
+      void backupPairMemoryToCloud(stored);
     }
   }
   markFirstMemoryCompleted();
-  const ring = getActiveRingOrFirst();
   if (ring?.uidKey && draftIds.length) {
     try {
       await clearRingSyncQueue(ring.uidKey, draftIds);

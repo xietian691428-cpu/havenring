@@ -4,6 +4,7 @@
  * Prefer: `import { … } from "@/src/features/memories/localMemoryStore"` or this file.
  */
 export {
+  appendMemorySupplement,
   clearAllMemories,
   createMemory,
   deleteMemory,

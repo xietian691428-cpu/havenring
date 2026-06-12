@@ -29,7 +29,6 @@ import {
   readComposerSnapshotTextOnly,
   SEAL_STAGING_TOO_LARGE,
   isSealStagingTooLargeError,
-  shouldPreferSameTabWebNfc,
   subscribeSealBroadcast,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
@@ -150,6 +149,10 @@ function buildNewMemoryPageCopy(locale, platform, t) {
     backgroundDraftSaved: en.backgroundDraftSaved,
     linkRingFirst: en.linkRingFirst,
     cloudBackupHint: en.cloudBackupHint,
+    sealStagingErrorTitle: en.sealStagingErrorTitle,
+    sealStagingTooLarge: en.sealStagingTooLarge,
+    sealSizeMeterOk: en.sealSizeMeterOk,
+    sealSizeMeterOver: en.sealSizeMeterOver,
   };
 }
 
@@ -223,7 +226,7 @@ export function NewMemoryPage({
   const [sealFinalizeError, setSealFinalizeError] = useState("");
   const [sealSizeStatus, setSealSizeStatus] = useState({
     withinLimit: true,
-    limitMb: 20,
+    limitMb: 50,
     usedMb: 0,
     wouldTrimMedia: false,
     message: "",
@@ -346,7 +349,7 @@ export function NewMemoryPage({
     if (!hasDraftContent) {
       setSealSizeStatus({
         withinLimit: true,
-        limitMb: userEntitlements?.tier === "plus" ? 100 : 20,
+        limitMb: userEntitlements?.tier === "plus" ? 100 : 50,
         usedMb: 0,
         wouldTrimMedia: false,
         message: "",
@@ -371,8 +374,8 @@ export function NewMemoryPage({
         );
         if (cancelled) return;
         const template = status.withinLimit
-          ? t.sealSizeMeterOk || pageCopy.sealSizeMeterOk
-          : t.sealSizeMeterOver || pageCopy.sealSizeMeterOver;
+          ? pageCopy.sealSizeMeterOk || t.sealSizeMeterOk
+          : pageCopy.sealSizeMeterOver || t.sealSizeMeterOver;
         const message = template
           .replace("{used}", String(status.usedMb))
           .replace("{limit}", String(status.limitMb));
@@ -729,12 +732,12 @@ export function NewMemoryPage({
 
   function resolveSealLimitMessage(error) {
     if (isSealStagingTooLargeError(error)) {
-      const template = t.sealStagingTooLarge || pageCopy.sealStagingTooLarge;
+      const template = pageCopy.sealStagingTooLarge || t.sealStagingTooLarge;
       return template.replace("{mb}", String(error.limitMb));
     }
     if (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE) {
-      const limitMb = userEntitlements?.tier === "plus" ? 100 : 20;
-      const template = t.sealStagingTooLarge || pageCopy.sealStagingTooLarge;
+      const limitMb = userEntitlements?.tier === "plus" ? 100 : 50;
+      const template = pageCopy.sealStagingTooLarge || t.sealStagingTooLarge;
       return template.replace("{mb}", String(limitMb));
     }
     return null;
@@ -745,7 +748,7 @@ export function NewMemoryPage({
       isSealStagingTooLargeError(error) ||
       (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE)
     ) {
-      return t.sealStagingErrorTitle || pageCopy.sealStagingErrorTitle;
+      return pageCopy.sealStagingErrorTitle || t.sealStagingErrorTitle;
     }
     return "";
   }
@@ -806,10 +809,7 @@ export function NewMemoryPage({
       });
       setEditingDraftId(savedDraft.id);
       setSealPromptOpen(true);
-      if (shouldPreferSameTabWebNfc(platform) && webNfcAvailable) {
-        void handleSealRingScan();
-        return;
-      }
+      // Always continue on /start — Android SDM needs the browser to open the ring URL on tap.
       navigateToSealWaitPage();
     } catch (error) {
       const limitMessage = resolveSealLimitMessage(error);

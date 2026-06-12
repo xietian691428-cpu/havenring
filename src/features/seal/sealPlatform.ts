@@ -63,9 +63,10 @@ export function getSealStrategy(
     };
   }
 
+  // SDM rings expose picc_data/cmac only when Chrome opens the tap URL — not via in-page NDEFReader.
   return {
     transport: "local",
-    preferSameTabWebNfc: platform === "android",
+    preferSameTabWebNfc: false,
     stagingOnPrep: false,
     stagingFallbackOnFinalize: stagingFallbackEnabled,
     stagingApiEnabled,

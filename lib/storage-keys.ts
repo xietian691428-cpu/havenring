@@ -28,6 +28,9 @@ export const STORAGE_KEYS = {
   sealPrepBundle: "haven.seal.prep.v2",
   sealStepUpRequired: "haven.seal.step_up_required.v1",
   sealPwaHintDismissed: "haven.seal.pwa_hint.dismissed.v1",
+  /** Pair share opt-in (default on after bind). "1" = share sealed memories in Pair. */
+  pairShareEnabled: "haven.pair.share_enabled.v1",
+  pairSharePromptDone: "haven.pair.share_prompt_done.v1",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

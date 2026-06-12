@@ -19,6 +19,7 @@ import {
   upsertBoundRingByUidKey,
   updateRingCloudMetadata,
 } from "./ringRegistryService";
+import { syncPairMemoriesFromServer } from "./pairSharingService";
 
 const INTEGRITY_MISMATCH_MSG = "detected_hash_mismatch";
 
@@ -174,10 +175,8 @@ export async function syncRingScopedCaches(options = {}) {
     });
   }
 
-  const cloudMomentsResult = await fetchMomentsDelta(
-    accessToken,
-    localRings.map((r) => r.cloudRingId).filter(Boolean)
-  );
+  const allCloudRingIds = cloudRings.map((r) => r.id).filter(Boolean);
+  const cloudMomentsResult = await fetchMomentsDelta(accessToken, allCloudRingIds);
   if (!cloudMomentsResult.ok && cloudMomentsResult.reason) {
     console.warn("[haven-ring] moments metadata sync skipped:", cloudMomentsResult.reason);
   }
@@ -267,6 +266,16 @@ export async function syncRingScopedCaches(options = {}) {
     }
   }
 
+  let pairImported = 0;
+  let pairActive = false;
+  try {
+    const pairOutcome = await syncPairMemoriesFromServer(accessToken);
+    pairImported = Number(pairOutcome?.imported || 0);
+    pairActive = Boolean(pairOutcome?.pairActive);
+  } catch (error) {
+    console.warn("[haven-ring] pair memory import skipped:", error);
+  }
+
   return {
     ok: true,
     mismatch,
@@ -275,5 +284,7 @@ export async function syncRingScopedCaches(options = {}) {
     activeUidKey: active?.uidKey || "",
     issues: Array.from(new Set(issues)).filter(isCriticalSyncIssue),
     recoveredLocalRings,
+    pairImported,
+    pairActive,
   };
 }
