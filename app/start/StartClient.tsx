@@ -1,46 +1,35 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import Link from "next/link";
-import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buildBindRingUrl } from "@/lib/partner-invite-pending";
 import {
   NFC_FLOW_TIMING,
-  RING_WAIT_QUERY,
-  ACTION_STEP_TIMING,
   clearRingWaitReason,
-  isRingWaitSearch,
-  readRingWaitReason,
   sleepMs,
   visibleSecondsRemaining,
   withTimeout,
-  writeRingWaitReason,
-  type RingWaitReason,
 } from "@/lib/nfc-flow-timing";
-import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
+import { hasSdmSearch } from "@/lib/nfc-intent";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isPermanentSupabaseSession } from "@/lib/appAuthGate";
 import { usePlatform } from "@/src/hooks/usePlatform";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
 import { NfcSyncedCountdown } from "@/src/components/NfcSyncedCountdown";
 import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
-import { START_PAGE_CONTENT } from "@/src/content/startPageContent";
 import {
   START_PAGE_EN,
   getNfcHoldGuideCopy,
   getSealFlowCopy,
-  getStartIdleHeroCopy,
-  getStartSdmCardCopy,
   type HavenPlatform,
   type StartSdmScene,
   type StartSdmStateForCopy,
 } from "@/src/content/havenCopy";
 import {
   abandonInProgressSealOnStartPage,
-  clearSealWaitTabActive,
   clearSealNfcTapHref,
+  clearSealWaitTabActive,
   consumeFreshSealNfcTapHref,
-  readFreshSealNfcTapHref,
   finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
   getSealSdmContextPayload,
@@ -51,6 +40,7 @@ import {
   isSealWaitSearch,
   listenForSealRingTapOnce,
   markSealWaitTabActive,
+  readFreshSealNfcTapHref,
   recordSealNfcTapHref,
   releaseSealResolveLock,
   sealRelayNavigateHref,
@@ -63,45 +53,10 @@ import {
   wasSealRecentlyCompleted,
   subscribeSealBroadcast,
 } from "@/src/features/seal";
-import { SealPwaHintCard } from "@/src/components/SealPwaHintCard";
-import { cacheSubscriptionStatus } from "@/src/services/subscriptionService";
-import {
-  consumeDeferredAppEntry,
-  FTUX_STARTED_KEY,
-  isPermanentSupabaseSession,
-} from "@/lib/appAuthGate";
-
-const CLAIM_REQUEST_TIMEOUT_MS = 10_000;
-import { buildBindRingUrl, hasPendingPartnerInvite } from "@/lib/partner-invite-pending";
+import { startPageStyles as styles } from "./startPageStyles";
 
 function isSealNfcLaunchSearch(search: string): boolean {
   return hasSdmSearch(search);
-}
-
-/** OAuth return URL: reads the live `/start` query so redirects never miss NFC params if the user signs in immediately. */
-function buildOAuthReturnUrl(safeOrigin: string): string {
-  if (typeof window === "undefined") {
-    return `${safeOrigin}/app`;
-  }
-  const rawSearch = window.location.search || "";
-  const sp = new URLSearchParams(
-    rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch
-  );
-  const claimRaw = sp.get("claim") || "";
-  const claimNormalized = normalizeClaimValue(claimRaw);
-  if (claimNormalized) {
-    return `${safeOrigin}/start?claim=${encodeURIComponent(claimRaw.trim())}`;
-  }
-  const uidOnly = (sp.get("uid") || "").trim();
-  if (uidOnly && !sp.get("cmac")) {
-    return buildBindRingUrl(safeOrigin, uidOnly);
-  }
-  if (isSealNfcLaunchSearch(rawSearch)) {
-    const qs = rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch;
-    return qs ? `${safeOrigin}/start?${qs}` : `${safeOrigin}/start`;
-  }
-  // Default login should land in app and immediately open ring binding.
-  return `${safeOrigin}/app?open=bind`;
 }
 
 function normalizeClaimValue(input: string): string {
@@ -128,22 +83,6 @@ function normalizeClaimValue(input: string): string {
   }
 }
 
-function getSdmCardStyle(state: StartSdmStateForCopy): CSSProperties {
-  if (state.kind === "failed") return styles.sdmCardFailed;
-  if (state.kind === "ready" && state.scene === "seal_confirmation") {
-    return styles.sdmCardSeal;
-  }
-  if (state.kind === "ready" && state.scene === "daily_access") {
-    const self = state.viewerUserId || "";
-    const owner = state.ownerId || "";
-    if (self && owner && self !== owner && !state.currentUserIsHavenMember) {
-      return styles.sdmCardFailed;
-    }
-    return styles.sdmCardTrusted;
-  }
-  return styles.sdmCardNew;
-}
-
 function isSdmScene(scene: unknown): scene is StartSdmScene {
   return (
     scene === "new_ring_binding" ||
@@ -165,71 +104,11 @@ function formatSealCountdown(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function NfcPhoneHint({ platform }: { platform: HavenPlatform }) {
-  const stroke = "rgba(240,194,158,0.85)";
-  const dim = "rgba(200,180,170,0.35)";
-  if (platform === "ios") {
-    return (
-      <div style={styles.nfcDiagramWrap} aria-hidden>
-        <svg width="200" height="128" viewBox="0 0 200 128" style={styles.nfcSvg}>
-          <rect x="56" y="12" width="88" height="104" rx="14" fill="none" stroke={dim} strokeWidth="2" />
-          <rect x="76" y="20" width="48" height="8" rx="3" fill={dim} />
-          <path
-            d="M100 20 L100 8 L130 8 L130 20"
-            fill="none"
-            stroke={stroke}
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <circle cx="115" cy="14" r="5" fill="rgba(217,166,122,0.35)" stroke={stroke} strokeWidth="2" />
-          <text x="100" y="118" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
-            Top — Dynamic Island / earpiece area
-          </text>
-        </svg>
-      </div>
-    );
-  }
-  if (platform === "android") {
-    return (
-      <div style={styles.nfcDiagramWrap} aria-hidden>
-        <svg width="200" height="128" viewBox="0 0 200 128" style={styles.nfcSvg}>
-          <rect x="56" y="12" width="88" height="104" rx="14" fill="none" stroke={dim} strokeWidth="2" />
-          <rect x="72" y="22" width="56" height="36" rx="6" fill="none" stroke={dim} strokeWidth="1.5" />
-          <circle cx="128" cy="40" r="10" fill="rgba(217,166,122,0.28)" stroke={stroke} strokeWidth="2" />
-          <text x="100" y="118" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
-            Back — NFC often near camera
-          </text>
-        </svg>
-      </div>
-    );
-  }
+function StartRingGlyphPulse() {
   return (
-    <div style={styles.nfcDiagramWrap} aria-hidden>
-      <svg width="200" height="96" viewBox="0 0 200 96" style={styles.nfcSvg}>
-        <rect x="48" y="8" width="104" height="80" rx="12" fill="none" stroke={dim} strokeWidth="2" />
-        <circle cx="100" cy="48" r="14" fill="rgba(217,166,122,0.22)" stroke={stroke} strokeWidth="2" />
-        <text x="100" y="88" textAnchor="middle" fill="#cbb09f" fontSize="9" fontFamily="Inter, sans-serif">
-          Hold near your device NFC reader
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-function StartRingGlyphPulse({ variant = "default" }: { variant?: "default" | "hero" }) {
-  const hero = variant === "hero";
-  return (
-    <div
-      style={hero ? { ...styles.ringMarkWrap, ...styles.ringMarkWrapHero } : styles.ringMarkWrap}
-      aria-hidden
-    >
-      <span style={hero ? { ...styles.ringHalo, ...styles.ringHaloHero } : styles.ringHalo} />
-      <svg
-        width={hero ? "118" : "76"}
-        height={hero ? "118" : "76"}
-        viewBox="0 0 76 76"
-        style={styles.ringSvg}
-      >
+    <div style={styles.ringMarkWrap} aria-hidden>
+      <span style={styles.ringHalo} />
+      <svg width="118" height="118" viewBox="0 0 76 76" style={styles.ringSvg}>
         <circle cx="38" cy="38" r="24" fill="none" stroke="#e6b48d" strokeWidth="5.5" />
         <circle cx="38" cy="38" r="14" fill="none" stroke="#f0c29e" strokeWidth="2.5" opacity="0.55" />
       </svg>
@@ -238,27 +117,15 @@ function StartRingGlyphPulse({ variant = "default" }: { variant?: "default" | "h
 }
 
 export default function StartClient() {
-  const [busyProvider, setBusyProvider] = useState("");
   const [notice, setNotice] = useState("");
-  const [appleProviderReady, setAppleProviderReady] = useState(true);
-  const [claimToken, setClaimToken] = useState("");
-  const [claimState, setClaimState] = useState<
-    "idle" | "waiting_signin" | "claiming" | "claimed" | "failed" | "skipped"
-  >("idle");
   const [sdmState, setSdmState] = useState<StartSdmStateForCopy>(() => readInitialSdmState());
   const { platform: detectedPlatform, ready: platformReady } = usePlatform();
   const platform = (platformReady ? detectedPlatform : "other") as HavenPlatform;
-  const idleHero = useMemo(() => getStartIdleHeroCopy(platform), [platform]);
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
-  const sdmCopy = useMemo(() => {
-    if (sdmState.kind === "idle") return null;
-    return getStartSdmCardCopy(platform, sdmState);
-  }, [platform, sdmState]);
+  const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
+
   const [sealLeaveGuard, setSealLeaveGuard] = useState(false);
   const [sealLeaveAck, setSealLeaveAck] = useState(false);
-  const hero = START_PAGE_CONTENT.hero;
-  const hasVideoHero = Boolean(hero.video);
-  const claimAttemptedRef = useRef(false);
   const pendingSealTapRef = useRef(false);
   const bindRingRedirectDoneRef = useRef(false);
   const nfcSdmResolveGenerationRef = useRef(0);
@@ -269,36 +136,45 @@ export default function StartClient() {
   );
   const [sealWaitMode, setSealWaitMode] = useState(false);
   const [sealRemoteFinishing, setSealRemoteFinishing] = useState(false);
-  const [ringTapSealLanding, setRingTapSealLanding] = useState(false);
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
   const [ringTapError, setRingTapError] = useState("");
-  const [ringWaitMode, setRingWaitMode] = useState(() =>
-    typeof window !== "undefined" ? isRingWaitSearch(window.location.search) : false
-  );
-  const [ringWaitReason, setRingWaitReason] = useState<RingWaitReason>(() =>
-    typeof window !== "undefined" ? readRingWaitReason() : "fresh"
-  );
   const [failedRetryReady, setFailedRetryReady] = useState(false);
   const resolveStartedAtRef = useRef(0);
   const nfcResolveInFlightRef = useRef(false);
   const failedStartedAtRef = useRef(0);
-  const redirectStartedAtRef = useRef(0);
   const [nfcUiTick, setNfcUiTick] = useState(0);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
-  const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
+
+  const nfcFlow = sdmState.kind !== "idle";
+  const useMinimalShell = nfcFlow || sealWaitMode;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const search = window.location.search;
     queueMicrotask(() => {
       setSealWaitMode(isPrimarySealWaitPage(search));
-      setRingTapSealLanding(isRingTapSealLandingPage(search));
-      setRingWaitMode(isRingWaitSearch(search));
-      if (isRingWaitSearch(search)) {
-        setRingWaitReason(readRingWaitReason());
-      }
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const claim = normalizeClaimValue(params.get("claim") || "");
+    if (!claim) return;
+    window.location.replace(`/hub?token=${encodeURIComponent(claim)}`);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const search = window.location.search || "";
+    if (isSealNfcLaunchSearch(search)) return;
+    if (isSealWaitSearch(search)) return;
+    const claim = normalizeClaimValue(
+      new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("claim") || ""
+    );
+    if (claim) return;
+    window.location.replace("/app");
   }, []);
 
   useEffect(() => {
@@ -315,66 +191,11 @@ export default function StartClient() {
     return () => window.clearTimeout(timer);
   }, [sdmState]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // eslint-disable-next-line no-console
-    console.log("=== START ROUTE ENTERED ===", {
-      href: window.location.href,
-      search: window.location.search,
-      isSealLaunch: isSealNfcLaunchSearch(window.location.search),
-    });
-  }, []);
-
-  function enterRingWaitMode(reason: RingWaitReason = "retry") {
-    if (typeof window === "undefined") return;
-    setSealLeaveAck(false);
-    clearSealNfcTapHref();
-    writeRingWaitReason(reason);
-    const wait = new URL("/start", window.location.origin);
-    wait.searchParams.set(RING_WAIT_QUERY, "1");
-    window.location.replace(wait.href);
-  }
-
-  function retrySdmTouch() {
-    if (typeof window === "undefined") return;
-    if (isSealFlowArmed() || isPrimarySealWaitPage(window.location.search)) {
-      const wait = new URL("/start", window.location.origin);
-      wait.searchParams.set("seal_wait", "1");
-      wait.searchParams.set("intent", "seal");
-      window.location.replace(wait.href);
-      return;
-    }
-    enterRingWaitMode("retry");
-  }
-
-  async function handleSealWaitRingScan() {
-    if (!webNfcAvailable || nfcSealScanBusy) return;
-    setRingTapError("");
-    setNfcSealScanBusy(true);
-    try {
-      const result = await listenForSealRingTapOnce(window.location.origin);
-      if (!result.ok) {
-        setRingTapError(result.message);
-        return;
-      }
-      window.location.replace(sealRelayNavigateHref(result.target));
-    } catch (error) {
-      setRingTapError(
-        error instanceof Error ? error.message : "Could not read the ring."
-      );
-    } finally {
-      setNfcSealScanBusy(false);
-    }
-  }
-
   const needsSealLeaveDouble =
     sealLeaveGuard &&
     (sdmState.kind === "resolving" ||
       sdmState.kind === "failed" ||
       (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
-
-  const nfcFlow = sdmState.kind !== "idle";
-  const sealTopBarMuted = nfcFlow && sealLeaveGuard;
 
   const showSealCountdown =
     sealLeaveGuard &&
@@ -382,6 +203,14 @@ export default function StartClient() {
     (sdmState.kind === "resolving" ||
       sdmState.kind === "failed" ||
       (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
+
+  const sealArmed = isSealFlowArmed();
+  void sealPrepRevision;
+
+  const showSealConnecting =
+    nfcFlow &&
+    (sealArmed || nfcSealBootstrapping) &&
+    (sdmState.kind === "resolving" || nfcSealBootstrapping);
 
   const [sealClockTick, setSealClockTick] = useState(0);
   useEffect(() => {
@@ -395,61 +224,21 @@ export default function StartClient() {
     return getSealArmedRemainingMs();
   }, [sealClockTick, showSealCountdown, sealWaitMode]);
 
-  const isDailyMember =
-    sdmState.kind === "ready" &&
-    sdmState.scene === "daily_access" &&
-    Boolean(
-      sdmState.currentUserIsHavenMember ||
-        (sdmState.viewerUserId && sdmState.ownerId && sdmState.viewerUserId === sdmState.ownerId)
-    );
-
-  const sealArmed = isSealFlowArmed();
-  void sealPrepRevision;
-
-  const showSealConnecting =
-    nfcFlow &&
-    (sealArmed || nfcSealBootstrapping) &&
-    (sdmState.kind === "resolving" || nfcSealBootstrapping);
-
-  useEffect(() => {
-    if (sealWaitMode || sealArmed) return undefined;
-    if (!isDailyMember) return undefined;
-    if (sdmState.kind !== "ready" || sdmState.scene !== "daily_access") return undefined;
-    redirectStartedAtRef.current = Date.now();
-    const t = window.setTimeout(() => {
-      window.location.assign("/app");
-    }, NFC_FLOW_TIMING.successRedirectMs);
-    return () => window.clearTimeout(t);
-  }, [sealWaitMode, sealArmed, isDailyMember, sdmState]);
-
-  const showMinimalSyncedCountdown =
+  const showResolveCountdown =
     sdmState.kind === "failed" ||
     sdmState.kind === "resolving" ||
     nfcSealBootstrapping ||
-    (sdmState.kind === "ready" && sdmState.scene === "daily_access" && isDailyMember) ||
     (sealWaitMode && sealRemainingMs > 0);
 
   useEffect(() => {
-    if (!showMinimalSyncedCountdown) return;
+    if (!showResolveCountdown) return;
     const id = window.setInterval(() => setNfcUiTick((n) => n + 1), 200);
     return () => window.clearInterval(id);
-  }, [showMinimalSyncedCountdown]);
+  }, [showResolveCountdown]);
 
-  function renderMinimalSyncedCountdown() {
+  function renderResolveCountdown() {
     void nfcUiTick;
     const now = Date.now();
-
-    if (
-      sdmState.kind === "ready" &&
-      sdmState.scene === "daily_access" &&
-      isDailyMember &&
-      redirectStartedAtRef.current > 0
-    ) {
-      const endsAt = redirectStartedAtRef.current + NFC_FLOW_TIMING.successRedirectMs;
-      if (visibleSecondsRemaining(endsAt, now) > 0) {
-        return <p style={styles.minimalHint}>{START_PAGE_EN.openingHavenLine}</p>;
-      }
-    }
 
     if (sdmState.kind === "failed" && failedStartedAtRef.current > 0 && !failedRetryReady) {
       const endsAt = failedStartedAtRef.current + NFC_FLOW_TIMING.minFailedBeforeRetryMs;
@@ -486,6 +275,184 @@ export default function StartClient() {
     return null;
   }
 
+  function retrySdmTouch() {
+    if (typeof window === "undefined") return;
+    if (isSealFlowArmed() || isPrimarySealWaitPage(window.location.search)) {
+      const wait = new URL("/start", window.location.origin);
+      wait.searchParams.set("seal_wait", "1");
+      wait.searchParams.set("intent", "seal");
+      window.location.replace(wait.href);
+      return;
+    }
+    setNotice(nfcHoldCopy.replaySubtitle);
+  }
+
+  async function handleSealWaitRingScan() {
+    if (!webNfcAvailable || nfcSealScanBusy) return;
+    setRingTapError("");
+    setNfcSealScanBusy(true);
+    try {
+      const result = await listenForSealRingTapOnce(window.location.origin);
+      if (!result.ok) {
+        setRingTapError(result.message);
+        return;
+      }
+      window.location.replace(sealRelayNavigateHref(result.target));
+    } catch (error) {
+      setRingTapError(
+        error instanceof Error ? error.message : "Could not read the ring."
+      );
+    } finally {
+      setNfcSealScanBusy(false);
+    }
+  }
+
+  function confirmLeaveWithoutRing() {
+    if (typeof window === "undefined") return;
+    setSealLeaveAck(false);
+    clearSealWaitTabActive();
+    abandonInProgressSealOnStartPage();
+    window.location.assign("/app");
+  }
+
+  function onFooterContinueWithoutRing() {
+    if (typeof window === "undefined") return;
+    if (needsSealLeaveDouble && !sealLeaveAck) {
+      setSealLeaveAck(true);
+      return;
+    }
+    if (!needsSealLeaveDouble) {
+      confirmLeaveWithoutRing();
+    }
+  }
+
+  function cancelNfcFlow() {
+    if (typeof window === "undefined") return;
+    if (needsSealLeaveDouble) {
+      confirmLeaveWithoutRing();
+      return;
+    }
+    window.location.assign("/app");
+  }
+
+  function openApp() {
+    if (typeof window === "undefined") return;
+    window.location.assign("/app");
+  }
+
+  function goToLoginForBind() {
+    if (typeof window === "undefined") return;
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+  }
+
+  function bindCurrentRing() {
+    if (typeof window === "undefined") return;
+    const uid = readUidForBind(sdmState);
+    if (!uid) {
+      setNotice(START_PAGE_EN.ringVerifyFailedNotice);
+      return;
+    }
+    window.location.assign(buildBindRingUrl(window.location.origin, uid));
+  }
+
+  function readUidForBind(state: StartSdmStateForCopy): string {
+    if (typeof window === "undefined") return "";
+    const fromUrl = (new URLSearchParams(window.location.search).get("uid") || "").trim();
+    if (fromUrl) return fromUrl;
+    if (state.kind === "ready" && state.resolvedUid) {
+      return String(state.resolvedUid).trim();
+    }
+    return "";
+  }
+
+  type MinimalNfcView = {
+    title: string;
+    subtitle: string;
+    showGuide: boolean;
+    stepLine?: string;
+    button?: string;
+    onAction?: (() => void) | null;
+    showSealScan?: boolean;
+    showOpenApp?: boolean;
+  };
+
+  function minimalNfcCopy(): MinimalNfcView {
+    if (sealWaitMode && sdmState.kind === "idle" && !sealRemoteFinishing) {
+      return {
+        title: nfcHoldCopy.sealWaitTitle,
+        subtitle: nfcHoldCopy.sealWaitSubtitle,
+        showGuide: true,
+        stepLine: nfcHoldCopy.waitStep,
+        showSealScan: webNfcAvailable,
+      };
+    }
+    if (sealWaitMode && sealRemoteFinishing) {
+      return {
+        title: START_PAGE_EN.sealWaitFinishingTitle,
+        subtitle: nfcHoldCopy.holdSteadyLine,
+        showGuide: true,
+      };
+    }
+    if (sdmState.kind === "failed") {
+      return {
+        title: nfcHoldCopy.failedTitle,
+        subtitle: sdmState.message || nfcHoldCopy.failedSubtitle,
+        showGuide: true,
+        stepLine: nfcHoldCopy.waitStep,
+        button: failedRetryReady ? nfcHoldCopy.tapRingAgainCta : undefined,
+        onAction: failedRetryReady ? retrySdmTouch : null,
+      };
+    }
+    if (sdmState.kind === "resolving" || showSealConnecting || nfcSealBootstrapping) {
+      return {
+        title: nfcHoldCopy.resolvingTitle,
+        subtitle: nfcHoldCopy.resolvingSubtitle,
+        showGuide: true,
+        stepLine: nfcHoldCopy.holdSteadyLine,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "new_ring_binding") {
+      return {
+        title: "Bind this ring?",
+        subtitle: "",
+        showGuide: false,
+        button: "Continue",
+        onAction: bindCurrentRing,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation") {
+      return {
+        title: START_PAGE_EN.preparingMemory,
+        subtitle: nfcHoldCopy.holdSteadyLine,
+        showGuide: true,
+      };
+    }
+    if (sdmState.kind === "ready" && sdmState.scene === "daily_access") {
+      return {
+        title: START_PAGE_EN.idleRingAck,
+        subtitle: "",
+        showGuide: false,
+        showOpenApp: true,
+      };
+    }
+    return {
+      title: nfcHoldCopy.waitTitle,
+      subtitle: nfcHoldCopy.waitSubtitle,
+      showGuide: true,
+      stepLine: nfcHoldCopy.waitStep,
+    };
+  }
+
+  useEffect(() => {
+    const id = "haven-start-ring-pulse-keyframes";
+    if (typeof document === "undefined" || document.getElementById(id)) return;
+    const el = document.createElement("style");
+    el.id = id;
+    el.textContent = `@keyframes havenStartRingGlow{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(240,194,158,0))}50%{transform:scale(1.05);filter:drop-shadow(0 0 12px rgba(240,194,158,0.5))}}@keyframes havenStartRingHalo{0%{transform:scale(0.92);opacity:0.5}70%{transform:scale(1.4);opacity:0}100%{transform:scale(1.4);opacity:0}}`;
+    document.head.appendChild(el);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!isSealNfcLaunchSearch(window.location.search)) return;
@@ -511,7 +478,6 @@ export default function StartClient() {
       if (wasSealRecentlyCompleted()) {
         return goSuccess();
       }
-      // iOS opens NFC in a foreground sibling tab — do not navigate this hidden wait tab.
       if (document.visibilityState === "hidden") {
         const relay = readFreshSealNfcTapHref();
         if (relay) {
@@ -566,55 +532,6 @@ export default function StartClient() {
       unsubBroadcast();
     };
   }, [sealWaitMode]);
-
-  const sealContextActive =
-    sealWaitMode ||
-    sealRemoteFinishing ||
-    ringTapSealLanding ||
-    isSealFlowArmed();
-
-  const hideFtuxOAuthDuringSealTouch =
-    sealContextActive ||
-    (nfcFlow &&
-      (sdmState.kind === "resolving" ||
-        sdmState.kind === "failed" ||
-        (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation")));
-
-  const showStartOAuth =
-    !hideFtuxOAuthDuringSealTouch &&
-    (Boolean(claimToken) ||
-      (nfcFlow &&
-        sdmState.kind === "ready" &&
-        sdmState.scene === "new_ring_binding" &&
-        !sealContextActive));
-
-  function confirmLeaveWithoutRing() {
-    if (typeof window === "undefined") return;
-    setSealLeaveAck(false);
-    clearSealWaitTabActive();
-    abandonInProgressSealOnStartPage();
-    window.location.assign("/app");
-  }
-
-  function onFooterContinueWithoutRing() {
-    if (typeof window === "undefined") return;
-    if (needsSealLeaveDouble && !sealLeaveAck) {
-      setSealLeaveAck(true);
-      return;
-    }
-    if (!needsSealLeaveDouble) {
-      confirmLeaveWithoutRing();
-    }
-  }
-
-  useEffect(() => {
-    const id = "haven-start-ring-pulse-keyframes";
-    if (typeof document === "undefined" || document.getElementById(id)) return;
-    const el = document.createElement("style");
-    el.id = id;
-    el.textContent = `@keyframes havenStartRingGlow{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(240,194,158,0))}50%{transform:scale(1.05);filter:drop-shadow(0 0 12px rgba(240,194,158,0.5))}}@keyframes havenStartRingHalo{0%{transform:scale(0.92);opacity:0.5}70%{transform:scale(1.4);opacity:0}100%{transform:scale(1.4);opacity:0}}`;
-    document.head.appendChild(el);
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -689,13 +606,6 @@ export default function StartClient() {
         setNotice(START_PAGE_EN.ringVerifyFailedNotice);
       }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
       try {
-        // eslint-disable-next-line no-console
-        console.log("=== START NFC RESOLVE BEGIN ===", {
-          uid,
-          ctr,
-          hasCmac: Boolean(cmac),
-          hasPicc: Boolean(picc),
-        });
         syncHydrateSealPrepFromStorage();
         setSealPrepRevision((n) => n + 1);
 
@@ -738,7 +648,7 @@ export default function StartClient() {
             "Sign-in check timed out."
           );
         } catch {
-          /* offline or timeout — continue; resolve may still work */
+          /* offline or timeout */
         }
         const { data: sessionData } = await withTimeout(
           supabase.auth.getSession(),
@@ -795,12 +705,6 @@ export default function StartClient() {
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         const data = await res.json().catch(() => ({}));
-        // eslint-disable-next-line no-console
-        console.log("=== START NFC RESOLVE RESPONSE ===", {
-          ok: res.ok,
-          status: res.status,
-          data,
-        });
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         if (!res.ok || data?.valid !== true) {
           const apiCode = typeof data?.code === "string" ? data.code : "";
@@ -813,12 +717,14 @@ export default function StartClient() {
             apiCode === "SDM_REPLAY_DETECTED" ||
             /already used/i.test(apiError)
           ) {
-            enterRingWaitMode("replay");
+            setSdmState({
+              kind: "failed",
+              message: nfcHoldCopy.replaySubtitle,
+            });
+            setNotice(nfcHoldCopy.replaySubtitle);
             return;
           }
-          throw new Error(
-            apiError || "We could not finish that tap."
-          );
+          throw new Error(apiError || "We could not finish that tap.");
         }
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         if (scene === "daily_access" && pendingSealTapRef.current) {
@@ -853,17 +759,10 @@ export default function StartClient() {
         });
         setNotice(
           scene === "new_ring_binding"
-            ? "Bind this ring to your account?"
+            ? "Bind this ring?"
             : scene === "seal_confirmation"
-              ? "Sealing your memory..."
-              : data.currentUserIsHavenMember ||
-                  (viewerUserId && data.ownerId && viewerUserId === data.ownerId)
-                ? "Opening Haven..."
-                : !accessToken
-                  ? nfcHoldCopy.signInSubtitle
-                  : viewerUserId && data.ownerId && viewerUserId !== data.ownerId
-                    ? nfcHoldCopy.signInSubtitle
-                    : nfcHoldCopy.waitSubtitle
+              ? START_PAGE_EN.preparingMemory
+              : START_PAGE_EN.idleRingAck
         );
         if (scene === "seal_confirmation") {
           if (!accessToken) {
@@ -873,7 +772,7 @@ export default function StartClient() {
             throw new Error("We could not finish that tap.");
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
-          setNotice("Sealing your memory...");
+          setNotice(START_PAGE_EN.preparingMemory);
           const finalizeResult = await withTimeout(
             finalizeSealChainFromSdmResponseSafe({
               sealTicket: String(data.sealTicket),
@@ -888,8 +787,6 @@ export default function StartClient() {
           }
         }
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error("=== START NFC RESOLVE FAILED ===", error);
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
         await sleepMs(
           Math.max(0, NFC_FLOW_TIMING.minResolvingMs - (Date.now() - resolveStartedAtRef.current))
@@ -921,185 +818,12 @@ export default function StartClient() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const hash = window.location.hash || "";
-    if (hash.includes("error=")) {
-      try {
-        const raw = hash.startsWith("#") ? hash.slice(1) : hash;
-        const hp = new URLSearchParams(raw);
-        const desc = hp.get("error_description") || hp.get("error") || "";
-        const readable = desc
-          ? decodeURIComponent(desc.replace(/\+/g, " "))
-          : "Sign-in failed.";
-        queueMicrotask(() => setNotice(readable));
-        const u = new URL(window.location.href);
-        u.hash = "";
-        window.history.replaceState({}, "", `${u.pathname}${u.search}`);
-      } catch {
-        queueMicrotask(() => setNotice("Sign-in failed."));
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const rawSearch = window.location.search || "";
-    if (isSealNfcLaunchSearch(rawSearch)) return;
-    const claimProbe = new URLSearchParams(
-      rawSearch.startsWith("?") ? rawSearch.slice(1) : rawSearch
-    ).get("claim") || "";
-    if (normalizeClaimValue(claimProbe)) return;
-
-    const supabase = getSupabaseBrowserClient();
-    let cancelled = false;
-    void (async () => {
-      try {
-        await supabase.auth.initialize();
-      } catch {
-        /* continue */
-      }
-      if (cancelled) return;
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!isPermanentSupabaseSession(data.session ?? null)) return;
-      const nextPath = consumeDeferredAppEntry();
-      if (!nextPath) return;
-      window.location.assign(`${window.location.origin}${nextPath}`);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const value = window.location.search
-      ? new URLSearchParams(window.location.search).get("claim") || ""
-      : "";
-    const normalized = normalizeClaimValue(value);
-    if (!normalized) return;
-    const timer = window.setTimeout(() => {
-      setClaimToken(normalized);
-      setClaimState("waiting_signin");
-      setNotice("Linking ring...");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (claimState !== "claimed") return;
-    if (typeof window === "undefined") return;
-    const timer = window.setTimeout(() => {
-      setClaimToken("");
-      setNotice("Ring linked.");
-      window.location.assign("/app");
-    }, ACTION_STEP_TIMING.claimSuccessRedirectMs);
-    return () => window.clearTimeout(timer);
-  }, [claimState]);
-
-  useEffect(() => {
-    if (claimState !== "claiming") return;
-    if (typeof window === "undefined") return;
-    const timer = window.setTimeout(() => {
-      claimAttemptedRef.current = false;
-      setClaimState("failed");
-      setNotice(
-        "Could not link this ring. Try again."
-      );
-    }, ACTION_STEP_TIMING.claimTimeoutMs);
-    return () => window.clearTimeout(timer);
-  }, [claimState]);
-
-  const claimRingWithToken = useCallback(async (accessToken: string) => {
-    if (!claimToken || claimAttemptedRef.current) return;
-    claimAttemptedRef.current = true;
-    setClaimState("claiming");
-    setNotice("Linking ring...");
-    try {
-      const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), CLAIM_REQUEST_TIMEOUT_MS);
-      const res = await fetch("/api/rings/claim", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        signal: controller.signal,
-        body: JSON.stringify({ token: claimToken }),
-      });
-      window.clearTimeout(timer);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        claimAttemptedRef.current = false;
-        setClaimState("failed");
-        setNotice(
-          typeof data?.error === "string" && data.error
-            ? "We could not connect this ring yet. You can continue now and link it later."
-            : "We could not connect this ring yet. You can continue without ring for now."
-        );
-        return;
-      }
-      if (data?.subscription) {
-        cacheSubscriptionStatus(data.subscription);
-      }
-      setClaimState("claimed");
-      setNotice(
-        data?.plusTrialActivated
-          ? "Ring linked."
-          : "Ring linked."
-      );
-    } catch {
-      claimAttemptedRef.current = false;
-      setClaimState("failed");
-      setNotice(
-        "Could not link this ring. Try again."
-      );
-    }
-  }, [claimToken]);
-
-  useEffect(() => {
-    if (!claimToken) return;
-    const supabase = getSupabaseBrowserClient();
-    let active = true;
-    const run = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!active) return;
-      if (data.session?.access_token) {
-        void claimRingWithToken(data.session.access_token);
-      } else {
-        setClaimState("waiting_signin");
-      }
-    };
-    void run();
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      if (session?.access_token) {
-        void claimRingWithToken(session.access_token);
-      }
-    });
-    return () => {
-      active = false;
-      authSub.subscription.unsubscribe();
-    };
-  }, [claimRingWithToken, claimToken]);
-
-  function readUidForPartnerBind(state: StartSdmStateForCopy): string {
-    if (typeof window === "undefined") return "";
-    const fromUrl = (new URLSearchParams(window.location.search).get("uid") || "").trim();
-    if (fromUrl) return fromUrl;
-    if (state.kind === "ready" && state.resolvedUid) {
-      return String(state.resolvedUid).trim();
-    }
-    return "";
-  }
-
-  useEffect(() => {
     if (sdmState.kind !== "ready" || sdmState.scene !== "new_ring_binding") {
       bindRingRedirectDoneRef.current = false;
       return;
     }
     if (typeof window === "undefined") return;
-    const uid = readUidForPartnerBind(sdmState);
+    const uid = readUidForBind(sdmState);
     if (!uid) return;
 
     const supabase = getSupabaseBrowserClient();
@@ -1109,9 +833,7 @@ export default function StartClient() {
       if (!active || bindRingRedirectDoneRef.current) return;
       if (!session?.access_token) return;
       bindRingRedirectDoneRef.current = true;
-      setNotice("Opening ring setup...");
-      const origin = window.location.origin;
-      window.location.assign(buildBindRingUrl(origin, uid));
+      window.location.assign(buildBindRingUrl(window.location.origin, uid));
     }
 
     void supabase.auth.getSession().then(({ data }) => go(data.session ?? null));
@@ -1124,1177 +846,142 @@ export default function StartClient() {
     };
   }, [sdmState]);
 
-  /** Supabase OAuth errors are localized by Accept-Language; match EN + zh-CN for provider-disabled. */
-  function isOAuthProviderNotEnabledMessage(message: string): boolean {
-    const raw = String(message || "");
-    const lower = raw.toLowerCase();
-    if (lower.includes("provider is not enabled")) return true;
-    if (lower.includes("unsupported provider")) return true;
-    if (raw.includes("提供程序未启用")) return true;
-    if (raw.includes("不支持的提供程序")) return true;
-    return false;
-  }
-
-  function getFriendlyAuthError(message: string, provider: "apple" | "google") {
-    if (isOAuthProviderNotEnabledMessage(message)) {
-      if (provider === "apple") {
-        return "Apple sign-in is unavailable.";
-      }
-      return "Google sign-in is unavailable.";
-    }
-    const detail = String(message || "").trim();
-    if (detail) {
-      return `Sign-in could not start. ${detail}`;
-    }
-    return "Sign-in could not start. Please try again in a moment.";
-  }
-
-  async function signInWith(provider: "apple" | "google") {
-    setBusyProvider(provider);
-    setNotice("");
-    try {
-      window.localStorage.setItem(FTUX_STARTED_KEY, "1");
-      const supabase = getSupabaseBrowserClient();
-      const safeOrigin = canonicalAuthOriginFromLocation();
-      const redirectTo = buildOAuthReturnUrl(safeOrigin);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo },
-      });
-      if (error) {
-        if (
-          provider === "apple" &&
-          isOAuthProviderNotEnabledMessage(String(error.message || ""))
-        ) {
-          setAppleProviderReady(false);
-          setNotice("Apple sign-in is unavailable. Opening Google...");
-          window.setTimeout(() => {
-            void signInWith("google");
-          }, 250);
-          return;
-        }
-        setNotice(getFriendlyAuthError(error.message, provider));
-        try {
-          window.localStorage.removeItem(FTUX_STARTED_KEY);
-        } catch {
-          /* ignore */
-        }
-      }
-    } finally {
-      setBusyProvider("");
-    }
-  }
-
-  async function signInForRingAccess(provider: "apple" | "google") {
-    setBusyProvider(provider);
-    setNotice("");
-    try {
-      window.localStorage.setItem(FTUX_STARTED_KEY, "1");
-      const supabase = getSupabaseBrowserClient();
-      const safeOrigin = canonicalAuthOriginFromLocation();
-      const redirectTo = `${safeOrigin}/start?${RING_WAIT_QUERY}=1`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo },
-      });
-      if (error) {
-        if (
-          provider === "apple" &&
-          isOAuthProviderNotEnabledMessage(String(error.message || ""))
-        ) {
-          setAppleProviderReady(false);
-          setNotice("Apple sign-in is unavailable. Opening Google...");
-          window.setTimeout(() => {
-            void signInForRingAccess("google");
-          }, 250);
-          return;
-        }
-        setNotice(getFriendlyAuthError(error.message, provider));
-        try {
-          window.localStorage.removeItem(FTUX_STARTED_KEY);
-        } catch {
-          /* ignore */
-        }
-      }
-    } finally {
-      setBusyProvider("");
-    }
-  }
-
-  function cancelNfcFlow() {
-    if (typeof window === "undefined") return;
-    if (needsSealLeaveDouble) {
-      confirmLeaveWithoutRing();
+  const [hasSessionForBind, setHasSessionForBind] = useState(false);
+  useEffect(() => {
+    if (sdmState.kind !== "ready" || sdmState.scene !== "new_ring_binding") {
+      setHasSessionForBind(false);
       return;
     }
-    window.location.assign("/app");
-  }
-
-  function bindCurrentRing() {
-    if (typeof window === "undefined") return;
-    const uid = readUidForPartnerBind(sdmState);
-    if (!uid) {
-      setNotice("We could not read this ring. Hold it steady near the top of your phone and try once more.");
-      return;
-    }
-    window.location.assign(buildBindRingUrl(window.location.origin, uid));
-  }
-
-  const needsDailySignIn =
-    sdmState.kind === "ready" &&
-    sdmState.scene === "daily_access" &&
-    !isDailyMember;
-
-  type MinimalNfcView = {
-    title: string;
-    subtitle: string;
-    showGuide: boolean;
-    stepLine?: string;
-    button?: string;
-    onAction?: (() => void) | null;
-    showOAuth?: boolean;
-    showSealScan?: boolean;
-  };
-
-  function minimalNfcCopy(): MinimalNfcView {
-    if (ringWaitMode && sdmState.kind === "idle") {
-      if (ringWaitReason === "replay") {
-        return {
-          title: nfcHoldCopy.replayTitle,
-          subtitle: nfcHoldCopy.replaySubtitle,
-          showGuide: true,
-          stepLine: nfcHoldCopy.waitStep,
-        };
-      }
-      return {
-        title: nfcHoldCopy.waitTitle,
-        subtitle: nfcHoldCopy.waitSubtitle,
-        showGuide: true,
-        stepLine: nfcHoldCopy.waitStep,
-      };
-    }
-    if (sealWaitMode && sdmState.kind === "idle" && !sealRemoteFinishing) {
-      return {
-        title: nfcHoldCopy.sealWaitTitle,
-        subtitle: nfcHoldCopy.sealWaitSubtitle,
-        showGuide: true,
-        stepLine: nfcHoldCopy.waitStep,
-        showSealScan: webNfcAvailable,
-      };
-    }
-    if (sealWaitMode && sealRemoteFinishing) {
-      return {
-        title: START_PAGE_EN.sealWaitFinishingTitle,
-        subtitle: nfcHoldCopy.holdSteadyLine,
-        showGuide: true,
-      };
-    }
-    if (sdmState.kind === "failed") {
-      return {
-        title: nfcHoldCopy.failedTitle,
-        subtitle: sdmState.message || nfcHoldCopy.failedSubtitle,
-        showGuide: true,
-        stepLine: nfcHoldCopy.waitStep,
-        button: failedRetryReady ? nfcHoldCopy.tapRingAgainCta : undefined,
-        onAction: failedRetryReady ? retrySdmTouch : null,
-      };
-    }
-    if (sdmState.kind === "resolving" || showSealConnecting || nfcSealBootstrapping) {
-      return {
-        title: nfcHoldCopy.resolvingTitle,
-        subtitle: nfcHoldCopy.resolvingSubtitle,
-        showGuide: true,
-        stepLine: nfcHoldCopy.holdSteadyLine,
-      };
-    }
-    if (sdmState.kind === "ready" && sdmState.scene === "new_ring_binding") {
-      const partnerJoin = hasPendingPartnerInvite();
-      return {
-        title: partnerJoin ? "Join Haven with this ring" : "Bind this ring to your account?",
-        subtitle: partnerJoin
-          ? "Sign in with your own account, then finish on the next screen. No need to tap the ring again."
-          : nfcHoldCopy.waitSubtitle,
-        showGuide: false,
-        button: partnerJoin ? "Continue" : "Bind Ring",
-        onAction: bindCurrentRing,
-        showOAuth: partnerJoin,
-      };
-    }
-    if (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation") {
-      return {
-        title: "Sealing your memory...",
-        subtitle: nfcHoldCopy.holdSteadyLine,
-        showGuide: true,
-      };
-    }
-    if (needsDailySignIn) {
-      return {
-        title: nfcHoldCopy.signInTitle,
-        subtitle: nfcHoldCopy.signInSubtitle,
-        showGuide: false,
-        showOAuth: true,
-      };
-    }
-    if (sdmState.kind === "ready" && sdmState.scene === "daily_access") {
-      return {
-        title: "Opening Haven...",
-        subtitle: nfcHoldCopy.holdSteadyLine,
-        showGuide: false,
-      };
-    }
-    return {
-      title: nfcHoldCopy.waitTitle,
-      subtitle: nfcHoldCopy.waitSubtitle,
-      showGuide: true,
-      stepLine: nfcHoldCopy.waitStep,
+    const supabase = getSupabaseBrowserClient();
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setHasSessionForBind(Boolean(data.session?.access_token));
+    });
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setHasSessionForBind(Boolean(session?.access_token));
+    });
+    return () => {
+      active = false;
+      authSub.subscription.unsubscribe();
     };
+  }, [sdmState]);
+
+  if (!useMinimalShell) {
+    return null;
   }
 
-  const useMinimalShell = (nfcFlow || ringWaitMode || sealWaitMode) && !claimToken;
-
-  if (useMinimalShell) {
-    const copy = minimalNfcCopy();
-    return (
-      <main style={styles.minimalPage}>
-        <button type="button" onClick={cancelNfcFlow} style={styles.minimalCancel}>
-          Cancel
-        </button>
-        <section style={styles.minimalPanel} aria-live="polite">
-          <StartRingGlyphPulse variant="hero" />
-          <h1 style={styles.minimalTitle}>{copy.title}</h1>
-          {copy.subtitle ? <p style={styles.minimalSubtitle}>{copy.subtitle}</p> : null}
-          {renderMinimalSyncedCountdown()}
-          {copy.showGuide ? (
-            <NfcHoldGuide platform={platform} stepLine={copy.stepLine} />
-          ) : null}
-          {copy.showSealScan ? (
-            <button
-              type="button"
-              onClick={() => void handleSealWaitRingScan()}
-              disabled={nfcSealScanBusy}
-              style={styles.minimalSecondary}
-            >
-              {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
-            </button>
-          ) : null}
-          {ringTapError ? (
-            <p style={styles.minimalError} role="alert">
-              {ringTapError}
-            </p>
-          ) : null}
-          {nfcSealScanBusy ? (
-            <IndeterminateStepStatus
-              active
-              label={nfcHoldCopy.listeningStatusLine}
-              slowLabel={nfcHoldCopy.stillListeningLine}
-              style={styles.minimalHint}
-            />
-          ) : null}
-          {copy.showOAuth ? (
-            <div style={styles.minimalOAuthStack}>
-              <button
-                type="button"
-                onClick={() =>
-                  void (hasPendingPartnerInvite()
-                    ? signInWith("apple")
-                    : signInForRingAccess("apple"))
-                }
-                disabled={Boolean(busyProvider) || !appleProviderReady}
-                style={styles.minimalPrimary}
-              >
-                {busyProvider === "apple"
-                  ? "Opening..."
-                  : appleProviderReady
-                    ? "Continue with Apple"
-                    : "Apple unavailable"}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void (hasPendingPartnerInvite()
-                    ? signInWith("google")
-                    : signInForRingAccess("google"))
-                }
-                disabled={Boolean(busyProvider)}
-                style={styles.minimalSecondary}
-              >
-                {busyProvider === "google" ? "Opening..." : "Continue with Google"}
-              </button>
-            </div>
-          ) : null}
-          {copy.button && copy.onAction ? (
-            <button type="button" onClick={() => copy.onAction?.()} style={styles.minimalPrimary}>
-              {copy.button}
-            </button>
-          ) : null}
-        </section>
-      </main>
-    );
-  }
+  const copy = minimalNfcCopy();
+  const showSealFooter =
+    nfcFlow &&
+    (needsSealLeaveDouble ||
+      sdmState.kind === "resolving" ||
+      sdmState.kind === "failed" ||
+      (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
 
   return (
-    <main style={styles.page}>
-      <section style={styles.heroCard}>
-        <div
-          style={{
-            ...styles.backdrop,
-            backgroundImage: `linear-gradient(180deg, rgba(30,23,20,0.65), rgba(19,15,14,0.88)), url('${hero.image}')`,
-          }}
-        />
-        {hasVideoHero ? (
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster={hero.poster || hero.image}
-            style={styles.videoBackdrop}
-          >
-            <source src={hero.video} />
-          </video>
+    <main style={styles.minimalPage}>
+      <button type="button" onClick={cancelNfcFlow} style={styles.minimalCancel}>
+        {START_PAGE_EN.backToHaven}
+      </button>
+      <section style={styles.minimalPanel} aria-live="polite">
+        <StartRingGlyphPulse />
+        <h1 style={styles.minimalTitle}>{copy.title}</h1>
+        {copy.subtitle ? <p style={styles.minimalSubtitle}>{copy.subtitle}</p> : null}
+        {renderResolveCountdown()}
+        {copy.showGuide ? (
+          <NfcHoldGuide platform={platform} stepLine={copy.stepLine} />
         ) : null}
-        <div style={styles.content}>
-          <header
-            style={{
-              ...styles.topBar,
-              opacity: sealTopBarMuted ? 0.48 : 1,
-            }}
+        {copy.showSealScan ? (
+          <button
+            type="button"
+            onClick={() => void handleSealWaitRingScan()}
+            disabled={nfcSealScanBusy}
+            style={styles.minimalSecondary}
           >
-            <Link href="/app" style={styles.topBarLink} aria-label={START_PAGE_EN.backToHaven}>
-              ← {START_PAGE_EN.backToHaven}
-            </Link>
-          </header>
-          {sealContextActive ? <SealPwaHintCard /> : null}
-
-          <StartRingGlyphPulse />
-
-          {!nfcFlow && sealWaitMode ? (
-            sealRemoteFinishing ? (
-              <>
-                <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
-                  {START_PAGE_EN.sealWaitFinishingTitle}
-                </h1>
-                {START_PAGE_EN.sealWaitFinishingBody ? (
-                  <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                    {START_PAGE_EN.sealWaitFinishingBody}
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8 }}>
-                  {START_PAGE_EN.sealWaitTitle}
-                </h1>
-                <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                  {START_PAGE_EN.sealWaitBody}
-                </p>
-                {sealRemainingMs > 0 ? (
-                  <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
-                    {START_PAGE_EN.sealCountdownPrefix}{" "}
-                    <strong>{formatSealCountdown(sealRemainingMs)}</strong>
-                  </p>
-                ) : null}
-                <p style={styles.subtitle} aria-live="polite">
-                  {nfcSealScanBusy
-                    ? sealFlow.sealScanRingBusy
-                    : sealFlow.readySubtitle || sealFlow.tapPlacement}
-                </p>
-                <NfcPhoneHint platform={platform} />
-                {webNfcAvailable ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleSealWaitRingScan()}
-                    disabled={nfcSealScanBusy}
-                    style={styles.sealScanRingBtn}
-                  >
-                    {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
-                  </button>
-                ) : null}
-                {ringTapError ? (
-                  <p style={styles.ringTapError} role="alert">
-                    {ringTapError}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.assign("/app?open=new");
-                  }}
-                  style={styles.sealGuideInlineLink}
-                >
-                  {START_PAGE_EN.sealWaitBackToEdit}
-                </button>
-              </>
-            )
-          ) : !nfcFlow ? (
-            <>
-              <h1 style={styles.title}>{idleHero.title}</h1>
-            </>
-          ) : showSealConnecting ? (
-            <h1 style={{ ...styles.title, fontSize: 32, marginTop: 8, letterSpacing: "-0.02em" }}>
-              {sealFlow.sealingLabel}
-            </h1>
-          ) : sdmCopy ? (
-            <>
-              <h1 style={{ ...styles.title, fontSize: 30, marginTop: 4 }}>{sdmCopy.title}</h1>
-              <p style={{ ...styles.subtitle, fontSize: 16, lineHeight: 1.45 }}>
-                {sdmState.kind === "resolving" ? START_PAGE_EN.readingRingStatus : ""}
-              </p>
-            </>
-          ) : null}
-
-          {showSealCountdown && sealRemainingMs > 0 && !showSealConnecting ? (
-            <p style={styles.sealCountdownLine} role="timer" aria-live="polite">
-              {START_PAGE_EN.sealCountdownPrefix}{" "}
-              <strong>{formatSealCountdown(sealRemainingMs)}</strong>
-            </p>
-          ) : null}
-
-          {nfcFlow && sdmCopy && !showSealConnecting ? (
-            <section
-              style={{ ...styles.sdmCard, ...getSdmCardStyle(sdmState) }}
-              role={sdmState.kind === "failed" ? "alert" : "status"}
-              aria-live="polite"
-            >
-              {isDailyMember ? (
-                <p style={styles.sdmSuccessMark} aria-hidden>
-                  ✓
-                </p>
-              ) : null}
-              {sdmCopy.eyebrow ? <p style={styles.sdmEyebrow}>{sdmCopy.eyebrow}</p> : null}
-              {sdmCopy.body ? <p style={styles.sdmBody}>{sdmCopy.body}</p> : null}
-              {nfcFlow &&
-              sdmCopy &&
-              (sdmState.kind === "resolving" ||
-                sdmState.kind === "failed" ||
-                (sdmState.kind === "ready" &&
-                  (sdmState.scene === "seal_confirmation" ||
-                    sdmState.scene === "new_ring_binding" ||
-                    isDailyMember))) ? (
-                <NfcPhoneHint platform={platform} />
-              ) : null}
-              {sdmCopy.placementHint && nfcFlow ? (
-                <p style={styles.sdmHint}>{sdmCopy.placementHint}</p>
-              ) : null}
-              {sdmState.kind === "failed" ? (
-                <div style={styles.sdmActions}>
-                  <button type="button" onClick={retrySdmTouch} style={styles.sdmPrimaryAction}>
-                    {START_PAGE_EN.retryRingTap}
-                  </button>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {claimToken ? (
-            <section style={styles.claimCard}>
-              <p style={styles.claimTitle}>Linking ring</p>
-              <p style={styles.claimBody}>
-                {claimState === "claimed"
-                  ? "Ring linked."
-                  : claimState === "waiting_signin"
-                    ? "Sign in to continue."
-                    : "Linking ring..."}
-              </p>
-              {claimState === "claiming" ? (
-                <IndeterminateStepStatus
-                  active
-                  label={nfcHoldCopy.linkingStatusLine}
-                  slowLabel={nfcHoldCopy.stillLinkingLine}
-                  style={styles.minimalHint}
-                />
-              ) : null}
-              {claimState === "claimed" ? (
-                <p style={styles.minimalHint}>{START_PAGE_EN.openingHavenLine}</p>
-              ) : null}
-              {claimState === "failed" ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const supabase = getSupabaseBrowserClient();
-                      const { data } = await supabase.auth.getSession();
-                      if (data.session?.access_token) {
-                        void claimRingWithToken(data.session.access_token);
-                      } else {
-                        setNotice("Sign in to continue.");
-                        setClaimState("waiting_signin");
-                      }
-                    } catch {
-                      setNotice("Sign in to continue.");
-                      setClaimState("waiting_signin");
-                    }
-                  }}
-                  style={styles.secondaryButton}
-                >
-                  Retry
-                </button>
-              ) : null}
-              {claimState !== "claimed" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setClaimState("skipped");
-                    setClaimToken("");
-                    setNotice("");
-                    window.location.assign("/app");
-                  }}
-                  style={styles.secondaryButton}
-                >
-                  Skip
-                </button>
-              ) : null}
-            </section>
-          ) : null}
-
-          {nfcFlow && !claimToken ? (
-            <footer style={styles.sealFooter}>
-              {needsSealLeaveDouble && sealLeaveAck ? (
-                <>
-                  <p style={styles.sdmLeaveWarn}>{START_PAGE_EN.leaveSealWarning}</p>
-                  <div style={styles.sealFooterActions}>
-                    <button type="button" onClick={() => setSealLeaveAck(false)} style={styles.sdmPrimaryAction}>
-                      {START_PAGE_EN.keepSealing}
-                    </button>
-                    <button type="button" onClick={confirmLeaveWithoutRing} style={styles.sealFooterDanger}>
-                      {START_PAGE_EN.leaveSealConfirmCta}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onFooterContinueWithoutRing}
-                  style={{
-                    ...styles.sdmSecondaryAction,
-                    ...styles.sealFooterSingleCta,
-                    ...(needsSealLeaveDouble && !sealLeaveAck ? styles.sdmSecondaryActionQuiet : {}),
-                  }}
-                >
-                  {START_PAGE_EN.continueWithoutRing}
-                </button>
-              )}
-            </footer>
-          ) : null}
-
-          {showStartOAuth ? (
-            <>
-              <button
-                type="button"
-                onClick={() => void signInWith("apple")}
-                disabled={Boolean(busyProvider) || !appleProviderReady}
-                style={styles.primaryButton}
-              >
-                {busyProvider === "apple"
-                  ? "Opening..."
-                  : appleProviderReady
-                    ? "Continue with Apple"
-                    : "Apple unavailable"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void signInWith("google")}
-                disabled={Boolean(busyProvider)}
-                style={styles.secondaryButton}
-              >
-                {busyProvider === "google"
-                  ? "Opening..."
-                  : "Continue with Google"}
-              </button>
-            </>
-          ) : null}
-
-          <p style={styles.notice}>{notice || "\u00A0"}</p>
-        </div>
+            {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
+          </button>
+        ) : null}
+        {ringTapError ? (
+          <p style={styles.minimalError} role="alert">
+            {ringTapError}
+          </p>
+        ) : null}
+        {nfcSealScanBusy ? (
+          <IndeterminateStepStatus
+            active
+            label={nfcHoldCopy.listeningStatusLine}
+            slowLabel={nfcHoldCopy.stillListeningLine}
+            style={styles.minimalHint}
+          />
+        ) : null}
+        {copy.showOpenApp ? (
+          <button type="button" onClick={openApp} style={styles.minimalPrimary}>
+            {START_PAGE_EN.openAppCta}
+          </button>
+        ) : null}
+        {copy.button && copy.onAction ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                sdmState.kind === "ready" &&
+                sdmState.scene === "new_ring_binding" &&
+                !hasSessionForBind
+              ) {
+                goToLoginForBind();
+                return;
+              }
+              copy.onAction?.();
+            }}
+            style={styles.minimalPrimary}
+          >
+            {sdmState.kind === "ready" &&
+            sdmState.scene === "new_ring_binding" &&
+            !hasSessionForBind
+              ? "Sign in"
+              : copy.button}
+          </button>
+        ) : null}
+        {notice ? <p style={styles.minimalHint}>{notice}</p> : null}
       </section>
+
+      {showSealFooter ? (
+        <footer style={styles.sealFooter}>
+          {needsSealLeaveDouble && sealLeaveAck ? (
+            <>
+              <p style={styles.sdmLeaveWarn}>{START_PAGE_EN.leaveSealWarning}</p>
+              <div style={styles.sealFooterActions}>
+                <button
+                  type="button"
+                  onClick={() => setSealLeaveAck(false)}
+                  style={styles.sdmPrimaryAction}
+                >
+                  {START_PAGE_EN.keepSealing}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmLeaveWithoutRing}
+                  style={styles.sealFooterDanger}
+                >
+                  {START_PAGE_EN.leaveSealConfirmCta}
+                </button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onFooterContinueWithoutRing}
+              style={{
+                ...styles.sdmSecondaryAction,
+                ...styles.sealFooterSingleCta,
+                ...(needsSealLeaveDouble && !sealLeaveAck ? styles.sdmSecondaryActionQuiet : {}),
+              }}
+            >
+              {START_PAGE_EN.continueWithoutRing}
+            </button>
+          )}
+        </footer>
+      ) : null}
     </main>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    margin: 0,
-    padding: 20,
-    display: "grid",
-    placeItems: "center",
-    background:
-      "linear-gradient(160deg, rgba(30,22,18,0.96) 0%, rgba(18,14,12,1) 55%, rgba(14,12,11,1) 100%)",
-  },
-  minimalPage: {
-    minHeight: "100dvh",
-    margin: 0,
-    padding: 24,
-    display: "grid",
-    placeItems: "center",
-    background:
-      "radial-gradient(circle at 50% 38%, rgba(240,194,158,0.12), transparent 34%), linear-gradient(180deg, #120f0e 0%, #080707 100%)",
-    color: "#fff7ef",
-    fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-  },
-  minimalCancel: {
-    position: "fixed",
-    top: "max(18px, env(safe-area-inset-top))",
-    right: 20,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.04)",
-    color: "rgba(255,247,239,0.68)",
-    borderRadius: 999,
-    padding: "9px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    backdropFilter: "blur(12px)",
-  },
-  minimalPanel: {
-    width: "100%",
-    maxWidth: 360,
-    minHeight: 360,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 26,
-    textAlign: "center",
-  },
-  minimalTitle: {
-    margin: 0,
-    maxWidth: 330,
-    fontSize: "clamp(25px, 7vw, 31px)",
-    lineHeight: 1.18,
-    fontWeight: 600,
-    letterSpacing: "-0.03em",
-    color: "#fff7ef",
-  },
-  minimalSubtitle: {
-    margin: 0,
-    maxWidth: 320,
-    fontSize: 16,
-    lineHeight: 1.5,
-    color: "rgba(255,247,239,0.78)",
-  },
-  minimalHint: {
-    margin: 0,
-    maxWidth: 300,
-    fontSize: 14,
-    lineHeight: 1.45,
-    color: "rgba(255,247,239,0.58)",
-  },
-  minimalCountdown: {
-    margin: 0,
-    fontSize: 15,
-    lineHeight: 1.4,
-    color: "rgba(255,247,239,0.82)",
-  },
-  minimalError: {
-    margin: 0,
-    maxWidth: 320,
-    fontSize: 14,
-    lineHeight: 1.45,
-    color: "#ffb4a8",
-  },
-  minimalOAuthStack: {
-    display: "grid",
-    gap: 10,
-    width: "100%",
-    maxWidth: 280,
-  },
-  minimalPrimary: {
-    marginTop: 4,
-    border: "1px solid rgba(230,180,141,0.92)",
-    background: "linear-gradient(180deg, #f1c6a3, #dca778)",
-    color: "#17100d",
-    borderRadius: 999,
-    minWidth: 160,
-    padding: "15px 30px",
-    fontSize: 16,
-    fontWeight: 800,
-    cursor: "pointer",
-    boxShadow: "0 14px 32px rgba(220,167,120,0.18)",
-  },
-  minimalSecondary: {
-    border: "1px solid rgba(255,255,255,0.16)",
-    background: "rgba(255,255,255,0.05)",
-    color: "#fff7ef",
-    borderRadius: 999,
-    minWidth: 160,
-    padding: "14px 26px",
-    fontSize: 15,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  heroCard: {
-    position: "relative",
-    width: "100%",
-    maxWidth: 760,
-    borderRadius: 24,
-    overflow: "hidden",
-    border: "1px solid #4a372f",
-    boxShadow: "0 24px 70px rgba(0,0,0,0.4)",
-  },
-  backdrop: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "linear-gradient(180deg, rgba(30,23,20,0.65), rgba(19,15,14,0.88)), url('/start/hero-memory-sanctuary.svg')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-  },
-  videoBackdrop: {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    opacity: 0.42,
-    filter: "saturate(0.88) contrast(0.95)",
-  },
-  content: {
-    position: "relative",
-    padding: 28,
-    display: "grid",
-    gap: 14,
-    color: "#f8efe7",
-    fontFamily: "Inter, system-ui, sans-serif",
-  },
-  kicker: {
-    margin: 0,
-    textTransform: "uppercase",
-    letterSpacing: "0.2em",
-    fontSize: 12,
-    color: "#d9c3b3",
-  },
-  title: {
-    margin: 0,
-    fontSize: 36,
-    lineHeight: 1.25,
-    fontWeight: 600,
-  },
-  subtitle: {
-    margin: 0,
-    fontSize: 18,
-    color: "#e7d2c3",
-  },
-  ringMarkWrap: {
-    position: "relative",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    minHeight: 88,
-    margin: "2px 0 8px",
-  },
-  ringMarkWrapHero: {
-    minHeight: 150,
-    margin: "0 0 4px",
-  },
-  ringHalo: {
-    position: "absolute",
-    width: 92,
-    height: 92,
-    borderRadius: 999,
-    border: "2px solid rgba(240,194,158,0.28)",
-    animation: "havenStartRingHalo 2.4s ease-out infinite",
-    pointerEvents: "none",
-  },
-  ringHaloHero: {
-    width: 142,
-    height: 142,
-    borderColor: "rgba(240,194,158,0.22)",
-  },
-  ringSvg: {
-    position: "relative",
-    animation: "havenStartRingGlow 2.2s ease-in-out infinite",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    marginBottom: 4,
-    minHeight: 28,
-  },
-  topBarLink: {
-    color: "#e7d2c3",
-    fontSize: 14,
-    fontWeight: 600,
-    textDecoration: "none",
-    letterSpacing: "0.02em",
-  },
-  sealCountdownLine: {
-    margin: "4px 0 0",
-    textAlign: "center",
-    fontSize: 14,
-    color: "#f0c29e",
-    letterSpacing: "0.04em",
-  },
-  sealFooter: {
-    marginTop: 8,
-    paddingTop: 12,
-    borderTop: "1px solid rgba(255,255,255,0.12)",
-    display: "grid",
-    gap: 10,
-  },
-  sealFooterSecurity: {
-    margin: 0,
-    fontSize: 12,
-    lineHeight: 1.5,
-    color: "#cbb09f",
-  },
-  sealFooterActions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  sealFooterSingleCta: {
-    justifySelf: "start",
-    maxWidth: "100%",
-  },
-  sealFooterDanger: {
-    border: "1px solid rgba(255,157,137,0.55)",
-    background: "rgba(72, 29, 25, 0.45)",
-    color: "#ffded8",
-    borderRadius: 999,
-    padding: "10px 14px",
-    fontWeight: 700,
-    cursor: "pointer",
-    fontSize: 14,
-  },
-  sdmSuccessMark: {
-    margin: 0,
-    fontSize: 36,
-    lineHeight: 1,
-    color: "#9fd7bd",
-    textAlign: "center",
-  },
-  nfcDiagramWrap: {
-    display: "flex",
-    justifyContent: "center",
-    margin: "4px 0 2px",
-  },
-  nfcSvg: {
-    maxWidth: "100%",
-    height: "auto",
-  },
-  privacyLead: {
-    margin: 0,
-    fontSize: 15,
-    lineHeight: 1.6,
-    color: "#e8d7cb",
-  },
-  primaryButton: {
-    border: "1px solid #d9a67a",
-    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
-    color: "#1b1411",
-    borderRadius: 999,
-    padding: "14px 18px",
-    fontSize: 16,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  secondaryButton: {
-    border: "1px solid #5b4438",
-    background: "transparent",
-    color: "#f8efe7",
-    borderRadius: 999,
-    padding: "12px 16px",
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  linkLine: {
-    margin: 0,
-    color: "#d9c3b3",
-    fontSize: 14,
-  },
-  complianceLine: {
-    margin: 0,
-    color: "#cbb09f",
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-  link: {
-    color: "#f0c29e",
-  },
-  tipCard: {
-    marginTop: 6,
-    border: "1px solid #5a3b30",
-    borderRadius: 14,
-    background: "rgba(26, 20, 18, 0.8)",
-    padding: 12,
-    display: "grid",
-    gap: 6,
-  },
-  tipCardIosStrong: {
-    borderColor: "#d9a67a",
-    boxShadow: "0 0 0 1px rgba(217,166,122,0.28) inset",
-  },
-  trustCard: {
-    border: "1px solid #5a3b30",
-    borderRadius: 14,
-    background: "rgba(26, 20, 18, 0.8)",
-    padding: 12,
-    display: "grid",
-    gap: 6,
-  },
-  trustTitle: {
-    margin: 0,
-    fontSize: 13,
-    color: "#f0c29e",
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-  },
-  trustList: {
-    margin: 0,
-    paddingLeft: 18,
-    color: "#d9c3b3",
-    lineHeight: 1.55,
-  },
-  tipTitle: {
-    margin: 0,
-    fontSize: 13,
-    color: "#f0c29e",
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-  },
-  tipBody: {
-    margin: 0,
-    color: "#d9c3b3",
-    lineHeight: 1.5,
-  },
-  tipList: {
-    margin: 0,
-    paddingLeft: 18,
-    color: "#d9c3b3",
-    lineHeight: 1.55,
-  },
-  tipFootnote: {
-    margin: 0,
-    color: "#cbb09f",
-    fontSize: 12,
-  },
-  sealGuideCard: {
-    display: "grid",
-    gap: 14,
-    padding: "22px 18px",
-    borderRadius: 16,
-    border: "1px solid rgba(240, 194, 158, 0.45)",
-    background: "rgba(48, 34, 27, 0.88)",
-    textAlign: "center",
-  },
-  sealGuideTitle: {
-    margin: 0,
-    fontSize: 26,
-    fontWeight: 600,
-    lineHeight: 1.2,
-    color: "#fff7ef",
-  },
-  sealGuideBody: {
-    margin: 0,
-    fontSize: 17,
-    lineHeight: 1.5,
-    color: "#e7d2c3",
-  },
-  sealGuidePrimary: {
-    marginTop: 4,
-    border: "1px solid #d9a67a",
-    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
-    color: "#1b1411",
-    borderRadius: 999,
-    padding: "14px 22px",
-    fontSize: 16,
-    fontWeight: 700,
-    cursor: "pointer",
-    width: "100%",
-    maxWidth: 280,
-    justifySelf: "center",
-  },
-  sealWaitSignedInNote: {
-    margin: "10px 0 0",
-    fontSize: 14,
-    lineHeight: 1.45,
-    color: "rgba(196, 220, 196, 0.92)",
-    maxWidth: 360,
-  },
-  sealWaitTapHint: {
-    margin: "12px 0 0",
-    fontSize: 14,
-    lineHeight: 1.5,
-    color: "rgba(220, 210, 180, 0.95)",
-    maxWidth: 380,
-  },
-  sealGuideInlineLink: {
-    border: "none",
-    background: "none",
-    padding: 0,
-    margin: 0,
-    color: "#e6b48d",
-    fontSize: "inherit",
-    fontWeight: 600,
-    textDecoration: "underline",
-    cursor: "pointer",
-  },
-  sealScanRingBtn: {
-    marginTop: 14,
-    alignSelf: "center",
-    borderRadius: 999,
-    border: "1px solid rgba(217, 166, 122, 0.65)",
-    background: "rgba(217, 166, 122, 0.12)",
-    color: "#f8efe7",
-    padding: "10px 18px",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  ringTapError: {
-    margin: "10px 0 0",
-    fontSize: 14,
-    lineHeight: 1.45,
-    color: "#ffcab5",
-    maxWidth: 360,
-  },
-  notice: {
-    margin: 0,
-    minHeight: 18,
-    color: "#ffcab5",
-    fontSize: 13,
-  },
-  claimCard: {
-    border: "1px solid #d9a67a",
-    borderRadius: 12,
-    background: "rgba(48, 34, 27, 0.75)",
-    padding: 12,
-    display: "grid",
-    gap: 8,
-  },
-  claimTitle: {
-    margin: 0,
-    color: "#f0c29e",
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-    fontWeight: 700,
-  },
-  claimBody: {
-    margin: 0,
-    color: "#f8efe7",
-    lineHeight: 1.5,
-    fontSize: 14,
-  },
-  sdmCard: {
-    border: "1px solid #d9a67a",
-    borderRadius: 18,
-    background:
-      "linear-gradient(135deg, rgba(64, 43, 32, 0.96), rgba(28, 22, 19, 0.92))",
-    padding: 18,
-    display: "grid",
-    gap: 10,
-    boxShadow: "0 18px 46px rgba(0,0,0,0.32)",
-  },
-  sdmCardNew: {
-    borderColor: "#e9b987",
-    boxShadow:
-      "0 18px 46px rgba(0,0,0,0.32), 0 0 0 1px rgba(233,185,135,0.28) inset",
-  },
-  sdmCardTrusted: {
-    borderColor: "#9fd7bd",
-    background:
-      "linear-gradient(135deg, rgba(31, 64, 49, 0.86), rgba(24, 27, 23, 0.92))",
-    boxShadow:
-      "0 18px 46px rgba(0,0,0,0.32), 0 0 0 1px rgba(159,215,189,0.22) inset",
-  },
-  sdmCardSeal: {
-    borderColor: "#f0c29e",
-    background:
-      "linear-gradient(135deg, rgba(82, 48, 35, 0.94), rgba(30, 22, 20, 0.94))",
-    boxShadow:
-      "0 18px 46px rgba(0,0,0,0.32), 0 0 0 1px rgba(240,194,158,0.34) inset",
-  },
-  sdmCardFailed: {
-    borderColor: "#ff9d89",
-    background:
-      "linear-gradient(135deg, rgba(72, 29, 25, 0.92), rgba(30, 20, 18, 0.94))",
-    boxShadow:
-      "0 18px 46px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,157,137,0.26) inset",
-  },
-  sdmEyebrow: {
-    margin: 0,
-    color: "#f0c29e",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.16em",
-    fontWeight: 800,
-  },
-  sdmTitle: {
-    margin: 0,
-    color: "#fff7ef",
-    fontSize: 24,
-    lineHeight: 1.18,
-    fontWeight: 800,
-  },
-  sdmBody: {
-    margin: 0,
-    color: "#f8efe7",
-    lineHeight: 1.55,
-    fontSize: 15,
-  },
-  sdmHint: {
-    margin: 0,
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: "#cbb09f",
-  },
-  sdmLeaveWarn: {
-    margin: "8px 0 0",
-    fontSize: 13,
-    lineHeight: 1.45,
-    color: "#ffcab5",
-  },
-  sdmNextStep: {
-    border: "1px solid rgba(255,255,255,0.16)",
-    borderRadius: 12,
-    background: "rgba(255, 247, 239, 0.08)",
-    padding: "10px 12px",
-    display: "grid",
-    gap: 4,
-    color: "#fff7ef",
-    lineHeight: 1.45,
-    fontSize: 14,
-  },
-  sdmNextLabel: {
-    color: "#f0c29e",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.14em",
-    fontWeight: 800,
-  },
-  sdmActions: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 2,
-  },
-  sdmPrimaryAction: {
-    border: "1px solid #d9a67a",
-    background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
-    color: "#1b1411",
-    borderRadius: 999,
-    padding: "10px 14px",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  sdmSecondaryAction: {
-    border: "1px solid rgba(255,255,255,0.22)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#fff7ef",
-    borderRadius: 999,
-    padding: "10px 14px",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  sdmSecondaryActionQuiet: {
-    opacity: 0.72,
-    fontWeight: 600,
-    fontSize: 14,
-  },
-};

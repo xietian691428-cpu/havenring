@@ -5,9 +5,20 @@
 
 ---
 
-## 1. Product posture (must not change)
+## 当前生效产品方向（2026-06 更新）
 
-- Primary flow is **prewritten ring + claim**.
+- **Hardware unchanged:** prewritten SDM URL → `/start` for **bind** and **Seal** verification.
+- **Ring is not a login device** — OAuth opens `/app`; ring tap does not replace sign-in.
+- **Daily PWA surface:** `/app` (Timeline, compose, seal) — not “tap ring to open vault.”
+- **User-facing setup:** optional bind; no mandatory ring gate before app use (Phase 1 UX).
+
+Product SSOT: `docs/core-definition.md`.
+
+---
+
+## 1. Product posture (must not change — hardware / factory)
+
+- Primary flow is **prewritten ring + claim/bind**.
 - NFC write is a **fallback/power feature** used in recovery only.
 - Users must not perceive ring setup as a required configuration task.
 - No third-party tools may appear in the normal path to first seal.
@@ -15,7 +26,8 @@
 ## 2. Entry-point model
 
 ### 2.1 Primary surface
-- **PWA** is the daily product surface (compose, seal, vault, wipe).
+- **PWA `/app`** is the daily product surface (browse Timeline, compose, seal, settings).
+- **`/start`** is NFC-only: bind + seal confirmation (not daily login).
 
 ### 2.2 Secondary surface
 - **Native app** exists for:

@@ -1,6 +1,10 @@
 import { classifySyncFailure } from "@/lib/sync-failure";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { backupToCloud, isCloudBackupReady } from "./cloudBackupService";
+import {
+  backupToCloud,
+  CLOUD_STORAGE_FULL_MESSAGE,
+  isCloudBackupReady,
+} from "./cloudBackupService";
 import {
   clearRingSyncQueue,
   enqueueRingSync,
@@ -227,6 +231,11 @@ export async function syncRingScopedCaches(options = {}) {
             });
             syncedIds.push(item.id);
           } catch (error) {
+            const msg = error instanceof Error ? error.message : "";
+            if (msg === CLOUD_STORAGE_FULL_MESSAGE) {
+              console.warn("[haven-ring] cloud backup quota full; queue retained");
+              break;
+            }
             console.warn("[haven-ring] optional cloud backup skipped:", error);
           }
         }

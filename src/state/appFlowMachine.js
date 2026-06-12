@@ -1,24 +1,13 @@
-import { RING_SETUP_DISMISSED_KEY } from "../components/RingSetupWizard";
 import { readPwaInstallDeferred, writePwaInstallDeferred } from "../lib/pwaInstallKeys";
 
 const MAIN_STATES = {
   BOOTSTRAP: "BOOTSTRAP",
   AUTH_GATE: "AUTH_GATE",
-  RING_SETUP_GATE: "RING_SETUP_GATE",
   SYNC_GATE: "SYNC_GATE",
   PWA_INSTALL_GATE: "PWA_INSTALL_GATE",
   READY: "READY",
   RECOVERY: "RECOVERY",
 };
-
-function isRingSetupDismissedInStorage() {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 function resolveMainState(ctx) {
   if (!ctx.bootstrapped) return MAIN_STATES.BOOTSTRAP;
@@ -33,9 +22,7 @@ function resolveMainState(ctx) {
   if (needsPwaInstall) {
     return MAIN_STATES.PWA_INSTALL_GATE;
   }
-  if (ctx.hasSession && !ctx.hasBoundRing && !isRingSetupDismissedInStorage()) {
-    return MAIN_STATES.RING_SETUP_GATE;
-  }
+  // Ring setup is optional — users can bind from Settings / Rings when ready.
   return MAIN_STATES.READY;
 }
 

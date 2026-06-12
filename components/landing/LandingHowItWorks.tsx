@@ -39,10 +39,10 @@ export function LandingHowItWorks() {
             How it works
           </p>
           <h2 className="mt-5 max-w-3xl text-balance text-[clamp(1.85rem,4.5vw,2.75rem)] font-medium leading-[1.15] tracking-[0.02em] text-white">
-            Preserve what matters in four quiet steps.
+            Your private memory sanctuary in four steps.
           </h2>
           <p className="mt-5 max-w-2xl text-pretty text-[15px] leading-relaxed text-white/48">
-            Write. Touch. Seal. Treasure. A ring, a sanctuary.
+            Write. Touch to seal. Treasure. No ring required to browse.
           </p>
         </LandingFadeIn>
 

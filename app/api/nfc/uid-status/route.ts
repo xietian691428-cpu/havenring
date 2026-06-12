@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
   const linked = Boolean(row?.user_id && row.is_active);
   const nonTransferable = Boolean(row?.user_id && (!row.is_active || row.retired_at));
   const ownedByYou = Boolean(linked && viewerId && row?.user_id === viewerId);
+  /** @deprecated Legacy pair scope — not implicit memory sharing (Phase 5). */
   let linkedToYourHaven = false;
 
   if (linked && viewerId && row?.haven_id) {

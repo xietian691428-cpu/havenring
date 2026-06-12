@@ -37,7 +37,7 @@ const EN = {
   welcomeBack: "Welcome back",
   nfcRegionLabel: "Ring sign-in",
   nfcLede:
-    "Either linked ring can open your Haven and add new memories. You can link up to 2 rings for one private pair; sealed memories stay unchanged.",
+    "Your memories live here after you sign in. Touch your ring when you seal — not to open the app.",
   nfcCta: "Continue with ring",
   nfcScanning: "Hold your ring near the device…",
   nfcErrGeneric: "Could not sign in with this ring.",
@@ -55,7 +55,7 @@ const EN = {
   nfcHelpGeneric:
     "Try once more with a steady ring touch. If it still fails, check network and ring binding status.",
   cloudSourceNote:
-    "Your Haven membership is the source of shared access. Local data helps with offline use and can be rebuilt when your account and keys are available.",
+    "Local-first on this device. Cloud backup and sharing are Plus and explicit.",
   integrityMismatch:
     "Detected data inconsistency. Cloud is the source of truth, please resync now.",
   resyncNow: "Resync",

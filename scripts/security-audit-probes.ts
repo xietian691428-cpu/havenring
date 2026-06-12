@@ -129,7 +129,7 @@ async function testStagingOversize() {
     if ([401, 413].includes(post.status)) {
       record("staging-oversize", "PASS", `Large body rejected or unauth (${post.status})`);
     } else {
-      record("staging-oversize", "WARN", `Got ${post.status} — verify 2MB cap`);
+      record("staging-oversize", "WARN", `Got ${post.status} — verify 20MB cap`);
     }
   } catch (e) {
     record("staging-oversize", "SKIP", String(e));

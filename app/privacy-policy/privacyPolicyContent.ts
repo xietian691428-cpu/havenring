@@ -23,7 +23,7 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
       heading: "1. Data We Collect",
       bullets: [
         "Account information (via Apple Sign In or Google Sign In)",
-        "Haven membership information when two partners choose to share one private Haven",
+        "Invite and ring-binding metadata when you optionally link a second ring to another account",
         "Ring binding metadata, including a hashed NFC ring identifier. We do not store raw NFC UIDs in plaintext.",
         "Memories you create (text, photos, videos, audio) — stored primarily on your device",
         "Technical data (device type, app version, usage statistics)",
@@ -34,8 +34,8 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
       bullets: [
         "Free plan: memories stay on your device only, in encrypted local storage (IndexedDB).",
         "Seal with Ring: while you complete a seal, an encrypted copy of your draft may be held on our servers for up to 10 minutes, then deleted automatically after the ring confirms or if the seal is cancelled.",
-        "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync for your private pair where available.",
-        "For a shared Haven, each partner uses their own account. Members of the same Haven may access shared sealed memories according to the product's ring and device-verification rules.",
+        "Haven Plus: optional end-to-end encrypted cloud backup (50 GB cap per account) and explicit sharing when you choose.",
+        "Each person uses their own Apple or Google account. Shared memories are never automatic — only when you explicitly share with Plus.",
         "We cannot access your memory content where client-side encryption applies.",
         "Free plan includes about 2 GB of local storage. Plus includes expanded storage and optional cloud capacity where offered.",
         "Cloud features may be limited or in beta while full E2EE sync rolls out.",
@@ -57,13 +57,13 @@ const FINAL_PRIVACY_POLICY: PrivacyPolicyContent = {
         "You can delete individual memories or your entire account.",
         "You can retire ring access. Retired rings are not reassigned to another Haven.",
         "You can stop cloud sync and delete cloud data.",
-        "If you are a member of a shared Haven, privacy requests may affect your account and contributions while preserving another member's lawful rights and copies where applicable.",
+        "If you have explicitly shared memories with someone, privacy requests may affect copies according to product rules and applicable law.",
       ],
     },
     {
-      heading: "5. Shared Haven Consent",
+      heading: "5. Sharing & Invites",
       body:
-        "A shared Haven requires an explicit invitation and acceptance. Partners do not share Apple or Google logins. Each member remains responsible for their own account, device security, and privacy choices.",
+        "Sharing a memory requires Haven Plus and your explicit action. A second ring requires an invite accepted on a separate account. Never share Apple or Google logins.",
     },
     {
       heading: "6. Important Disclaimer",

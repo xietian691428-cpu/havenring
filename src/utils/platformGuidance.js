@@ -18,14 +18,14 @@ export function getPlatformGuidance(platformInput) {
     startTitle: hero.title,
     startSubtitle: hero.subtitle,
     ringClaimLine: isIos
-      ? "Your ring has been pre-configured to open this sanctuary. We will now connect it to your account."
+      ? "Link your ring for sealing."
       : isAndroid
-        ? "Let's connect and configure your ring."
-        : "Open Haven on your phone to connect your ring.",
+        ? "Link your ring for sealing."
+        : "Open Haven on your phone to link your ring.",
     ringsHint: isIos
-      ? "Touch your ring to quickly access your sanctuary."
+      ? "Touch your ring when you seal a memory."
       : isAndroid
-        ? "Touch your ring to quickly access your sanctuary. You can also rewrite the ring link here."
+        ? "Touch your ring when you seal. You can rewrite the ring link here."
         : "Ring tap works on supported mobile browsers after install.",
     sealPrimaryMode: isIos ? "secure_save" : "ring_seal",
   };

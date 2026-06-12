@@ -7,6 +7,7 @@ export const API_RATE_POLICIES = {
   sealStaging: { maxRequests: 20, windowMs: 60_000 },
   sealStagingCreate: { maxRequests: 6, windowMs: 60_000 },
   sealStagingRead: { maxRequests: 30, windowMs: 60_000 },
+  cloudBackupUpload: { maxRequests: 120, windowMs: 60_000 },
   ringMedium: { maxRequests: 45, windowMs: 60_000 },
   secondaryToken: { maxRequests: 10, windowMs: 60_000 },
 } as const;

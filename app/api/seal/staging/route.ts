@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { API_RATE_POLICIES, enforceUserRateLimit } from "@/lib/api-rate-limit";
-import { isSealStagingApiEnabled } from "@/lib/seal-staging-config";
+import {
+  isSealStagingApiEnabled,
+  resolveSealStagingMaxBytes,
+} from "@/lib/seal-staging-config";
+import { getUserSubscriptionStatus } from "@/lib/subscription";
 import { createSealStagingRecord } from "@/lib/seal-staging-server";
 import { recordSealStagingTelemetry } from "@/lib/seal-staging-telemetry";
 import {
@@ -49,12 +53,15 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = getSupabaseAdminClient();
+    const subscription = await getUserSubscriptionStatus(admin, user.id);
+    const maxBytes = resolveSealStagingMaxBytes(subscription.tier === "plus");
     try {
       const row = await createSealStagingRecord({
         userId: user.id,
         draftIds,
         ciphertextB64: ciphertext,
         iv,
+        maxBytes,
       });
       return NextResponse.json({
         staging_id: row.id,

@@ -1,6 +1,6 @@
 /**
  * Seal prep is tied to an active foreground session. Background / lock screen ends
- * the armed window so a later ring tap opens Haven (daily_access), not seal.
+ * the armed window so a later idle ring tap does not auto-seal (legacy daily_access scene).
  */
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";

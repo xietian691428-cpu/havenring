@@ -171,6 +171,9 @@ export function PartnerInvitePanel({
               {t.invitePanelTitle}
             </h1>
             <p style={styles.subtitle}>{t.invitePanelSubtitle}</p>
+            {t.legacyInviteBanner ? (
+              <p style={styles.legacyBanner}>{t.legacyInviteBanner}</p>
+            ) : null}
           </div>
 
           {phase === "preparing" ? (
@@ -318,6 +321,12 @@ const styles = {
     fontSize: 15,
     lineHeight: 1.55,
     color: "rgba(248, 239, 231, 0.72)",
+  },
+  legacyBanner: {
+    margin: "12px 0 0",
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "rgba(200, 175, 155, 0.85)",
   },
   checklist: {
     margin: 0,

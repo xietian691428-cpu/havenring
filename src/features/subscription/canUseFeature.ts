@@ -25,6 +25,7 @@ export const canUseFeature = (
 
     case "cloud_backup":
     case "cloud_sync":
+      // Plus tier only; 50 GB hard cap enforced in /api/cloud-backup/*.
       return Boolean(e.canUseCloudBackup);
 
     case "expand_ring_slots":

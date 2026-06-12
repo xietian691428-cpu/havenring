@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser(req);
     if (isAnonymousUser(user)) {
       return NextResponse.json(
-        { error: "A full Haven account is required to invite a partner." },
+        { error: "Sign in to send a legacy second-ring invite." },
         { status: 403 }
       );
     }

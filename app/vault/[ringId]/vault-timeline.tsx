@@ -120,7 +120,7 @@ export function VaultTimeline({ ringId }: Props) {
       if (!data.session?.access_token) {
         setLoad({
           kind: "denied",
-          reason: "Please sign in to view your Haven history.",
+          reason: "Please sign in to view your memories.",
         });
         return;
       }
@@ -211,7 +211,7 @@ export function VaultTimeline({ ringId }: Props) {
       if (!accessToken) {
         setLoad({
           kind: "denied",
-          reason: "Please sign in to view your Haven history.",
+          reason: "Please sign in to view your memories.",
         });
         return;
       }

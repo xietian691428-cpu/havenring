@@ -19,20 +19,18 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "common.high_contrast_off": "HIGH CONTRAST: OFF",
     "common.toggle_high_contrast_mode": "Toggle high contrast mode",
     "common.help": "Help",
-    "home.title.line1": "Write one thing.",
-    "home.title.line2": "Touch your ring to seal it.",
+    "home.title.line1": "Your private memory sanctuary.",
+    "home.title.line2": "Sign in to read and write. Touch your ring only when you seal.",
     "home.ring.linked": "Ring linked",
     "home.ring.unlinked": "No ring linked",
     "home.cta.prepare": "Prepare to seal",
     "home.cta.write_new": "Write new",
     "home.claim.hint": "Not linked yet?",
     "home.claim.cta": "Tap your ring to claim",
-    "home.vault.hint":
-      "Tap your ring anytime for quick access to your sealed moments. Your account—not the ring alone—protects everything.",
-    "home.vault.cta": "Tap ring to open your Haven",
-    "home.vault.open": "Open Haven history",
-    "home.seal.hint":
-      "Prepare to seal, then tap your ring to confirm. The ring is a shortcut; serious changes still need your account and this device checks.",
+    "home.vault.hint": "Sign in to browse your memories. Touch your ring when you seal.",
+    "home.vault.cta": "Go to Memories",
+    "home.vault.open": "Memories",
+    "home.seal.hint": "Write, then touch your ring to seal.",
     "home.state.encrypting": "Encrypting...",
     "home.state.awaiting.title": "Touch your ring to seal",
     "home.state.awaiting.body":
@@ -42,10 +40,9 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "hub.error.title": "Could not read the ring",
     "hub.error.missing_token": "Missing token.",
     "hub.error.generic": "Unknown error.",
-    "hub.error.ring_inactive":
-      "Ring quick access is unavailable right now. Please continue with sign-in.",
-    "claim.title": "Continue to Haven",
-    "claim.subtitle": "Quick access",
+    "hub.error.ring_inactive": "Sign in to continue. The ring is for sealing only.",
+    "claim.title": "Continue",
+    "claim.subtitle": "Ring recovery",
     "claim.reason.ring_inactive":
       "This ring has not been activated for your account yet.",
     "claim.reason.nfc_unavailable":
@@ -53,8 +50,7 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "claim.reason.permission_denied":
       "NFC permission is unavailable. Try another device.",
     "claim.reason.unknown": "We could not verify this ring yet.",
-    "claim.next":
-      "Continue with sign-in to unlock Haven on this phone.",
+    "claim.next": "Sign in to continue.",
     "claim.cta.claim": "Continue",
     "claim.cta.claiming": "Continuing...",
     "claim.error.auth_required": "Please sign in to continue.",
@@ -74,13 +70,13 @@ const MESSAGES: Record<Locale, Dictionary> = {
     "help.title": "Rings, privacy, and your account",
     "help.local_only.title": "Local-first by default",
     "help.local_only.body":
-      "Sealed content is encrypted on this device for speed and privacy. The ring is a quick-access shortcut, not a replacement for your account.",
+      "Sealed content stays encrypted on this device. The ring confirms a seal — sign-in opens the app.",
     "help.recovery.title": "If something is lost or broken",
     "help.recovery.body":
-      "Your Haven membership protects shared access. For a ring or device issue, retire a lost ring credential from a trusted device as soon as you can.",
+      "Sign in on a trusted device to recover. Retire a lost ring credential as soon as you can.",
     "help.optional_cloud.title": "Optional cross-device backup",
     "help.optional_cloud.body":
-      "You can turn on optional Sign in with Apple or Google in Settings to sync backup across devices. Each partner keeps their own account; the physical ring is not a shared login.",
+      "Plus adds optional encrypted cloud backup (50 GB cap per account). Memories stay on each device unless you back up. One account per person.",
   },
   fr: {
     "common.return": "Retour",

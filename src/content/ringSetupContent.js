@@ -210,7 +210,7 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Weiteren Ring hinzufugen",
     doneToHaven: "Zu meinem Bereich",
     limitTitle: "Ring-Limit",
-    limitBody: "Maximal zwei Ringe pro Haven, einer pro Partnerkonto.",
+    limitBody: "Maximal zwei Ringe, eines pro Konto.",
   },
   it: {
     ...EN,
@@ -235,6 +235,6 @@ export const RING_SETUP_CONTENT = {
     addAnother: "Aggiungi un altro anello",
     doneToHaven: "Vai al mio spazio",
     limitTitle: "Limite anelli",
-    limitBody: "Massimo due anelli per Haven, uno per account partner.",
+    limitBody: "Massimo due anelli, uno per account.",
   },
 };

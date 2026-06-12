@@ -12,11 +12,6 @@ import {
   type TouchEvent,
 } from "react";
 import { AppChrome, type ActiveTab } from "./AppChrome";
-import {
-  RingSetupWizard,
-  RING_SETUP_DISMISSED_KEY,
-} from "../components/RingSetupWizard";
-import { RingSetupErrorBoundary } from "../components/RingSetupErrorBoundary";
 import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
 import { useMemories } from "../hooks/useMemories";
@@ -105,8 +100,6 @@ export function AppRouter() {
   const [hideNfcPrompt, setHideNfcPrompt] = useState(false);
   const [quickSigningIn, setQuickSigningIn] = useState(false);
   const [quickSignInError, setQuickSignInError] = useState("");
-  const [ringSetupOpen, setRingSetupOpen] = useState(false);
-  const [ringSetupKey, setRingSetupKey] = useState(0);
   const [temporaryModeBanner, setTemporaryModeBanner] = useState(() =>
     isTemporaryDeviceModeEnabled()
   );
@@ -133,8 +126,9 @@ export function AppRouter() {
   }
 
   function openRingSetup() {
-    setRingSetupKey((k) => k + 1);
-    setRingSetupOpen(true);
+    if (typeof window !== "undefined") {
+      window.location.assign("/bind-ring");
+    }
   }
 
   const selectedMemory = useMemo(() => {
@@ -149,10 +143,6 @@ export function AppRouter() {
   const flowPrimaryAction = useCallback(
     (intent: string = "primary") => {
       if (!flowPrimaryUi) return;
-      if (flowState.mainState === "RING_SETUP_GATE") {
-        openRingSetup();
-        return;
-      }
       if (flowState.mainState === "SYNC_GATE") {
         void syncNow();
         return;
@@ -205,31 +195,12 @@ export function AppRouter() {
 
   function handleAfterOnboarding(detail = {}) {
     if (typeof window === "undefined") return;
-    const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
-    if (detail.choice === "bind_ring" && !dismissed) {
-      openRingSetup();
-      return;
-    }
-    if (detail.choice === "face_only" || detail.outcome === "skipped") {
-      void refresh();
-      navigateTo({ name: "timeline", memoryId: null }, "forward");
-      return;
-    }
-    if (!dismissed && boundRingCount === 0) {
+    if (detail.choice === "bind_ring") {
       openRingSetup();
       return;
     }
     void refresh();
     navigateTo({ name: "timeline", memoryId: null }, "forward");
-  }
-
-  function handleRingSetupFinished(payload: { nickname?: string } | undefined) {
-    const nickname = payload?.nickname ?? "friend";
-    scheduleWelcomeToast({ nickname });
-    setRingSetupOpen(false);
-    navigateTo({ name: "timeline", memoryId: null }, "forward");
-    void refresh();
-    bumpRingRegistry();
   }
 
   const activeTab = useMemo((): ActiveTab => {
@@ -380,12 +351,10 @@ export function AppRouter() {
       params.get("open") === "ring" ||
       params.get("bind") === "1";
     if (openBind) {
-      openRingSetup();
       params.delete("open");
       params.delete("bind");
       const qs = params.toString();
-      const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
-      window.history.replaceState({}, "", nextUrl);
+      window.location.assign(qs ? `/bind-ring?${qs}` : "/bind-ring");
       return;
     }
     const openNew =
@@ -483,7 +452,7 @@ export function AppRouter() {
       type: "RINGS_CHANGED",
       hasBoundRing: getBoundRingCount() > 0,
     });
-  }, [supabaseSession, ringSetupOpen, route.name, dispatchFlow]);
+  }, [supabaseSession, route.name, dispatchFlow]);
 
   useEffect(() => {
     dispatchFlow({ type: "SYNC_STATUS", syncing: Boolean(syncing) });
@@ -525,15 +494,6 @@ export function AppRouter() {
     route.name,
     dispatchFlow,
   ]);
-
-  useEffect(() => {
-    if (flowState.mainState !== "RING_SETUP_GATE") return;
-    if (typeof window === "undefined") return;
-    const dismissed = localStorage.getItem(RING_SETUP_DISMISSED_KEY) === "1";
-    if (dismissed || ringSetupOpen) return;
-    setRingSetupKey((k) => k + 1);
-    setRingSetupOpen(true);
-  }, [flowState.mainState, ringSetupOpen]);
 
   useEffect(() => {
     const onModeChanged = (evt: Event) => {
@@ -842,27 +802,7 @@ export function AppRouter() {
     );
   }
 
-  return (
-    <>
-      {renderWithShell(mainContent)}
-      <RingSetupErrorBoundary>
-        <RingSetupWizard
-          key={ringSetupKey}
-          open={ringSetupOpen}
-          locale={locale}
-          onClose={() => setRingSetupOpen(false)}
-          onFinished={handleRingSetupFinished}
-          onTestSeal={() => {
-            setRingSetupOpen(false);
-            navigateTo({ name: "new", memoryId: null, autoSeal: true }, "forward");
-          }}
-          onOpenSettings={() =>
-            navigateTo({ name: "settings", memoryId: null }, "forward")
-          }
-        />
-      </RingSetupErrorBoundary>
-    </>
-  );
+  return renderWithShell(mainContent);
 }
 
 function FadePage({

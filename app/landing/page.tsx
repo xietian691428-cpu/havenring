@@ -4,9 +4,9 @@ import { SITE_ORIGIN } from "@/lib/site";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
-  title: "HavenRing — Keep what matters.",
+  title: "HavenRing — Your Private Memory Sanctuary",
   description:
-    "A sacred vessel for private moments — not another notes app. Seal what matters with HavenRing.",
+    "Write precious moments. Touch your ring to seal. Local-first, encrypted on your device.",
 };
 
 export default function LandingAlternateRoute() {

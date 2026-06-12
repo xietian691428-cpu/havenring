@@ -54,9 +54,8 @@ export function LandingTheRing() {
                 A key to your sanctuary.
               </h2>
               <p className="text-lg text-[#F5F5F5]/80">
-                Crafted for daily wear, each HavenRing becomes a private key for personal records
-                and couple memories. Couples link one ring per person to one shared Haven, with
-                separate accounts.
+                Crafted for daily wear. Optional bind — your ring confirms a seal, not your
+                sign-in. One account per person.
               </p>
             </div>
 

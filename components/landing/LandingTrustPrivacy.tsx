@@ -8,17 +8,22 @@ const PILLARS = [
   {
     icon: "🔒",
     title: "Local First",
-    body: "Your memories stay on your device by default.",
+    body: "Your private sanctuary lives on your device by default.",
   },
   {
     icon: "🔑",
-    title: "Physical Key",
-    body: "Only you hold the ring that unlocks the ritual.",
+    title: "Ring for Sealing",
+    body: "Optional bind. Touch your ring only for the seal ritual — not daily sign-in.",
   },
   {
     icon: "🛡️",
-    title: "End-to-End Encrypted",
-    body: "When cloud sync is enabled, we still cannot access your content.",
+    title: "Sealed & Private",
+    body: "Strong encryption on supported flows. Once sealed, a memory cannot be edited.",
+  },
+  {
+    icon: "✨",
+    title: "Share (Plus)",
+    body: "One account per person. Sharing a memory is explicit — never by default.",
   },
 ] as const;
 
@@ -43,7 +48,7 @@ export function LandingTrustPrivacy() {
           </h2>
         </motion.div>
 
-        <div className="grid gap-10 md:grid-cols-3">
+        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           {PILLARS.map((pillar, i) => (
             <motion.div
               key={pillar.title}

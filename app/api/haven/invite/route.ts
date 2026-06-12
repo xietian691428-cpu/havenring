@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser(req);
     if (isAnonymousUser(user)) {
       return NextResponse.json(
-        { error: "A full Haven account is required to invite a partner." },
+        { error: "Sign in to create a legacy second-ring invite.", code: "AUTH_REQUIRED" },
         { status: 403 }
       );
     }
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     if (!havenId) {
       return NextResponse.json(
-        { error: "Bind your first ring before inviting a partner.", code: "NO_HAVEN" },
+        { error: "Bind your ring first.", code: "NO_HAVEN" },
         { status: 409 }
       );
     }

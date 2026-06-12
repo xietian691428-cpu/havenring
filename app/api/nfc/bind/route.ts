@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     if ((existingUserRings?.length ?? 0) >= 1) {
       return NextResponse.json(
         {
-          error: "Each partner account can link one active ring. Invite your partner to link their own ring with their own account.",
+          error: "Each account can link one active ring. Invite someone with their own account to add a second ring.",
           code: "RING_LIMIT_REACHED",
           ringLimit: 1,
         },
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
       if (invite.created_by === user.id) {
         return NextResponse.json(
           {
-            error: "Partner invite must be accepted from your partner's own account.",
+            error: "Legacy invite must be accepted on a separate account.",
             code: "INVITE_REQUIRES_SEPARATE_ACCOUNT",
           },
           { status: 409 }
@@ -313,8 +313,8 @@ export async function POST(req: NextRequest) {
       ring: data,
       message:
         role === "member"
-          ? "Your ring is linked to your shared Haven."
-          : "Ring successfully linked. Invite your partner to link their own ring.",
+          ? "Ring linked. Ready for sealing."
+          : "Ring linked. Invite someone with their own account to add a second ring.",
       plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
       plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
       subscription: plusTrial,

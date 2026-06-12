@@ -1,14 +1,27 @@
 /** Seal staging limits and feature flags (server + public client). */
 
-/** Max encrypted payload per seal staging upload (2 MB). */
-export const SEAL_STAGING_MAX_BYTES = 2 * 1024 * 1024;
+/** Max encrypted staging blob (cross-tab handoff, iOS). */
+export const SEAL_STAGING_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Plus users — larger ephemeral staging for cloud handoff. */
+export const SEAL_STAGING_PLUS_MAX_BYTES = 100 * 1024 * 1024;
+
+/** Local finalize / IDB target (client keeps full media here). */
+export const SEAL_LOCAL_MAX_BYTES = 50 * 1024 * 1024;
 
 /** Inline DB storage below this size; larger blobs go to Supabase Storage. */
-export const SEAL_STAGING_DB_INLINE_MAX_BYTES = 256 * 1024;
+export const SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 * 1024;
+
+/** Chunk size for resumable Plus cloud / staging uploads. */
+export const SEAL_CLOUD_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
 export const SEAL_STAGING_BUCKET = "seal-staging";
 
 export const SEAL_STAGING_SIGNED_URL_TTL_SEC = 120;
+
+export function resolveSealStagingMaxBytes(isPlus: boolean): number {
+  return isPlus ? SEAL_STAGING_PLUS_MAX_BYTES : SEAL_STAGING_MAX_BYTES;
+}
 
 function readEnvFlag(name: string, fallback = true): boolean {
   if (typeof process === "undefined") return fallback;

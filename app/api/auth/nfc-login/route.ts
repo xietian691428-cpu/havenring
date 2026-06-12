@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        error: "Ring-only sign-in is disabled for shared Haven pairs. Sign in with your own Apple or Google account.",
+        error: "Ring-only sign-in is disabled. Sign in with your own Apple or Google account.",
         code: "nfc_login_disabled_for_shared_haven",
       },
       { status: 410 }

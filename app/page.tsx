@@ -5,15 +5,15 @@ import { SITE_ORIGIN } from "@/lib/site";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
   title: {
-    default: "HavenRing — Keep what matters.",
+    default: "HavenRing — Your Private Memory Sanctuary",
     template: "%s — HavenRing",
   },
   description:
-    "A private memory ring for personal records and couples. Capture, seal, and treasure memories — no feeds, no followers.",
+    "Your private memory sanctuary. Local-first, encrypted on your device. Optional ring to seal.",
   openGraph: {
-    title: "HavenRing — Keep what matters.",
+    title: "HavenRing — Your Private Memory Sanctuary",
     description:
-      "Capture personal records and couple memories, then seal them with a touch. Private by design.",
+      "Write precious moments. Touch your ring to seal. Plus: optional cloud backup and explicit sharing.",
     url: SITE_ORIGIN,
     siteName: "HavenRing",
     locale: "en_US",
@@ -21,9 +21,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "HavenRing — Keep what matters.",
+    title: "HavenRing — Your Private Memory Sanctuary",
     description:
-      "A ring for personal records and private couple memories. Capture, seal, and treasure what matters.",
+      "Your private memory sanctuary. Local-first. Optional ring to seal. Plus cloud backup where offered.",
   },
 };
 

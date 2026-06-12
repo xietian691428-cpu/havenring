@@ -1,77 +1,62 @@
 # Group Haven Migration Manual
 
-## Goal
+> ## ⚠️ LEGACY — Phase 5 (2026-06)
+>
+> **Do not build new product features on this model.**
+>
+> | Era | Model |
+> |-----|--------|
+> | **Current** | Personal Memory Sanctuary per account. Sharing = **Plus explicit Shared** only. |
+> | **Legacy (this doc)** | `havens` + `haven_members` + partner invite → pair-scoped rings and implicit haven-wide reads. |
+
+## Current product (Phase 5)
+
+- **Default:** one person, one account, local-first memories on device.
+- **Ring:** optional bind; owner account only may seal with that ring (`lib/haven-access.ts`).
+- **Sync:** `/api/sync/moments` returns moments for **owner rings only** — not haven-wide.
+- **Second ring:** legacy invite path retained for recovery (`PartnerInvitePanel`, `/api/haven/invite/*`) — de-emphasized in UI, not removed.
+- **Plus:** optional cloud backup + explicit sharing when user chooses (not automatic via membership).
+
+## What remains in code (backward compatibility)
+
+| Artifact | Status |
+|----------|--------|
+| `havens`, `haven_members`, `ring_invites` tables | DB legacy; bind/invite still write rows |
+| `haven_member_keys` | Legacy key wrap for invite recovery |
+| `/api/nfc/list` | Shows legacy pair rings in same haven (`legacyPairRing`) for display |
+| `currentUserIsHavenMember` in SDM resolve | Deprecated telemetry field only |
+| `linkedToYourHaven` in uid-status | Deprecated bind UX hint |
+
+## Historical goal (pre–Phase 5)
 
 Upgrade Haven Ring from single-owner ring access to consent-based small group access:
 
-- Any existing member can authorize adding a new ring.
-- New ring join requires both tap token + invite consent.
-- All linked rings in the same haven have equivalent seal/read capabilities.
-- Privacy model remains unchanged: ciphertext only on server.
+- Any existing member could authorize adding a new ring.
+- New ring join required both tap token + invite consent.
+- All linked rings in the same haven had equivalent seal/read capabilities.
 
-## What Changed
+**Superseded by:** per-account library + opt-in Shared items (Plus).
 
-- Added group scope tables: `havens`, `haven_members`, `ring_invites`.
-- Added `haven_id` to `rings` and `moments` for shared authorization scope.
-- Expanded ring event actions for authorization audit:
-  - `ring_link_request`
-  - `ring_link_approved`
-  - `ring_link_rejected`
-- Added secure RPC contracts:
-  - `issue_ring_invite(p_haven_id)`
-  - `link_ring_by_invite(p_token, p_invite_code)`
+## Schema (still in DB)
 
-## Security Model
+- Group scope tables: `havens`, `haven_members`, `ring_invites`.
+- `haven_id` on `rings` and `moments` for legacy authorization scope.
+- RPCs: `issue_ring_invite`, `link_ring_by_invite`.
 
-- No invite plaintext persisted; only `sha256(invite_code)` hash.
-- Invite is one-time, valid for 24 hours, and can be cancelled by the owner/creator.
-- Linking a ring requires:
-  - authenticated user
-  - valid invite
-  - physical ring tap token
-- Membership controls all access (RLS by `haven_members`).
+## Security model (historical)
 
-## Rollout Steps
+- Invite hash only; one-time 24h invite.
+- Linking required authenticated user + invite + physical tap.
+- Membership controlled access (RLS by `haven_members`).
 
-1. Run `docs/database-schema.md` sections in order:
-   - Extensions
-   - Tables
-   - Compatibility migration
-   - Indexes
-   - RLS
-   - RPCs
-2. Validate schema:
-   - `rings.haven_id` exists
-   - `moments.haven_id` exists
-   - `havens`, `haven_members`, `ring_invites` tables exist
-3. Validate function availability:
-   - `issue_ring_invite`
-   - `link_ring_by_invite`
-4. Smoke test:
-   - User A issues invite for haven
-   - User B taps ring and completes `link_ring_by_invite`
-   - User B can read/write moments in same haven
-   - Existing User A access remains unchanged
+## Rollout / regression
 
-## Backward Compatibility
+1. Schema: `supabase/migrations/0017_dual_account_haven_pair.sql`
+2. Legacy invite APIs: `app/api/haven/invite/*`, `app/api/nfc/bind`
+3. Contract checks: `scripts/verify-flow-contracts.ts` (dual-account + phase 5 personal-first)
 
-- Existing single-ring users are migrated to one-person havens.
-- Existing flows remain valid until UI routes are switched from ring scope to haven scope.
-- Existing RPCs can coexist with new invite/link RPCs during transition.
+## Migration checklist (operators)
 
-## API Transition Guidance
-
-- Current: ring-scoped reads/writes (`ring_id`).
-- Target: haven-scoped reads/writes (`haven_id`) with ring retained for audit.
-- Recommended transition:
-  1. Write both `ring_id` and `haven_id`.
-  2. Read by `haven_id`.
-  3. Keep `ring_id` for event attribution and operational tooling.
-
-## Privacy Checklist
-
-- [ ] Plaintext never written to server logs.
-- [ ] Invite code never stored in plaintext.
-- [ ] All membership checks performed server-side.
-- [ ] All sensitive RPCs are `security definer` with fixed `search_path`.
-- [ ] Ring token rotation/revocation remains available for incident response.
+- [ ] Do not market “shared Haven” or couple auto-sync.
+- [ ] Deploy Phase 5 API changes (`haven-access`, sync/moments owner scope).
+- [ ] When Plus Shared ships per-memory flags, narrow RLS further per `docs/core-definition.md`.

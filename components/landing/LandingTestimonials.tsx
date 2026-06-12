@@ -12,7 +12,7 @@ const QUOTES = [
   },
   {
     quote: "We stopped performing our relationship online. This feels like ours again.",
-    context: "Couples journal",
+    context: "Private journal",
     name: "Sarah",
     locale: "UK",
   },

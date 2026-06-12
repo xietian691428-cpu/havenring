@@ -79,8 +79,8 @@ export function RingsPage({
         havenId: c.haven_id || null,
         cloudBoundAt: c.bound_at || null,
         cloudLastUsedAt: c.last_used_at || null,
-        nickname: c.nickname || (c.ownedByYou ? "Your ring" : "Partner ring"),
-        label: c.nickname || (c.ownedByYou ? "Your ring" : "Partner ring"),
+        nickname: c.nickname || (c.ownedByYou ? "Your ring" : t.partnerRingLabel || "Legacy pair ring"),
+        label: c.nickname || (c.ownedByYou ? "Your ring" : t.partnerRingLabel || "Legacy pair ring"),
         colorKey: c.ownedByYou ? "gold" : "rose",
         icon: "ring",
         ownedByYou: Boolean(c.ownedByYou),
@@ -91,7 +91,7 @@ export function RingsPage({
       const db = Date.parse(b.cloudBoundAt || "") || b.createdAt || 0;
       return db - da;
     });
-  }, [localRings, cloudRings]);
+  }, [localRings, cloudRings, t.partnerRingLabel]);
 
   function colorHex(key) {
     return RING_COLOR_OPTIONS.find((c) => c.key === key)?.hex ?? sanctuaryTheme.accent;
@@ -301,11 +301,11 @@ export function RingsPage({
           </div>
           <button
             type="button"
-            onClick={canInvitePartner ? openInvitePanel : onOpenRingSetup}
+            onClick={onOpenRingSetup}
             style={ringLimitReached ? styles.secondaryBtn : styles.headerAddBtn}
             disabled={ringLimitReached}
           >
-            {canInvitePartner ? t.invitePartnerCta || "Add Partner Ring" : t.addRingHeaderCta || t.openSetup}
+            {t.addRingHeaderCta || t.openSetup}
           </button>
         </header>
 
@@ -412,7 +412,7 @@ export function RingsPage({
                     {t.linkedMemories}: {memoryCountByRingId[ring.cloudRingId] || 0}
                   </p>
                   <p style={styles.ringMeta}>
-                    {ring.ownedByYou ? t.yourRingLabel || "Your ring" : t.partnerRingLabel || "Partner ring"}
+                    {ring.ownedByYou ? t.yourRingLabel || "Your ring" : t.partnerRingLabel || "Legacy pair ring"}
                   </p>
                 </div>
                 {ring.cloudRingId ? (
@@ -443,15 +443,25 @@ export function RingsPage({
           </ul>
         )}
 
-        {rings.length > 0 ? (
+        {canInvitePartner ? (
+          <section style={styles.legacyCard}>
+            <p style={styles.legacyTitle}>{t.legacySecondRingTitle}</p>
+            <p style={styles.legacyBody}>{t.legacySecondRingBody}</p>
+            <button type="button" style={styles.ghostBtn} onClick={openInvitePanel}>
+              {t.legacySecondRingCta}
+            </button>
+          </section>
+        ) : null}
+
+        {rings.length > 0 && !canInvitePartner ? (
           <div style={styles.actions}>
             <button
               type="button"
-              onClick={canInvitePartner ? openInvitePanel : onOpenRingSetup}
+              onClick={onOpenRingSetup}
               style={styles.secondaryBtn}
               disabled={ringLimitReached}
             >
-              {canInvitePartner ? t.invitePartnerCta || "Add Partner Ring" : t.addAnotherRingSecondary || t.openSetup}
+              {t.addAnotherRingSecondary || t.openSetup}
             </button>
             {ringLimitReached ? (
               <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
@@ -687,6 +697,28 @@ const styles = {
     fontSize: 13,
     lineHeight: 1.55,
     color: "rgba(232, 220, 208, 0.78)",
+  },
+  legacyCard: {
+    border: "1px dashed rgba(232, 220, 208, 0.18)",
+    borderRadius: 14,
+    background: "rgba(26, 21, 18, 0.22)",
+    padding: 14,
+    display: "grid",
+    gap: 8,
+  },
+  legacyTitle: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 650,
+    color: "rgba(232, 220, 208, 0.72)",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  },
+  legacyBody: {
+    margin: 0,
+    fontSize: 14,
+    lineHeight: 1.55,
+    color: "rgba(217, 195, 179, 0.78)",
   },
   footerEdu: {
     marginTop: 4,

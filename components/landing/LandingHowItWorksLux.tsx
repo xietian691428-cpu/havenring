@@ -8,19 +8,19 @@ const STEPS = [
   {
     num: "1",
     title: "Record the Moment",
-    body: "Write your thoughts, add photos or videos, and keep a private record for yourself or your pair.",
+    body: "Write your thoughts, add photos or videos, and keep a private record on your device.",
     accent: false,
   },
   {
     num: "2",
     title: "Seal with Intention",
-    body: "Touch your HavenRing to your phone to perform the ritual. This moment is now sealed — sacred and protected.",
+    body: "Touch your ring to seal. Once sealed, the memory cannot be edited.",
     accent: true,
   },
   {
     num: "3",
-    title: "Shared Quietly",
-    body: "Up to two linked rings can add new memories. Old sealed memories stay unchanged.",
+    title: "Share (Plus)",
+    body: "One account per person. Share a memory only when you choose — never by default.",
     accent: false,
   },
 ] as const;

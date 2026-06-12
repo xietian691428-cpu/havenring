@@ -99,7 +99,7 @@ check("dual-account Haven requires invite for second ring", () => {
   const bindRoute = readRepoFile("app/api/nfc/bind/route.ts");
   assert.match(bindRoute, /invite_code/);
   assert.match(bindRoute, /INVITE_REQUIRES_SEPARATE_ACCOUNT/);
-  assert.match(bindRoute, /Each partner account can link one active ring/);
+  assert.match(bindRoute, /Each account can link one active ring/);
 });
 
 check("ring-only login cannot bootstrap partner account", () => {
@@ -156,17 +156,21 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(shareInvite, /navigator\.share/);
 });
 
-check("daily access routes by Haven membership", () => {
+check("start page: seal + bind only; daily_access is ack not unlock", () => {
   const resolveRoute = readRepoFile("app/api/rings/sdm/resolve/route.ts");
   const startClient = readRepoFile("app/start/StartClient.tsx");
   const timing = readRepoFile("lib/nfc-flow-timing.ts");
   assert.match(resolveRoute, /currentUserIsHavenMember/);
-  assert.match(startClient, /isDailyMember/);
+  assert.match(resolveRoute, /daily_access/);
   assert.match(startClient, /minimalNfcCopy/);
+  assert.match(startClient, /idleRingAck/);
   assert.match(startClient, /getNfcHoldGuideCopy/);
-  assert.match(startClient, /enterRingWaitMode/);
   assert.match(startClient, /NfcHoldGuide/);
-  assert.match(startClient, /NfcSyncedCountdown/);
+  assert.match(startClient, /finalizeSealChainFromSdmResponseSafe/);
+  assert.doesNotMatch(startClient, /enterRingWaitMode/);
+  assert.doesNotMatch(startClient, /signInForRingAccess/);
+  assert.doesNotMatch(startClient, /isDailyMember/);
+  assert.doesNotMatch(startClient, /successRedirectMs/);
   assert.match(readRepoFile("src/hooks/useActionStepCountdown.js"), /useDeadlineCountdown/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /IndeterminateStepStatus/);
   assert.match(readRepoFile("src/views/TimelinePage.js"), /syncIssueOffline/);
@@ -176,11 +180,57 @@ check("daily access routes by Haven membership", () => {
   assert.match(readRepoFile("src/components/IndeterminateStepStatus.tsx"), /IndeterminateStepStatus/);
   assert.match(startClient, /readingCountdownPrefix/);
   assert.match(startClient, /retryCountdownPrefix/);
-  assert.match(startClient, /openingHavenLine/);
-  assert.doesNotMatch(startClient, /redirectCountdownPrefix/);
   assert.match(timing, /minFailedBeforeRetryMs/);
-  assert.doesNotMatch(startClient, /isDailySelfOwner/);
   assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);
+});
+
+check("ring bind is optional not gated", () => {
+  const machine = readRepoFile("src/state/appFlowMachine.js");
+  const router = readRepoFile("src/app-shell/AppRouter.tsx");
+  const wizard = readRepoFile("src/components/RingSetupWizard.js");
+  assert.doesNotMatch(machine, /RING_SETUP_GATE/);
+  assert.match(router, /\/bind-ring/);
+  assert.doesNotMatch(router, /RingSetupWizard/);
+  assert.match(wizard, /\/bind-ring/);
+  assert.match(readRepoFile("src/content/havenCopy.ts"), /Your ring is for sealing/);
+});
+
+check("phase 5 personal-first ring access and legacy invite de-emphasized", () => {
+  const access = readRepoFile("lib/haven-access.ts");
+  const membership = readRepoFile("lib/haven-membership.ts");
+  const syncMoments = readRepoFile("app/api/sync/moments/route.ts");
+  const sdmResolve = readRepoFile("app/api/rings/sdm/resolve/route.ts");
+  const ringTap = readRepoFile("app/api/seal/ring-tap/route.ts");
+  const ringsPage = readRepoFile("src/views/RingsPage.js");
+  const ringsContent = readRepoFile("src/content/ringsPageContent.js");
+  const migrationManual = readRepoFile("docs/group-haven-migration-manual.md");
+  assert.match(access, /userCanSealWithRing/);
+  assert.match(access, /isLegacyHavenMember/);
+  assert.match(membership, /owner-only/);
+  assert.match(syncMoments, /eq\("user_id", user\.id\)/);
+  assert.doesNotMatch(syncMoments, /from\("haven_members"\)/);
+  assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
+  assert.match(ringTap, /RING_OWNER_REQUIRED/);
+  assert.match(ringsPage, /legacyCard/);
+  assert.match(ringsContent, /legacySecondRingTitle/);
+  assert.match(migrationManual, /LEGACY — Phase 5/);
+});
+
+check("cloud backup 50GB quota compress and chunk upload", () => {
+  const config = readRepoFile("lib/cloud-storage-config.ts");
+  const server = readRepoFile("lib/cloud-storage-server.ts");
+  const backup = readRepoFile("src/services/cloudBackupService.js");
+  const quotaRoute = readRepoFile("app/api/cloud-backup/quota/route.ts");
+  const uploadRoute = readRepoFile("app/api/cloud-backup/upload/route.ts");
+  assert.match(config, /CLOUD_STORAGE_QUOTA_BYTES/);
+  assert.match(config, /CLOUD_STORAGE_QUOTA_GB = PLUS_STORAGE_GB/);
+  assert.match(config, /CLOUD_STORAGE_FULL_MESSAGE/);
+  assert.match(server, /assertCloudQuotaHeadroom/);
+  assert.match(backup, /compressPayloadForCloud/);
+  assert.match(backup, /chunkBlobForCloudUpload/);
+  assert.match(backup, /precheckCloudUpload/);
+  assert.match(quotaRoute, /CLOUD_STORAGE_FULL/);
+  assert.match(uploadRoute, /mode === "commit"/);
 });
 
 check("timeline sync does not fail when optional cloud backup is off", () => {
@@ -242,8 +292,13 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   const vercel = readRepoFile("vercel.json");
   const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
   const rateLimit = readRepoFile("lib/api-rate-limit.ts");
-  assert.match(config, /SEAL_STAGING_MAX_BYTES = 2 \* 1024 \* 1024/);
-  assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 256 \* 1024/);
+  assert.match(config, /SEAL_STAGING_MAX_BYTES = 20 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_LOCAL_MAX_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_STAGING_PLUS_MAX_BYTES/);
+  assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 \* 1024/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealPayloadFromDraft/);
+  assert.match(readRepoFile("src/features/seal/sealPrepBundle.ts"), /sealPrepBundle/);
+  assert.match(readRepoFile("lib/subscription.ts"), /canSealWithRing: true/);
   assert.match(config, /SEAL_STAGING_FALLBACK_ENABLED/);
   assert.match(server, /createSealStagingRecord/);
   assert.match(server, /resolveSealStagingCiphertext/);

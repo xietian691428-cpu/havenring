@@ -7,8 +7,8 @@ import {
 } from "@/lib/supabase/server";
 
 /**
- * GET /api/sync/moments — sealed-moment metadata for the signed-in Haven member.
- * Server-side fetch avoids brittle client RLS / VPN issues on the timeline sync banner.
+ * GET /api/sync/moments — sealed-moment metadata for the signed-in account.
+ * Phase 5: personal-first (owner rings only). Legacy haven-wide reads removed.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -21,41 +21,43 @@ export async function GET(req: NextRequest) {
     });
     if (limitRes) return limitRes;
 
-    const ringIds = req.nextUrl.searchParams
+    const ringIdsParam = req.nextUrl.searchParams
       .get("ring_ids")
       ?.split(",")
       .map((id) => id.trim())
       .filter(Boolean);
 
     const admin = getSupabaseAdminClient();
-    const { data: memberships, error: membershipErr } = await admin
-      .from("haven_members")
-      .select("haven_id")
-      .eq("user_id", user.id);
+    const { data: ownedRings, error: ringsErr } = await admin
+      .from("user_nfc_rings")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
 
-    if (membershipErr) {
-      return NextResponse.json({ error: membershipErr.message }, { status: 500 });
+    if (ringsErr) {
+      return NextResponse.json({ error: ringsErr.message }, { status: 500 });
     }
 
-    const havenIds = [
-      ...new Set((memberships ?? []).map((row) => row.haven_id).filter(Boolean)),
-    ];
-    if (!havenIds.length) {
+    const ownedRingIds = (ownedRings ?? []).map((row) => row.id).filter(Boolean);
+    if (!ownedRingIds.length) {
       return NextResponse.json({ moments: [] });
     }
 
-    let query = admin
+    const scopedRingIds = ringIdsParam?.length
+      ? ringIdsParam.filter((id) => ownedRingIds.includes(id))
+      : ownedRingIds;
+
+    if (!scopedRingIds.length) {
+      return NextResponse.json({ moments: [] });
+    }
+
+    const { data, error } = await admin
       .from("moments")
       .select("id, ring_id, created_at, release_at, content_sha256, is_sealed")
-      .in("haven_id", havenIds)
+      .in("ring_id", scopedRingIds)
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (ringIds?.length) {
-      query = query.in("ring_id", ringIds);
-    }
-
-    const { data, error } = await query;
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

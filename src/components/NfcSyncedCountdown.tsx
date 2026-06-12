@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { visibleSecondsRemaining } from "@/lib/nfc-flow-timing";
 
 type NfcSyncedCountdownProps = {
-  /** e.g. "Keep holding", "Tap again in", "Opening Haven in" */
+  /** e.g. "Keep holding", "Tap again in", "Continuing in" */
   label: string;
   /** Unix ms when the timed phase ends. */
   endsAt: number;

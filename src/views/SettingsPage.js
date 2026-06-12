@@ -6,6 +6,7 @@ import {
 } from "../services/localStorageService";
 import {
   backupToCloud,
+  CLOUD_STORAGE_FULL_MESSAGE,
   getCloudBackupSettings,
   restoreFromCloud,
   setCloudBackupEnabled,
@@ -235,8 +236,13 @@ export function SettingsPage({
       const payload = await getAllMemories();
       await backupToCloud(payload);
       setStatus(localeCopy.backupDone);
-    } catch {
-      setStatus(error instanceof Error ? error.message : localeCopy.backupFailed);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : localeCopy.backupFailed;
+      setStatus(
+        msg === CLOUD_STORAGE_FULL_MESSAGE || msg === localeCopy.cloudStorageFull
+          ? CLOUD_STORAGE_FULL_MESSAGE
+          : msg || localeCopy.backupFailed
+      );
     } finally {
       setBusy(false);
     }
@@ -250,8 +256,8 @@ export function SettingsPage({
     try {
       const result = await restoreFromCloud();
       setStatus(result.message || localeCopy.restoreDone);
-    } catch {
-      setStatus(error instanceof Error ? error.message : localeCopy.restoreFailed);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : localeCopy.restoreFailed);
     } finally {
       setBusy(false);
     }
@@ -525,6 +531,7 @@ export function SettingsPage({
             />
           </label>
           <p style={styles.copy}>{cloudStateText}</p>
+          <p style={styles.copyMuted}>{localeCopy.cloudQuotaNote}</p>
           <div style={styles.actions}>
             <button
               type="button"
@@ -893,6 +900,12 @@ const styles = {
     margin: 0,
     color: "#d9c3b3",
     lineHeight: 1.6,
+  },
+  copyMuted: {
+    margin: 0,
+    color: "#a89284",
+    fontSize: 13,
+    lineHeight: 1.5,
   },
   complianceNote: {
     margin: "4px 0 0",

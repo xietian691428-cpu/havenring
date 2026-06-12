@@ -1,7 +1,7 @@
 /**
  * Recover in-progress composer content when the user taps their ring before
  * explicitly pressing Seal (text-only localStorage snapshot → idb draft).
- * Does NOT arm seal — ring tap without explicit Seal stays daily_access.
+ * Does NOT arm seal — idle ring tap shows a short ack on /start only.
  */
 
 import { getDraftItem, saveDraftItem } from "../memories/draftBoxStore";

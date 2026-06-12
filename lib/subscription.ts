@@ -52,7 +52,7 @@ export function getSubscriptionStatusFromEntitlement(
     plusTrialDaysLeft: daysLeft,
     ringLimit: isPlus ? PLUS_RING_LIMIT : FREE_RING_LIMIT,
     storageGb: isPlus ? PLUS_STORAGE_GB : FREE_STORAGE_GB,
-    canSealWithRing: isPlus,
+    canSealWithRing: true,
   };
 }
 

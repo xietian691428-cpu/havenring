@@ -4,13 +4,15 @@
  * pending draft ids in localStorage still arrive, so we mirror finalize payloads here.
  */
 
+import { SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
 import { SEAL_ARM_TTL_MS } from "@/lib/seal-flow";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { readSealPrepRelay } from "./sealPrepBundle";
 import type { SealDraftFinalizePayload } from "./sealTypes";
 
 const RELAY_KEY = STORAGE_KEYS.sealDraftRelay;
 const TEXT_COOKIE = "haven_seal_text_relay_v1";
-const MAX_RELAY_BYTES = 2 * 1024 * 1024;
+const MAX_RELAY_BYTES = SEAL_STAGING_MAX_BYTES;
 
 type RelayStore = {
   expiresAt: number;
@@ -149,6 +151,8 @@ export function writeSealDraftRelay(payload: SealDraftFinalizePayload): void {
 export function readSealDraftRelay(id: string): SealDraftFinalizePayload | null {
   const key = String(id || "").trim();
   if (!key) return null;
+  const fromBundle = readSealPrepRelay(key);
+  if (fromBundle) return fromBundle;
   const store = readRelayStore();
   if (Date.now() > store.expiresAt) {
     clearSealDraftRelay();

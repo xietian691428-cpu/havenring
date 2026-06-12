@@ -17,20 +17,6 @@ export function getFlowPrimaryUi(flowState) {
       enforceSingle: true,
     };
   }
-  if (flowState.mainState === APP_FLOW_MAIN_STATES.RING_SETUP_GATE) {
-    const isIos = flowState.platform === "ios";
-    const noWebNfcOnIos = isIos && !flowState.webNfcAvailable;
-    return {
-      title: "Ring binding required",
-      body: noWebNfcOnIos
-        ? "This device cannot use Web NFC in browser. Add to Home Screen first, then use Ring Link URL or manual bind fallback."
-        : isIos
-          ? "Session is valid but no ring is bound yet. On iOS, use Ring Link URL or manual bind fallback for first ring."
-          : "Session is valid but no ring is bound yet. Ring setup is strongly recommended for fast access, but your account remains the core owner.",
-      actionLabel: "Bind a ring",
-      enforceSingle: true,
-    };
-  }
   if (flowState.mainState === APP_FLOW_MAIN_STATES.SYNC_GATE) {
     return {
       title: "Syncing data",
@@ -45,9 +31,9 @@ export function getFlowPrimaryUi(flowState) {
     const noWebNfcOnIos = isIos && !flowState.webNfcAvailable;
     const title = isAndroid ? "Install Haven on your phone" : "Add to Home Screen recommended";
     const body = isAndroid
-      ? "Install Haven from Chrome for a full-screen app icon and smoother daily access."
+      ? "Install Haven from Chrome for a full-screen app icon."
       : noWebNfcOnIos
-        ? "Web NFC is unavailable in this browser. Add to Home Screen first for a more reliable daily entry."
+        ? "Web NFC is unavailable in this browser. Add to Home Screen first for sealing."
         : "On iOS, add Haven to your Home Screen in Safari, then open from the new icon.";
     return {
       title,

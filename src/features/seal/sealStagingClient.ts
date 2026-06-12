@@ -1,5 +1,7 @@
 import {
+  SEAL_STAGING_MAX_BYTES,
   SEAL_STAGING_MAX_CIPHERTEXT_BYTES,
+  resolveSealStagingMaxBytes,
   parseSealStagingDraftIds,
 } from "@/lib/seal-staging-shared";
 import type { SealDraftFinalizePayload } from "./sealTypes";
@@ -72,9 +74,12 @@ export function estimateSealPayloadBytes(payloads: SealDraftFinalizePayload[]): 
   }
 }
 
-export function assertSealPayloadWithinQuota(payloads: SealDraftFinalizePayload[]): void {
+export function assertSealPayloadWithinQuota(
+  payloads: SealDraftFinalizePayload[],
+  maxBytes: number = SEAL_STAGING_MAX_CIPHERTEXT_BYTES
+): void {
   const bytes = estimateSealPayloadBytes(payloads);
-  if (bytes > SEAL_STAGING_MAX_CIPHERTEXT_BYTES) {
+  if (bytes > maxBytes) {
     throw new Error(SEAL_STAGING_TOO_LARGE);
   }
 }
@@ -83,15 +88,17 @@ export async function uploadSealStaging(opts: {
   draftIds: string[];
   payloads: SealDraftFinalizePayload[];
   accessToken: string;
+  isPlus?: boolean;
 }): Promise<string> {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error(SEAL_STAGING_OFFLINE);
   }
   const { draftIds, payloads, accessToken } = opts;
-  assertSealPayloadWithinQuota(payloads);
+  const maxBytes = resolveSealStagingMaxBytes(Boolean(opts.isPlus));
+  assertSealPayloadWithinQuota(payloads, maxBytes);
   const plaintext = JSON.stringify({ payloads });
   const { ciphertext, iv } = await encryptSealStagingJson(plaintext, accessToken);
-  if (ciphertext.length > SEAL_STAGING_MAX_CIPHERTEXT_BYTES) {
+  if (ciphertext.length > maxBytes) {
     throw new Error(SEAL_STAGING_TOO_LARGE);
   }
   const res = await fetch("/api/seal/staging", {

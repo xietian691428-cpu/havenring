@@ -1,106 +1,74 @@
-# Technical & security checklist (Haven Ring)
+# Technical & security checklist (Haven)
+
+> **Product direction (2026-06):** Personal sanctuary; OAuth login only; ring for **Seal + bind**,
+> not vault unlock. See `docs/core-definition.md`.
+
+---
+
+## 当前生效产品方向（2026-06 更新）— security implications
+
+| Area | Requirement |
+|------|-------------|
+| Auth | Supabase OAuth (Apple / Google / Email). **`nfc-login` disabled (410).** |
+| Ring tap | Must **not** sign user into another account or expose partner memories. |
+| SDM | Replay-safe counters; `seal_confirmation` only when seal armed. |
+| `daily_access` | **Legacy scene** — must not become ring-based vault unlock (Phase 1 UX removal). |
+| Bind/revoke | Authenticated user + secondary token + device verify. |
+| Data | No plaintext memory content on server. |
+
+---
 
 ## Data model
 
 | Item | Status |
 |------|--------|
-| `user_nfc_rings` (`user_id`, `nfc_uid` **as hash**, `nickname`, `bound_at`, `last_used_at`, `is_active`) | Migration `0003_user_nfc_rings.sql` — server stores **SHA-256** of normalized UID (`nfc_uid_hash`), not raw wire UID. |
-| Dynamic NFC ring SDM state | Migration `0012_user_nfc_rings_sdm.sql` — tracks `sdm_enabled`, `last_sdm_counter`, and `last_sdm_verified_at` for replay rejection. |
-| Max one **active** binding per `(user_id, nfc_uid_hash)` | Partial unique index. |
+| `user_nfc_rings` (hashed UID, `is_active`, SDM counters) | Migration `0003`, `0012` |
+| Max one active binding per `(user_id, nfc_uid_hash)` | Partial unique index |
+| `havens` / `haven_members` | **Legacy schema** — product moving to explicit Shared memories |
 
 ## Local encryption
 
 | Item | Status |
 |------|--------|
-| AES-GCM for local blobs | `src/services/encryptionService.js` |
-| User-derived wrapping key (PBKDF2) | `deriveUserWrappingKey()` for migrating to passphrase-bound local keys. |
+| AES-GCM local blobs | `src/services/encryptionService.js` |
+| PBKDF2 wrapping key | `deriveUserWrappingKey()` |
 
 ## Backend API
 
 | Route | Purpose |
 |-------|---------|
-| `POST /api/rings/sdm/resolve` | Verifies dynamic NFC ring SDM payload (`uid`, `ctr`, `cmac`, `picc`) through `sdm-backend`; returns `new_ring_binding`, `daily_access`, or `seal_confirmation`. |
-| `POST /api/nfc/bind` | Auth user; requires `X-Haven-Secondary-Verified: 1` and `privacy_acknowledged: true`; max 2 active rings for one private pair. |
-| `GET /api/nfc/list` | Lists current user’s bindings. |
-| `POST /api/nfc/revoke` | Retires the credential with `is_active = false`; the physical ring is not released for transfer. |
-| `POST /api/auth/nfc-login` | Disabled for shared Havens; ring taps must not log one partner into another partner's account. |
+| `POST /api/rings/sdm/resolve` | SDM verify; scenes: `new_ring_binding`, `seal_confirmation`, **legacy** `daily_access` |
+| `POST /api/nfc/bind` | Bind ring to **authenticated user**; secondary token; max 2 active rings (code constant) |
+| `POST /api/nfc/revoke` | Retire credential |
+| `POST /api/auth/secondary-token` | Short-lived token after device verify |
+| `POST /api/auth/nfc-login` | **Disabled (410)** — ring must not replace OAuth |
 
 ## Integrity
 
 | Item | Status |
 |------|--------|
-| `moments.content_sha256` | Migration `0004_moments_content_sha256.sql` |
-| Client canonical hash | `src/utils/memoryIntegrity.js` — use before sync to compare with server. |
+| `moments.content_sha256` | Migration `0004` |
+| Client hash | `src/utils/memoryIntegrity.js` |
 
 ## Privacy copy
 
-| Location | Status |
-|----------|--------|
-| Ring setup intro | `RingSetupWizard` + `ringSetupContent` + link to `/privacy-policy` or `NEXT_PUBLIC_PRIVACY_POLICY_URL` |
-| Settings | NFC bind / unbind lines + policy link |
-| `app/privacy-policy/page.tsx` | Placeholder — replace with legal text. |
+| Location | Direction |
+|----------|-----------|
+| In-flow | ≤1 sentence |
+| Ring setup / bind | Short + link to `/privacy-policy` |
+| Detail | Settings / Help |
 
 ## Environment
 
-- `SUPABASE_JWT_SECRET` — required for minting Supabase-compatible access tokens in `/api/auth/nfc-login` (same value as in Supabase project settings).
-- `SUPABASE_JWT_ISS` — optional explicit issuer claim for NFC JWT; if omitted, app derives `<NEXT_PUBLIC_SUPABASE_URL>/auth/v1`.
-- `NFC_ACCESS_TOKEN_SECONDS` — optional default NFC access JWT lifetime (seconds, default 90 days).
-- `NFC_LONG_SESSION_MAX_SECONDS` — optional long-session NFC JWT lifetime (seconds, default 10 years cap).
-- `NEXT_PUBLIC_NFC_ACCESS_GRANT_TTL_DAYS` — optional browser ring-grant TTL in days (default 90).
-- `NEXT_PUBLIC_NFC_LONG_ACCESS_GRANT_TTL_DAYS` — optional browser long ring-grant TTL in days (default 3650).
-- `SDM_BACKEND_URL` — internal URL for `icedevml/sdm-backend` (for host-local Docker, `http://127.0.0.1:5000`).
-- `SDM_BACKEND_VERIFY_PATH` — optional override; defaults to `/api/tag` for encrypted PICC data and `/api/tagpt` for plaintext UID/counter.
-- `MASTER_KEY` — required only in the `sdm-backend` server/container environment. Never commit or expose it to the Next.js client.
+- `CRON_SECRET` — seal staging purge cron (see `.env.example`).
+- `SDM_BACKEND_URL`, `MASTER_KEY` (sdm-backend only) — SDM verification.
+- `SUPABASE_*` — OAuth session.
+- Legacy NFC JWT env vars — only if `nfc-login` were re-enabled (**forbidden by product direction**).
 
 ## Test scenarios
 
-See [security-checklist-tests.md](./security-checklist-tests.md).
+See [security-checklist-tests.md](./security-checklist-tests.md). Dual-account Haven tests are **legacy regression** until schema/UX migrates to Shared memories.
 
-## RLS owner-only verification SQL (single-user mode)
+## RLS notes
 
-Use these checks in Supabase SQL Editor to validate owner-only access for
-`user_nfc_rings` and optional owner-only mode for `moments`.
-
-```sql
--- 1) user_nfc_rings must be strict owner-only for all operations
-alter table public.user_nfc_rings enable row level security;
-
-drop policy if exists "user_nfc_rings_select_own" on public.user_nfc_rings;
-drop policy if exists "user_nfc_rings_insert_own" on public.user_nfc_rings;
-drop policy if exists "user_nfc_rings_update_own" on public.user_nfc_rings;
-drop policy if exists "user_nfc_rings_delete_own" on public.user_nfc_rings;
-
-create policy "user_nfc_rings_select_own"
-  on public.user_nfc_rings
-  for select
-  using (auth.uid() = user_id);
-
-create policy "user_nfc_rings_insert_own"
-  on public.user_nfc_rings
-  for insert
-  with check (auth.uid() = user_id);
-
-create policy "user_nfc_rings_update_own"
-  on public.user_nfc_rings
-  for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-create policy "user_nfc_rings_delete_own"
-  on public.user_nfc_rings
-  for delete
-  using (auth.uid() = user_id);
-
--- 2) Optional: if product is pure owner-only (no shared haven),
--- enforce owner check on moments by created_by_user_id as well:
--- create policy "moments_owner_insert"
---   on public.moments for insert
---   with check (auth.uid() = created_by_user_id);
--- create policy "moments_owner_update"
---   on public.moments for update
---   using (auth.uid() = created_by_user_id)
---   with check (auth.uid() = created_by_user_id);
--- create policy "moments_owner_delete"
---   on public.moments for delete
---   using (auth.uid() = created_by_user_id);
-```
+Owner-only `user_nfc_rings` policies remain required. **Target product** is owner-scoped memories with optional explicit Shared sync — not broad Haven member read for all rows.

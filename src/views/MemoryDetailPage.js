@@ -263,11 +263,12 @@ export function MemoryDetailPage({
   }
 
   function handleTitleEditTap() {
-    if (isCapsuleLocked) return;
+    if (isCapsuleLocked || sealed) return;
     handleEditRequest();
   }
 
   function handleEditRequest() {
+    if (sealed) return;
     openVerify("edit");
   }
 
@@ -318,9 +319,11 @@ export function MemoryDetailPage({
                 </button>
                 {menuOpen ? (
                   <div style={styles.menuDropdown} role="menu">
-                    <button type="button" role="menuitem" style={styles.menuItem} onClick={handleEditRequest}>
-                      {t.menuEdit}
-                    </button>
+                    {!sealed ? (
+                      <button type="button" role="menuitem" style={styles.menuItem} onClick={handleEditRequest}>
+                        {t.menuEdit}
+                      </button>
+                    ) : null}
                     <button type="button" role="menuitem" style={styles.menuItem} onClick={handleExportMenuClick}>
                       {t.menuExport}
                     </button>
@@ -364,7 +367,7 @@ export function MemoryDetailPage({
           <>
             <header style={styles.hero}>
               <div style={styles.heroTitleRow}>
-                {isCapsuleLocked ? (
+                {isCapsuleLocked || sealed ? (
                   <h1 style={styles.heroTitleStatic}>{memory.title || t.defaultTitle}</h1>
                 ) : (
                   <button

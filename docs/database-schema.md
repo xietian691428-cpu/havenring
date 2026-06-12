@@ -2,6 +2,18 @@
 
 > Apply these in Supabase SQL Editor. Keep in sync with `lib/supabase/types.ts`.
 
+---
+
+## 当前生效产品方向（2026-06 更新）— schema note
+
+**Product target:** personal memories per account; **explicit Shared** (Plus) for partner/family — **not** implicit full read via `haven_members`.
+
+**This document describes shipping tables**, including **legacy** `havens`, `haven_members`, and `ring_invites`. Do not build new product features assuming “Haven membership = shared vault.” Phase 2 may add per-memory `shared` flags and narrow RLS.
+
+**Auth:** OAuth only; `nfc-login` disabled. Rings bind to `user_nfc_rings.user_id`.
+
+See `docs/core-definition.md` and `docs/architecture-decisions.md`.
+
 ## 1) Extensions
 
 ```sql
@@ -390,14 +402,15 @@ Applied via `supabase/migrations/0003_user_nfc_rings.sql`:
   `last_sdm_counter` is used by `/api/rings/sdm/resolve` and the compatibility
   `/api/sdm/verify` route to reject replayed dynamic NFC ring taps.
 
-API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/uid-status`, `/api/nfc/list`, `/api/nfc/revoke`; `/api/auth/nfc-login` is disabled for shared Havens.
+API: `/api/rings/sdm/resolve`, `/api/nfc/bind`, `/api/nfc/uid-status`, `/api/nfc/list`, `/api/nfc/revoke`; `POST /api/auth/nfc-login` is **disabled (410)** — OAuth only per 2026-06 product direction.
 
 ## `user_entitlements` (Free / Haven Plus)
 
 Applied via `supabase/migrations/0013_user_entitlements.sql`:
 
-- Free: 2 GB local-first storage, up to 2 active rings for one private pair, Save Securely only.
-- Haven Plus: 50 GB local + optional cloud storage, up to 2 active rings for one private pair, Seal with Ring, priority support, and full backup.
+- Free: local-first storage, up to 2 active rings (code cap), Save Securely; browse Timeline with OAuth.
+- Haven Plus: larger storage, Seal with Ring, optional E2E cloud, **Shared** memories (target), same ring cap in code.
+- **Legacy copy** referenced “private pair” — product is now **personal sanctuary**; constants unchanged until Phase 2.
 - Successful hardware claim or NFC bind grants a one-time 30-day Plus trial via `plus_trial_start` and `plus_trial_end`.
 - After `plus_trial_end`, the app computes the user as Free unless `plus_subscription_status = 'active'`.
 

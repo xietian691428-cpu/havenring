@@ -22,7 +22,10 @@ export const STORAGE_KEYS = {
   sealResolveLock: "haven.seal.resolve.lock.v1",
   sealCompleteRelay: "haven.seal.complete.v1",
   sealWaitTabActive: "haven.seal.wait_tab.v1",
+  /** @deprecated Prefer sealPrepBundle; kept for cross-tab read fallback. */
   sealDraftRelay: "haven.seal.draft.relay.v1",
+  /** Pending draft ids + relay payloads (consolidated cross-tab prep). */
+  sealPrepBundle: "haven.seal.prep.v2",
   sealStepUpRequired: "haven.seal.step_up_required.v1",
   sealPwaHintDismissed: "haven.seal.pwa_hint.dismissed.v1",
 } as const;

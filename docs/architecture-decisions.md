@@ -1,129 +1,178 @@
-# Haven Ring — Architecture decisions
+# Haven — Architecture decisions
 
-This document reflects the **current shipping code** (Next.js App Router + PWA shell under `src/`). It is the single place for **product intent + technical shape** so Phase 3+ refactors stay aligned.
+This document records **product intent + technical shape** for agents and engineers.
+It must stay aligned with `docs/core-definition.md`.
 
 ---
 
-## 1. Final product summary
+## 当前生效产品方向（2026-06 更新）
+
+| Topic | Decision |
+|-------|----------|
+| **Positioning** | Personal **Memory Sanctuary** (individual-first). |
+| **Auth** | Supabase OAuth only: **Apple / Google / Email**. No NFC login. |
+| **Ring** | **Seal ritual + bind only** — not daily unlock or app entry. |
+| **Daily UX** | `/app` → **Timeline** with session; compose → Seal → ring tap. |
+| **Sharing** | **Explicit Shared** memories (Plus, E2E) or export/import — **not** implicit full Haven membership read. |
+| **Copy** | ≤1 sentence in-flow; detail in Settings / Help. |
+| **`/start`** | NFC bind + Seal confirm only; shrink legacy branches (Phase 1). |
+| **Storage** | Local-first; target **20MB+** local attachments; Plus for larger cloud (code limits may lag). |
+
+**Code vs direction:** Shipping code may still implement `daily_access`, `RING_SETUP_GATE`, and `haven_members` sharing. Treat those as **legacy**; new work follows the table above and must not deepen deprecated paths.
+
+### Deprecated / weakening (do not extend)
+
+- `daily_access` “Opening Haven…” redirect as primary ring behavior.
+- Mandatory ring setup gate before app use.
+- Couple **Haven pair** as the main sharing metaphor.
+- Client NFC silent login (**removed Phase 1**). Legacy ring access grants in `deviceTrustService` may remain until Phase 4.
+- Ring described as access credential in user-facing copy.
+
+---
+
+## 1. Product summary
 
 | | |
 |---|---|
-| **Name** | **Haven Ring** — private memory sanctuary anchored by an NFC ring (“Haven Ring”). |
-| **Audience** | Primarily US/EU; user-facing copy is English-first. |
-| **Business model** | **Hardware-led acquisition** + **subscription profit**: buying a ring drives onboarding; **Haven Plus** ($4.90/mo or $49/yr) funds cloud backup and premium rituals. **Binding or claiming a ring** triggers a **30-day Haven Plus trial** (`user_entitlements.plus_trial_*`, `lib/subscription.ts`). |
-| **Data posture** | **Local-first by default**: sealed memories and media live in **IndexedDB** on device; **optional encrypted cloud sync** is a Plus enhancement, not a prerequisite. |
-| **Core idea** | **Local-First + Hardware Ritual**: the ring is a physical trust anchor for sealing; the app remains usable offline with local encryption. |
+| **Name** | **Haven** / Haven Ring — personal memory sanctuary; NFC ring for **Seal** ritual. |
+| **Audience** | US/EU; English-first UI. |
+| **Business** | Hardware + **Haven Plus** (Seal with Ring, E2E cloud, Shared memories, storage). Ring bind may still trigger Plus trial in code (`lib/subscription.ts`). |
+| **Data** | **Local-first** IndexedDB; optional Plus cloud (target: true E2E implementation). |
+| **Core loop** | OAuth → Timeline → write → **Seal with Ring** → SDM tap → local encrypted memory. |
 
 ---
 
-## 2. Recommended directory structure (current + direction)
+## 2. Repository layout (current + direction)
 
 ```
-app/                    # Next.js routes, API routes, marketing/legal pages
-  start/                # Ring tap / onboarding (StartClient)
-  bind-ring/            # Post-verify bind flow → /api/nfc/bind
+app/
+  app/page.tsx          → /app shell (OAuth gate → AppShell)
+  start/                → NFC: bind + seal confirm (converge in Phase 1)
+  bind-ring/            → POST /api/nfc/bind
+  login/                → OAuth entry
   api/
-    rings/sdm/resolve/  # Canonical SDM verifier (replay-safe counter)
-    sdm/verify/         # LEGACY forwarder → resolve
-    seal/finalize/      # Seal ticket commit
-    subscription/status/# GET subscription snapshot (Bearer)
-    ...
+    rings/sdm/resolve/  → SDM verify; scenes (legacy daily_access → deprecate)
+    seal/finalize/        → Seal ticket commit
+    auth/nfc-login/     → DISABLED (410) — keep disabled
+    auth/secondary-token/ → Short-lived token after device verify (bind/revoke)
 
 src/
-  app-shell/            # PWA shell: AppShell (providers + router), AppRouter, AppChrome
-  providers/            # SessionProvider, SubscriptionProvider, RingProvider
-  App.js.bak            # Historical note only (former re-export shim; do not resurrect App.js)
-  features/
-    memories/           # Canonical local-first: IndexedDB encrypted memories + idb drafts
-    subscription/       # Types, canUseFeature, entitlement copy (barrel)
-    seal/                 # Seal-with-Ring orchestration (client)
-  views/                # Screen components (timeline, new memory, rings, …)
-  services/
-    localMemoryStore.ts # Re-export shim → ../features/memories/localMemoryStore
-    localStorageService.js # Legacy path → still works
-    draftBoxService.js  # Re-export shim → ../features/memories/draftBoxStore
-    encryptionService.js# Web Crypto port — localCrypto façade
-    ...
-  state/                # App flow machine (gates, recovery)
-  hooks/
-  content/              # Copy modules
+  app-shell/            → AppRouter (default route: timeline)
+  features/memories/    → localMemoryStore (canonical)
+  features/seal/        → Seal orchestration
+  state/appFlowMachine  → gates (RING_SETUP_GATE → target: optional/soft)
 
 lib/
-  subscription.ts       # Server-side entitlements / trial
-  supabase/             # Clients + types
-  seal-flow.ts          # Client seal arm flags
-  ...
-
-docs/                   # Operational + architecture notes
-haven-pwa-legacy/       # Frozen static PWA snapshot (NOT in Next build). Paths use `/haven-pwa-legacy/`.
-supabase/migrations/    # DB schema (rings, user_nfc_rings, seal_tickets, entitlements, …)
+  seal-flow.ts          → Client seal arm state
+  subscription.ts       → Entitlements
 ```
 
-**Refactor direction:** new code should import **`@/src/features/memories`** (or `localMemoryStore` / `draftBoxStore` / `memoryRepository` therein) instead of growing `localStorageService.js` / `draftBoxService.js`.
+**Import rule:** prefer `@/src/features/memories` over growing legacy shims.
 
-**Shims:** `src/services/localMemoryStore.ts` and `draftBoxService.js` re-export from `features/memories` so existing imports keep working.
+### 2.1 Entry points
 
-### 2.1 App entry and shell split (completed)
-
-- **`app/page.tsx`** is the Next.js **`/`** entry: the **marketing landing page** (SEO, canonical URL via `lib/site.ts`). The in-app shell mounts at **`app/app/page.tsx`** → route **`/app`** (first-run redirect to `/start`, then **`AppShell`**).
-- **`src/app-shell/AppShell.tsx`** wraps the tree: **`AppFlowProvider` → `SessionProvider` → `SubscriptionProvider` → `RingProvider` → `AppRouter`**. Global chrome and tab routing live under **`AppRouter`** / **`AppChrome`** — not in `app/page.tsx`.
-- **`src/App.js`** was removed as redundant. **Do not reintroduce** `src/App.js` — use **`AppShell`** directly from **`app/app/page.tsx`**.
-
----
-
-## 3. Authentication and Seal (end-to-end)
-
-### 3.1 Authentication (account)
-
-1. User signs in with **Apple** or **Google** via **Supabase Auth** (`lib/supabase/client.ts`, `SessionProvider`).
-2. Authenticated API calls use **`Authorization: Bearer <access_token>`**.
-3. `POST /api/auth/nfc-login` is disabled for shared Havens. A ring tap must not sign one partner into another partner's account.
-4. **Device trust** (password / recovery codes) gates sensitive local operations (`deviceTrustService.js`).
-
-### 3.2 Ring binding (hardware trust in the account)
-
-- **Pair limit:** Each private Haven pair supports **at most 2 active NFC rings** (usually one ring per partner account). **Free and Plus share the same cap** (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` in `lib/subscription.ts`). Enforced in **`POST /api/nfc/bind`** via Haven membership: first ring creates a one-person Haven; second ring requires a 24-hour partner invite and a separate authenticated account. PWA local registry mirrors the cap in `ringRegistryService.js` (`MAX_BOUND_RINGS`). Shop checkout uses `MAX_RING_QUANTITY` in `lib/shop/catalog.ts`. **Do not** restore legacy “up to 5 rings”, family-sharing positioning, or shared-login partner access.
-- **Dual-account privacy model:** Couples do **not** share Apple/Google login credentials. A shared Haven is authorized through `havens` + `haven_members`; ring credentials are non-transferable in normal flows and can only be retired for loss/security incidents.
-- **Dynamic NFC** payloads are verified server-side: **`POST /api/rings/sdm/resolve`** (canonical). Legacy **`POST /api/sdm/verify`** forwards to the same handler.
-- Replay protection: **`user_nfc_rings.last_sdm_counter`** must **strictly increase** for bound rings.
-- Binding: **`POST /api/nfc/bind`** creates/updates **`user_nfc_rings`** and can activate **Plus trial** (`activatePlusTrialForUser`).
-
-### 3.3 Seal with Ring (hardware ritual)
-
-1. User composes a memory; for **Seal with Ring**, drafts may be stored via **`draftBoxService` / `draftBoxRepository`** (`idb-keyval`).
-2. Client arms seal context (`lib/seal-flow.ts`) and may pass **`context: seal_confirmation`** into SDM resolve together with **`draft_ids`**.
-3. Server verifies SDM, optionally issues a **short-lived seal ticket** (`seal_tickets` table, issued in `app/api/rings/sdm/resolve/route.ts`).
-4. Client calls **`POST /api/seal/finalize`** (`mode: precheck` then `commit`) with the ticket and draft payloads; server uses **`seal_finalize_atomic`** RPC for atomicity (`supabase/migrations/0009_*`).
-5. Successful paths clear local draft state; **memories of record** remain in **`localMemoryStore`** (encrypted).
-
-**Feature gating:** **Free** tier uses **Save Securely** paths; **Seal with Ring** requires **Plus or active trial** (`canUseFeature(..., "seal_with_ring")`, `lib/subscription.ts` + `GET /api/subscription/status`).
+| Route | Role (target) |
+|-------|----------------|
+| `/` | Marketing |
+| `/login` | OAuth sign-in → `/app` |
+| `/app` | **Primary app** — Timeline, compose, settings |
+| `/start` | **Ring NFC only** — bind, seal confirmation |
+| `/hub` | **Legacy** token router — migrate to `/start` or recovery-only |
 
 ---
 
-## 4. Local-First + Hardware Ritual — three layers
+## 3. Authentication
 
-| Layer | Role | Primary code / data |
-|-------|------|---------------------|
-| **L1 — Local-first core** | Default: create/read memories **on device** without cloud. | `localMemoryStore.ts` / `memoryRepository`, `encryptionService.js` / **`localCrypto`** |
-| **L2 — Account & device safety** | OAuth session, optional NFC login JWT, device passphrase / recovery; sync health & flow gates. | `SessionProvider`, `deviceTrustService.js`, `ringSyncService.js`, `appFlowMachine` |
-| **L3 — Hardware ritual & cloud** | Verified ring tap (SDM), seal tickets, optional **Plus** cloud backup & higher limits. | `app/api/rings/sdm/resolve`, `app/api/seal/finalize`, `user_nfc_rings`, `user_entitlements` |
+### 3.1 Account session (canonical)
 
-### Repository pattern (local storage)
+1. User signs in with **Apple**, **Google**, or **Email** via Supabase (`SessionProvider`).
+2. APIs use `Authorization: Bearer <access_token>`.
+3. **`POST /api/auth/nfc-login`** returns **410** — ring must never bootstrap OAuth.
 
-- **`memoryRepository`** (`localMemoryStore.ts`): **encrypted** persisted memories (IndexedDB `haven_ring_memories_db`). Only this layer (plus `encryptionService`) should own persistence details.
-- **`draftBoxRepository`** (`draftBoxService.js`): **plaintext drafts** for seal-in-progress UX; **must not** be treated as long-term vault — finalized memories belong in `memoryRepository`.
-- **`localCrypto`** (`encryptionService.js`): **crypto port** consumed by memory repository; future stores (attachments cache, export bundles) should reuse it instead of duplicating Web Crypto.
+### 3.2 Device trust (implementation detail)
 
-### Next steps (optional backlog)
+- Local device password / recovery (`deviceTrustService.js`) gates **bind, revoke, seal step-up** — not app login.
+- `POST /api/auth/secondary-token` issues short-lived server tokens for high-risk NFC APIs.
 
-- Typed **`DraftItem`** in a small `draftBoxTypes.ts` (or migrate `draftBoxService` to `.ts`).
-- Single **`LocalDataModule`** barrel export to document allowed imports for “data layer.”
-- Migrate `encryptionService.js` → `.ts` when convenient; keep **`localCrypto`** as the stable façade.
+**Phase 1+ consideration:** simplify device password if OAuth re-auth suffices for bind/revoke.
 
 ---
 
-## 5. Related docs
+## 4. Ring binding
 
-- `docs/database-schema.md` — tables (`user_nfc_rings`, `seal_tickets`, `user_entitlements`, …).
-- `docs/technical-security-checklist.md` — SDM, NFC login, rate limits.
-- `docs/core-definition.md` — product narrative (keep in sync with this file when terms change).
+- Ring binds to **the authenticated account** that completes bind (`POST /api/nfc/bind`).
+- SDM verification via `POST /api/rings/sdm/resolve`; replay protection via `last_sdm_counter`.
+- **Technical cap (shipping code):** max **2** active rings per user/Haven row (`FREE_RING_LIMIT` / `PLUS_RING_LIMIT` = 2). **Product target:** one ring per person for Seal; do not market multi-ring family sharing.
+- Retired rings are **non-transferable** in normal flows.
+
+### Legacy: Haven pair + partner invite
+
+- DB tables `havens`, `haven_members`, partner invite APIs still exist.
+- **Product direction:** deprecate as the sharing model; replace with per-memory **Shared** (Plus).
+- Do not add features that assume “all Haven members see all moments.”
+
+---
+
+## 5. Seal with Ring
+
+1. User composes on `NewMemoryPage`; arms seal (`lib/seal-flow.ts`).
+2. Ring tap → `/start` → `sdm/resolve` with `context: seal_confirmation` + `draft_ids`.
+3. Server issues seal ticket → `POST /api/seal/finalize` (precheck/commit).
+4. Memory persists in **`localMemoryStore`** (encrypted).
+5. iOS Private: seal staging + cron purge (Phase 3) — unchanged technically.
+
+**Gating (shipping):** `canSealWithRing` requires Plus or trial — product may revisit for “ring owners always seal.”
+
+---
+
+## 6. SDM scenes — target mapping
+
+| Scene | Shipping behavior | Target product |
+|-------|-------------------|----------------|
+| `new_ring_binding` | Bind flow | **Keep** |
+| `seal_confirmation` | Finalize seal | **Keep** |
+| `daily_access` | Redirect / “Opening Haven…” | **Remove** — replace with neutral hint + `/app` |
+
+---
+
+## 7. Three technical layers
+
+| Layer | Role | Code |
+|-------|------|------|
+| **L1 Local** | Memories on device | `localMemoryStore`, `encryptionService` |
+| **L2 Account** | OAuth, device trust, flow gates | `SessionProvider`, `deviceTrustService`, `appFlowMachine` |
+| **L3 Ritual & cloud** | SDM, seal tickets, Plus backup | `sdm/resolve`, `seal/finalize`, cloud backlog |
+
+---
+
+## 8. Storage strategy
+
+| Tier | Target |
+|------|--------|
+| **Local** | Primary; attachments **20MB+** per file (product goal; raise code limits in Phase 1/2). |
+| **Seal staging** | Ephemeral cross-tab handoff; shipping ~2MB cap — not the long-term user limit. |
+| **Plus cloud** | E2E encrypted backup + Shared memory sync; larger objects in object storage. |
+
+---
+
+## 9. Phase 1 engineering alignment (planned — not yet code)
+
+1. Remove `daily_access` unlock UX from `StartClient`.
+2. Soft optional ring setup (drop hard `RING_SETUP_GATE`).
+3. Delete or hide NFC silent login client paths.
+4. Converge `/start` to bind + seal only.
+5. Update in-flow copy to ≤1 sentence; move prose to Help.
+6. Document Shared-memory schema/API when Plus cloud is implemented.
+
+---
+
+## 10. Related docs
+
+| Doc | Purpose |
+|-----|---------|
+| `docs/core-definition.md` | Product SSOT |
+| `docs/prd.md` | Working PRD (aligned 2026-06) |
+| `docs/haven-user-journey.md` | Code-aligned journeys (being updated) |
+| `docs/ring-provisioning.md` | Factory / SDM (hardware unchanged) |
+| `docs/database-schema.md` | Schema (legacy Haven tables noted) |
+| `docs/group-haven-migration-manual.md` | **Deprecated** product path — schema reference only |

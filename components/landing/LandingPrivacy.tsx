@@ -15,8 +15,8 @@ const ITEMS = [
     ),
   },
   {
-    title: "Shared only by invitation",
-    body: "Nothing is public by default. If someone sees your world, it is because you opened the door — not because an algorithm kicked it in.",
+    title: "Share only with Plus",
+    body: "Nothing is public by default. You choose what to share — never automatic.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" className="h-5 w-5">
         <path d="M16 11a4 4 0 10-8 0 4 4 0 008 0z" />

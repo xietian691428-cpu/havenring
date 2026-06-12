@@ -128,18 +128,17 @@ export function HeroSection() {
         </div>
 
         <h1 className="mb-6 text-4xl font-light leading-[1.05] tracking-tighter text-white sm:text-5xl md:text-7xl">
-          Your private memory space,
+          Your Private
           <br />
           <span className="bg-gradient-to-r from-[#D4AF37] to-amber-300 bg-clip-text font-medium text-transparent">
-            sealed by rings.
+            Memory Sanctuary
           </span>
         </h1>
 
         <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/90 md:text-2xl">
-          A beautiful pair of physical rings for personal records and couple memories.
+          Write precious moments. Touch your ring to seal.
           <br />
-          Capture meaningful moments and seal them with intention —{" "}
-          <span className="text-white">only for you and your private pair.</span>
+          <span className="text-white">Encrypted on your device — your memories stay yours.</span>
         </p>
 
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -168,7 +167,7 @@ export function HeroSection() {
         </div>
 
         <p className="mt-8 text-sm text-white/60">
-          Built for up to two rings • 30-day ritual guarantee • No public feed
+          Local-first • Optional ring to seal • Plus cloud backup where offered
         </p>
       </motion.div>
 

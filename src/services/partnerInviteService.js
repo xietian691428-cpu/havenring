@@ -6,6 +6,7 @@ import {
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
 
+/** @deprecated Legacy second-ring invite (Phase 5). Plus explicit sharing is separate. */
 export async function preparePartnerInvite({ havenId }) {
   const sb = getSupabaseBrowserClient();
   const {

@@ -15,11 +15,11 @@ export function BindSuccessClient({ plusTrialActivated }: BindSuccessClientProps
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.kicker}>Ring linked</p>
+        <p style={styles.kicker}>{BIND_SUCCESS_EN.title}</p>
         <div style={styles.check} aria-hidden>
           ✓
         </div>
-        <h1 style={styles.title}>{BIND_SUCCESS_EN.title}</h1>
+        <h1 style={styles.title}>{BIND_SUCCESS_EN.subtitle}</h1>
         {plusTrialActivated ? (
           <p style={styles.trial}>{BIND_SUCCESS_EN.plusTrialNote}</p>
         ) : null}

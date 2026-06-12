@@ -1,144 +1,139 @@
-# Haven — end-to-end user journey (code-aligned)
+# Haven — end-to-end user journey (code-aligned + target direction)
 
-English reference for product and support. Routes and behavior match the current implementation under `src/app-shell/`, `app/app/`, `app/start/`, and `src/features/seal/`.
+> **Product SSOT:** `docs/core-definition.md` (2026-06). Where this doc notes **LEGACY**,
+> shipping code may still behave that way until Phase 1.
+
+---
+
+## 当前生效产品方向（2026-06 更新）
+
+| Step | Target behavior |
+|------|-----------------|
+| Sign in | Apple / Google / Email → `/app` |
+| Daily read | **Timeline** — no ring required |
+| Write | **Seal new** → compose |
+| Seal | **Seal with Ring** → tap ring → `/start` → finalize |
+| Share | **Shared** (Plus) or export — not full Haven auto-share |
+| Ring tap (idle) | **No unlock** — hint to open app and start Seal (Phase 1) |
 
 ---
 
 ## 1. High-level phases
 
-### Phase 1 — First-time experience (FTUX)
+### Phase 1 — First-time experience
 
-| Step | What happens (code) |
-|------|---------------------|
-| Open PWA / web app | User lands on **`/app`** (`app/app/page.tsx` → `AppShell` → `AppRouter`). |
-| Optional redirect to **`/start`** | If there is **no permanent Supabase session** and **either** onboarding **or** first memory is incomplete—and the user did **not** begin FTUX from `/start`—`app/app/page.tsx` sends them to **`/start`** for Apple/Google OAuth (`FTUX_STARTED_KEY` / `haven.ftux.started.v1`). |
-| Home vs timeline | `AppRouter` defaults internal route to **`timeline`**, but on first load if **`haven.onboarding.completed.v1` ≠ `"1"`** it switches to **`home`** (`HomePage`) so the welcome surface shows first. |
-| Onboarding | `FirstTimeOnboarding` from `HomePage` / `HelpCenterPage`; completion sets **`haven.onboarding.completed.v1`** and emits telemetry (`onboarding_completed`). |
-| Sign-in | Apple or Google via Supabase OAuth (from `HomePage`, `/start`, or quick sign-in flows in `AppRouter`). |
-| PWA hint (iOS) | `appFlowMachine`: **`PWA_INSTALL_GATE`** when `platform === "ios"` and the app is not installed, not deferred, and PWA FTUX is not marked done—blocks progression until install/defer or state changes. |
-| First ring | After onboarding, **`handleAfterOnboarding`** opens **`RingSetupWizard`** if the user has **not** dismissed setup and **`boundRingCount === 0`**. Independently, **`RING_SETUP_GATE`** auto-opens the wizard when signed in, no bound ring, and `RING_SETUP_DISMISSED_KEY` is not set. |
-| Into the app | Wizard `onFinished` navigates to **`timeline`** (Memories) and refreshes memories / ring registry. |
+| Step | What happens (code today) | Target |
+|------|---------------------------|--------|
+| Open app | `/app` → OAuth if needed → `AppShell` | Same |
+| Default view | `AppRouter` → **timeline** (or home if onboarding incomplete) | Timeline after minimal onboarding |
+| Sign-in | Apple / Google from `/login`, `/app`, `/start` | + **Email** when wired |
+| Ring setup | **LEGACY:** `RING_SETUP_GATE` may force `RingSetupWizard` | **Optional** — Settings / Rings |
+| Bind ring | Wizard or `/bind-ring` after SDM `new_ring_binding` | Same entry, not blocking app |
 
-### Phase 2 — Day-to-day
+### Phase 2 — Day-to-day (target primary)
 
-| Surface | Route name in `AppRouter` | Chrome label (`appChromeContent` EN) |
-|---------|---------------------------|--------------------------------------|
-| Timeline | `timeline` | **Memories** |
-| Explore | `explore` | **Explore** |
-| Composer | `new` | **Seal new** |
-| Rings | `rings` | **Rings** |
+| Surface | Route | Purpose |
+|---------|-------|---------|
+| **Memories** | `timeline` | Browse encrypted local memories (OAuth) |
+| **Seal new** | `new` | Compose |
+| **Rings** | `rings` | Bind / retire / rename |
+| **Settings / Help** | top bar | Policies, device trust, explanations |
 
-**Settings** and **Help** live in the **top bar** of `AppChrome`, not in the bottom tab strip.
-
-Recommended capture path: **Seal new** → `NewMemoryPage`.
+**No ring tap required** to open Timeline or read memories.
 
 ### Phase 3 — Create & seal (core loop)
 
-1. User builds a memory on **`NewMemoryPage`** (`route.name === "new"`).
-2. Validation requires story/media per existing rules; **Seal with Ring** is the primary ritual when `gateSealWithRingAccess(entitlements)` allows it; otherwise upgrade copy / modal (`havenCopy` + `newMemoryPageContent`).
-3. Persisting a draft calls **`primeSealPrepAfterDraftPersisted(draftId)`** (`sealFlowClient.ts`): arms seal session state and records **pending draft IDs** for the SDM payload.
-4. User is prompted to touch the ring; the **ring URL** opens **`/start`** with **SDM parameters** (`cmac`, `picc` or `uid`+`ctr`, etc.).
-5. **`StartClient`** POSTs **`/api/rings/sdm/resolve`** with **`getSealSdmContextPayload()`** (`context` + `draft_ids` when prep is armed).
-6. On **`seal_confirmation`** with a **seal ticket**, **`finalizeSealChainFromSdmResponse`** runs **`finalizeSealWithTicket`** → **`/api/seal/finalize`** (precheck/commit), clears seal prep, then **`window.location.assign("/seal-success")`** (`SEAL_SUCCESS_PATH`).
-7. **`/seal-success`** shows **`SealCeremony`**; user returns to **`/app`** via **Return** → back into **`AppRouter`** (typically **Memories**).
+1. User opens **Seal new** (`NewMemoryPage`).
+2. User composes text/media; taps **Seal with Ring** (Plus/trial when gated).
+3. Client arms seal prep (`primeSealPrepAfterDraftPersisted`, `lib/seal-flow`).
+4. User taps ring → browser opens **`/start`** with SDM params.
+5. `StartClient` → `POST /api/rings/sdm/resolve` → **`seal_confirmation`** + ticket.
+6. `finalizeSealChainFromSdmResponse` → `POST /api/seal/finalize` → local memory + `/seal-success`.
 
-**Alternate path — Save securely (Face ID / device lock)**  
-Secondary action on `NewMemoryPage` encrypts to the timeline without the ring NFC handoff; user can seal later with a ring when eligible.
+**Secondary path:** Save securely (no ring) — legacy convenience; may be retired later.
 
-### Phase 4 — Management & high-assurance actions
+### Phase 4 — Idle ring tap (LEGACY vs target)
+
+| | LEGACY (shipping) | Target (Phase 1) |
+|---|-------------------|------------------|
+| Scene | `daily_access` | Same API value, **new UX** |
+| UX | “Opening Haven…” → redirect `/app` | One line: open app to seal → `/app` |
+| Auth | May prompt OAuth on tap if unsigned | OAuth only at `/login` / `/app` gate |
+
+### Phase 5 — Management
 
 | Area | Notes |
 |------|--------|
-| **`RingsPage`** | Bind/revoke/rename; copy and flows stress **Face ID / secondary verification** for sensitive operations (`ringsPageContent`). |
-| **`MemoryDetailPage`** | Open from Timeline (`route.name === "detail"`). |
-| **`SettingsPage`** | Export, subscription, policy links as implemented. |
+| `RingsPage` | Bind/revoke; device password + secondary token for revoke |
+| `SettingsPage` | Cloud backup toggle (framework), export, help links |
+| `MemoryDetailPage` | Open from Timeline |
 
 ---
 
-## 2. Mermaid flowchart (implementation sketch)
+## 2. Mermaid — target daily loop
 
 ```mermaid
 flowchart TD
-  subgraph entry["Entry"]
-    A[Open PWA / visit /app] --> B{Permanent session?}
-    B -->|No + FTUX incomplete| S0[/start — OAuth FTUX/]
-    S0 --> A2[Return to /app with session]
-    B -->|Yes or FTUX OK| C[AppShell + AppRouter]
-    A2 --> C
-  end
-
-  C --> D{haven.onboarding.completed.v1?}
-  D -->|No| H0[Route: home — HomePage]
-  D -->|Yes| T0[Route: timeline — Memories]
-
-  H0 --> OB[FirstTimeOnboarding 3–5 screens]
-  OB --> LG[Apple / Google sign-in]
-  LG --> T0
-
-  subgraph gates["Session gates — appFlowMachine"]
-    T0 --> G1{mainState}
-    G1 -->|PWA_INSTALL_GATE iOS| PWA[Install or defer PWA]
-    PWA --> G1
-    G1 -->|RING_SETUP_GATE| RW[RingSetupWizard]
-    G1 -->|READY| TAB[Bottom tabs]
-    RW --> TAB
-  end
-
-  TAB --> M[Memories timeline]
-  TAB --> E[Explore]
-  TAB --> N[NewMemoryPage — Seal new]
-  TAB --> R[RingsPage]
-
-  N --> C1{Has sealable content?}
-  C1 -->|No| V1[Inline validation / hints]
-  C1 -->|Yes| SR[Seal with Ring primary path]
-
-  SR --> DRAFT[Save draft + primeSealPrepAfterDraftPersisted]
-  DRAFT --> ARM[armSealFlow + pending draft_ids]
-  ARM --> PROMPT[Prompt: touch ring → opens /start with SDM query]
-
-  PROMPT --> Q[/start — StartClient NFC SDM/]
-  Q --> PL{iOS vs Android UX copy}
-  PL --> API["POST /api/rings/sdm/resolve"]
-  API --> SC{scene === seal_confirmation?}
-  SC -->|Yes + ticket| FIN[finalizeSealChainFromSdmResponse]
-  FIN --> API2["/api/seal/finalize precheck + commit"]
-  API2 --> OK[/seal-success — SealCeremony/]
-  OK --> M
-
-  SR -.-> SS[Save securely — Face ID / lock]
-  SS --> TL[Encrypted timeline entry]
-  TL --> M
-
-  SR -->|No Haven Plus access| UP[Upgrade modal / copy — Rings + trial]
-  UP --> N
-
-  R --> HR[Revoke / rename — secondary verification]
-  M --> MD[MemoryDetail]
-  MD --> DEL[Delete sealed — Face ID + extra confirm per copy]
-
-  style N fill:#4F46E5,color:#fff
-  style SR fill:#10B981,color:#fff
-  style OK fill:#8B5CF6,color:#fff
+  LOGIN[OAuth — Apple / Google / Email] --> APP[/app — Timeline/]
+  APP --> READ[Browse memories — no ring]
+  APP --> NEW[Seal new — compose]
+  NEW --> ARM[Arm seal prep]
+  ARM --> TAP[Touch ring — /start SDM]
+  TAP --> SEAL[seal_confirmation + finalize]
+  SEAL --> APP
 ```
 
 ---
 
-## 3. Quick reference — localStorage / telemetry keys
+## 3. Mermaid — implementation sketch (shipping gates)
 
-| Key / constant | Role |
-|----------------|------|
-| `haven.onboarding.completed.v1` | First-time welcome slides finished |
-| `haven.ftux.started.v1` | User began sign-in from `/start` (avoids redirect loop in `app/app/page.tsx`) |
-| `haven.ring.setup.dismissed.v1` | User skipped `RingSetupWizard` |
-| `haven.first_memory.completed.v1` (`FIRST_MEMORY_DONE_KEY`) | First memory milestone for `/app` gating |
-| `PENDING_SEAL_DRAFT_IDS_KEY` / seal flow arm (`lib/seal-flow`) | `/start` payload + finalize |
+```mermaid
+flowchart TD
+  A[Open /app] --> B{Session?}
+  B -->|No| L[/login/]
+  L --> A
+  B -->|Yes| C[AppRouter]
+  C --> G1{appFlowMachine}
+  G1 -->|LEGACY RING_SETUP_GATE| RW[RingSetupWizard]
+  G1 -->|READY| TAB[Tabs: Timeline / New / Rings]
+  RW --> TAB
+  TAB --> N[NewMemoryPage]
+  N --> SR[Seal with Ring]
+  SR --> Q[/start/]
+  Q --> API[sdm/resolve]
+  API --> SC{scene}
+  SC -->|seal_confirmation| FIN[seal/finalize]
+  SC -->|daily_access LEGACY| APP2[Redirect /app]
+  SC -->|new_ring_binding| BIND[bind-ring]
+  FIN --> OK[/seal-success/]
+  OK --> TAB
+```
 
 ---
 
-## 4. API touchpoints (seal path)
+## 4. Quick reference — keys
 
-- **`POST /api/rings/sdm/resolve`** — dynamic NFC / scene (`new_ring_binding`, `daily_access`, `seal_confirmation`).
-- **`POST /api/seal/finalize`** — server-side precheck + commit after verified ring ticket.
+| Key | Role |
+|-----|------|
+| `haven.onboarding.completed.v1` | Welcome slides done |
+| `haven.ring.setup.dismissed.v1` | Skipped ring wizard |
+| `lib/seal-flow` arm state | Seal prep for `/start` payload |
 
-If product naming changes (e.g. tab labels), update **`src/content/appChromeContent.js`** and keep this doc in sync.
+---
+
+## 5. API touchpoints
+
+| API | Role (target) |
+|-----|----------------|
+| `POST /api/rings/sdm/resolve` | Verify tap; `new_ring_binding` \| `seal_confirmation` (+ legacy `daily_access`) |
+| `POST /api/seal/finalize` | Commit seal |
+| `POST /api/nfc/bind` | Bind ring to **current account** |
+| `POST /api/auth/nfc-login` | **Disabled (410)** |
+
+---
+
+## Deprecated journey elements
+
+- Tap ring to **enter** app or vault daily.
+- Partner **shared Haven** as default couple flow (invite → see all memories).
+- `/start` as primary login surface for unsigned users (except bind-before-seal edge cases).

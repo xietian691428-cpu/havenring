@@ -1,234 +1,195 @@
-# Haven Ring — Core Definition
+# Haven — Core Definition
 
-> **Single Source of Truth.** Every file, decision, and line of code in this repo
-> must defer to this document. If a feature disagrees with this file, the feature
-> is wrong — not the file.
+> **Single source of truth for product intent.** Every file, decision, and line of code
+> must defer to this document. If shipping code disagrees with **Current direction** below,
+> treat the code as **legacy to migrate** (Phase 1+), not as permission to extend old UX.
 
 ---
 
-## 1. One-sentence product
+## 当前生效产品方向（2026-06 更新）
 
-**Haven Ring** is a physical NFC ring that lets a person turn a private thought
-into a **sealed, immutable** digital moment — by typing it once on their phone
-and then *touching the ring* — and that lets only explicitly authorized members
-of the same private haven revisit those moments, but **only** when they
-physically tap a linked ring again.
+**This section overrides all older text in this file and in other docs.**
 
-It is not a journal. It is not a diary. It is not a note app. It is a **ritual
-device**.
+### What Haven is
 
-## 2. Three unbreakable principles
+**Haven is a personal private Memory Sanctuary** — local-first, end-to-end encrypted,
+with an optional NFC ring for a **Seal ritual only**. It is not a couple vault, not a
+shared-login device, and not a “tap ring to open the app” product.
 
-These are the only invariants. If a decision violates one, stop.
+### Login and unlock
 
-### 2.1 Low frequency
-- The product is designed to be used **rarely** — maybe once a week, maybe once
-  a year. The UI must *discourage* casual or habitual use.
-- No streaks. No daily prompts. No reminders. No notifications of any kind.
-- The app has **no in-UI affordance** to view sealed moments. There is no
-  "history", "memories", "timeline", "search" or "export" button anywhere.
-  The only way into the vault is to physically tap the ring.
-- There is no feed. There is no "today's moment". There is no digest email.
+- **Only** personal account sign-in: **Apple**, **Google**, or **Email** (OAuth via Supabase).
+- Daily use: open the PWA at **`/app`** → **Timeline (Memories)** with a normal session.
+- **No ring-based login, unlock, or “enter Haven” gesture.** `POST /api/auth/nfc-login` stays disabled.
 
-### 2.2 Ritual / ceremony
-- Sealing a moment requires a **physical act** (touching the ring to the phone).
-  This is non-negotiable. No "seal" button. No "save" shortcut.
-- Revisiting sealed moments **also** requires the physical act. Tapping the
-  ring is the one, only, universal gesture this product has.
-- **Hard constraint:** NFC write capability belongs to **recovery tooling**, not
-  the primary user flow. Main flow is always **prewritten ring + claim**.
-- Every screen change that follows a tap is full-screen, dark, and animated
-  with deliberate slowness (Framer Motion). The user must *feel* that
-  something happened.
-- Copy is sparse, declarative, and final: *"Touch your ring to seal."*,
-  *"Sealed forever."*, *"The ring is now empty and ready for a new chapter."*.
-  No exclamation marks, no emoji, no confirmation toasts.
-- **Sealed = immutable.** Once sealed, a moment cannot be edited, deleted
-  individually, exported, or shared. The author may *revisit* it (via ring
-  tap), but never alter it. The only way to remove a sealed moment is to wipe
-  the whole ring — which is all-or-nothing and irreversible.
+### What the ring does
 
-### 2.3 Zero sensitive data on the server
-- The server (Supabase) **must never** see plaintext. Ever.
-- All payload encryption and decryption happens in the browser via Web Crypto
-  (AES-GCM 256).
-- The encryption key is generated in the browser and stored **only** in
-  IndexedDB (`idb-keyval`). **No backend storage, no backup, no sync, no escrow,
-  no recovery.** Losing the device == losing the ability to ever decrypt. That
-  is the feature, not a bug.
-- Wiping a ring is the only sanctioned destructive path. It deletes all
-  ciphertext rows server-side *and* destroys the local key.
-- The server stores:
-  - `rings` — ring id, owner id, status, a *hash* of the NFC token.
-  - `moments` — ring id, opaque `encrypted_vault` blob, `iv`, `is_sealed` flag,
-    `created_at`. No title, no tags, no preview, no category, no length
-    bucketing, no metadata beyond that.
-- The server never receives, logs, or proxies anything that could reveal
-  plaintext — including via analytics, error reporting, or logs.
+| Ring **does** | Ring **does not** |
+|---------------|-------------------|
+| **Seal** — physical confirmation after the user composes a memory | Sign in or unlock the app |
+| **First bind** — associate this physical ring with the **current** logged-in account | Open Timeline or vault for daily browsing |
+| Prove a fresh, server-verifiable tap (SDM) during Seal | Grant access to another person’s account or memories |
 
-## 3. The user's mental model
+**Canonical daily loop:** write memory in app → **Seal with Ring** → touch **your** ring → encrypted local save (optional Plus cloud).
 
-```
-I had a thought.
-I typed it on my phone.
-I touched my ring. — Sealed.
+### Account and sharing model
 
-Weeks later, idly, I touched my ring again.
-The past came back, only for a moment.
-I read. I closed the app. It's locked away again until I tap next.
-```
+- **Strong default:** one person, one account, one ring (binding is per account).
+- Partner / family sharing is **not** “join the same Haven and see everything.”
+- **Target:** explicit **Shared** memories (Plus, E2E encrypted cloud) or manual export/import of chosen items.
+- **Legacy (code still present, product deprecated):** `havens` + `haven_members` + partner invite → full Haven membership sharing. Do **not** build new UX on this model.
 
-That's the whole product. Everything else is scaffolding.
+### Copy and UX
 
-## 4. The canonical NFC flow (one dynamic URL, three outcomes)
+- **Minimal in-flow copy:** ≤1 short sentence per screen for the action at hand.
+- Explanations, privacy detail, and troubleshooting → **Settings** and **Help** only.
+- **`/start`** is for **NFC bind** and **Seal confirmation** — not daily app entry.
 
-Haven Ring hardware is a **dynamic NFC ring**. Production rings use NTAG 424
-DNA Secure Dynamic Messaging (SDM), so each physical tap produces a fresh,
-server-verifiable URL. The SDM master key lives only in the server-side
-`sdm-backend` container environment; it is never committed, shipped to the
-browser, or stored in Supabase.
+### Storage
 
-The ring is programmed with exactly **one** dynamic NDEF URL template:
+- **Local-first:** encrypted memories in IndexedDB (`localMemoryStore`); primary read path is Timeline after OAuth.
+- **Target limits:** generous local media (goal **20MB+ per attachment** on device); avoid arbitrary small caps in product design.
+- **Plus cloud:** optional E2E backup/sync and larger payloads (implementation backlog).
+- **Note:** shipping code may still enforce smaller staging caps (e.g. seal staging ~2MB) until Phase 1 refactors land — do not treat those as the long-term product ceiling.
 
-```
-https://<app>/start?picc_data=<dynamic>&cmac=<dynamic>
-```
+### Privacy invariant (unchanged)
 
-Plain UID mirroring is supported only as a compatibility mode:
-`/start?uid=<uid>&ctr=<read-counter>&cmac=<dynamic>`.
+- Server must not receive or store **plaintext** memory content.
+- Web Crypto (AES-GCM) in the browser; ciphertext only over the network.
 
-`/start` calls `POST /api/rings/sdm/resolve`, which validates the tap against
-`sdm-backend`, maps the verified UID to the active ring binding, rejects replayed
-read counters, and returns one of three scenes:
+---
+
+## Deprecated concepts — do not extend
+
+| Deprecated | Replacement |
+|------------|-------------|
+| `daily_access` = “Opening Haven…” / ring unlocks app | OAuth → `/app` Timeline; idle ring tap → short hint to start Seal in app (Phase 1) |
+| Vault / memories **only** via ring tap | Timeline + Memory detail after sign-in |
+| Mandatory **Ring Setup Gate** before using app | Optional bind in Settings / Rings; soft prompt only |
+| **Couple Haven** — members share all sealed content | Personal library + **explicit Shared** (Plus) |
+| Ring as **access credential** / NFC login JWT | Supabase session only |
+| Long ritual copy on `/start` | One line + Help |
+| “No timeline / no history UI” (old §2.1) | Timeline is the primary memory surface |
+
+---
+
+## 1. One-sentence product (current)
+
+**Haven** lets a signed-in person capture private memories on their phone, **seal** chosen moments with a physical ring tap, and revisit them from their own account — local-first, encrypted, calm, and without ring-based login.
+
+## 2. Principles (current)
+
+### 2.1 Calm, low-noise use
+
+- No streaks, spammy notifications, or habit gamification.
+- **Timeline** is the normal place to browse **your** memories after sign-in.
+- The ring adds meaning at **Seal** time, not on every app open.
+
+### 2.2 Seal ritual (ring-required for Seal with Ring)
+
+- **Seal with Ring** requires a physical tap after compose (SDM-verified).
+- Revisiting memories does **not** require a ring tap (session + local decrypt).
+- NFC tag **write** remains **recovery / factory** only; retail flow is prewritten SDM URL → `/start`.
+
+### 2.3 Local-first encryption
+
+- Encrypt/decrypt in the browser; keys and plaintext memories stay on device by default.
+- Optional Plus cloud backup/sync must remain E2E from the client’s perspective.
+- Server stores binding metadata, seal tickets, and ciphertext blobs — never plaintext story/media.
+
+## 3. User mental model (current)
 
 ```
-User taps dynamic ring → /start?...SDM...
+I sign in with my Apple / Google / Email account.
+I open Haven and see my memories.
+
+I write something that matters.
+I tap Seal with Ring and touch my ring.
+It’s sealed — calm, final, mine.
+
+Later I open the app again — no ring needed to read.
+If I share with someone I trust, I mark it Shared (Plus) or export — explicitly.
+```
+
+## 4. NFC / SDM flow (target behavior)
+
+Hardware: dynamic NTAG 424 DNA URL → `https://<app>/start?picc_data=…&cmac=…`
+
+`POST /api/rings/sdm/resolve` verifies the tap. **Product target** scenes:
+
+```
+User taps ring → /start?...SDM...
     │
-    ├─ No active binding for verified UID
-    │     └─ scene = new_ring_binding
+    ├─ UID not bound to any account
+    │     └─ new_ring_binding → bind to current session (or sign-in first)
     │
-    ├─ Active binding exists, no armed seal context
-    │     └─ scene = daily_access
+    ├─ UID bound, seal flow armed in app
+    │     └─ seal_confirmation → finalize seal ticket
     │
-    └─ Active binding exists, authenticated owner has armed seal flow
-          └─ scene = seal_confirmation
+    └─ UID bound, no seal armed  [LEGACY: daily_access — TO REMOVE]
+          └─ TARGET: one-line “Open Haven to seal a memory” → /app (no unlock narrative)
 ```
 
-The same physical tap is *new ring binding*, *daily access*, and *seal
-confirmation*. The server verifies that the tap is real and fresh; local product
-state decides which trusted scene should continue.
+SDM proves **this ring was tapped now**; it does **not** prove identity — OAuth does.
 
-## 5. Compose flow (unchanged)
+## 5. Compose and seal flow (code-aligned)
 
 ```
-Input (plain text in browser)
-  └─ Web Crypto AES-GCM encrypt (key from IndexedDB)
-      └─ POST to Supabase moments table   { encrypted_vault, iv, is_sealed: false }
-          └─ UI transitions to full-screen "Touch your ring to seal"
-              └─ User taps ring → /hub?token=T
-                  └─ hub calls seal_moment RPC → is_sealed = true
-                      └─ "Sealed forever."
+Sign in (OAuth) → New memory (NewMemoryPage)
+  └─ arm seal prep (lib/seal-flow, draft ids)
+      └─ User taps ring → /start → sdm/resolve (seal_confirmation)
+          └─ POST /api/seal/finalize (precheck + commit)
+              └─ Encrypted row in localMemoryStore (+ optional cloud backlog)
+                  └─ /seal-success ceremony → back to Timeline
 ```
 
-## 6. Vault flow
+**Save securely** (without ring) may remain as a secondary path until product retires it.
 
-```
-User taps ring (nothing pending) → /hub?token=T
-  └─ hub calls resolve_ring_by_token RPC → ringId
-      └─ RPC hashes plaintext T inside Postgres and compares with rings.token_hash
-      └─ store in-memory vaultAccess = { ringId, token, expiresAt }
-          └─ redirect /vault/[ringId]
-              └─ vault verifies vaultAccess matches ringId and not expired
-                  └─ select sealed moments for ringId (RLS enforces ownership)
-                      └─ decrypt each row locally
-                          └─ render minimal, read-only, dark timeline
-```
+## 6. What Haven is **not** (current)
 
-Vault access lives **only in memory** (not localStorage, not IndexedDB). When
-the tab closes or reloads without a ring tap, access is gone. Default TTL
-is short (order of minutes).
+- Not ring-based login or “tap to enter someone’s Haven.”
+- Not a shared couple vault where membership implies all memories visible.
+- Not a social feed or public sharing network.
+- Not plaintext-on-server storage.
+- Not a requirement to bind a ring before using the app (bind is for Seal + ownership).
 
-## 7. Wipe flow — the only destructive path
+## 7. Architecture snapshot
 
-Deep inside the vault, a visually-recessed affordance reveals a confirmation
-dialog. The user must type `ERASE FOREVER` exactly. On confirm:
+| Layer | Role |
+|-------|------|
+| `/app` PWA shell | OAuth session, Timeline, compose, settings |
+| IndexedDB + Web Crypto | Local encrypted memories |
+| Supabase Auth | Apple / Google / Email session |
+| SDM + `/api/rings/sdm/resolve` | Tap verification for bind + seal |
+| Seal tickets + finalize | Server-audited seal commit |
+| Plus (target) | E2E cloud, Shared memories, larger media |
 
-```
-wipe_ring RPC (verifies ring token server-side)
-  └─ hard-delete every row in moments where ring_id = X
-      └─ update rings.status = 'unclaimed', owner_id = null
-          └─ client destroys IndexedDB key + clears all Zustand state
-              └─ "The ring is now empty and ready for a new chapter."
-```
+## 8. Language policy
 
-Token handling invariant:
-- Ring URL carries plaintext opaque token `T` only.
-- Server/RPC computes hash at query-time (`encode(extensions.digest(T, 'sha256'), 'hex')`).
-- `token_hash` is never exposed to the client or API consumers.
+- English-first (`en`); optional `fr`, `es`, `de`, `it`.
+- In-flow strings stay short; legal and help content may be longer.
 
-After a wipe:
-- Server retains no ciphertext for that ring.
-- Client retains no key that could decrypt old backups (if any existed).
-- The ring is now an unclaimed device that can be re-paired by a new owner.
+## 9. Decision guardrails (current)
 
-## 8. What Haven Ring is **not**
+Before shipping a feature, ask:
 
-To prevent scope creep, explicit non-goals:
+1. Does it require a **ring tap to browse** memories? → **Reject** (except Seal ritual).
+2. Does it sign a user in **without** their OAuth account? → **Reject**.
+3. Does it expose **another account’s** memories via a ring tap? → **Reject**.
+4. Does it send **plaintext** to the server? → **Reject**.
+5. Does in-flow copy exceed **one necessary sentence** without living in Help? → **Revise**.
 
-- **Not** a searchable, queryable journal. No list, no search, no filter, no
-  export, no tags, no titles.
-- **Not** a public social product. Moments can only be shared inside a private,
-  explicitly consented small group haven.
-- **Not** an encrypted backup service. There is no cloud restore.
-- **Not** cross-device key sync. Each device keeps its own local key; a device
-  can only decrypt moments it encrypted unless members intentionally use the
-  same trusted device.
-- **Not** a chat, a wallet, a health tracker, or a keepsake viewer.
-- **Not** a gamified habit tool. No streaks, badges, counts, or reminders.
-- **Not** a casual-access app. Vault access is gated by a physical tap every
-  single time.
+---
 
-## 9. Architecture at a glance
+## Appendix — superseded text (archival only)
 
-| Layer          | Tech                                             | Why                                                           |
-| -------------- | ------------------------------------------------ | ------------------------------------------------------------- |
-| Shell          | Next.js 16 App Router, PWA (install-to-home)     | One codebase, offline-capable, no app store friction          |
-| UI             | React 19 + Tailwind v4 + Framer Motion           | Minimal, fast, ceremony animations                            |
-| Local identity | Web Crypto `SubtleCrypto` + `idb-keyval`         | Key never leaves the device                                   |
-| Session        | Zustand — persisted `pending` + session `vaultAccess` | Compose state survives reloads; vault access does not    |
-| Transport      | Supabase JS client (HTTPS)                       | Only ciphertext crosses the network                           |
-| Server state   | Supabase Postgres + Row Level Security           | Rings, sealed moments, no plaintext                           |
-| Auth           | Supabase Auth (owner of a ring)                  | Ring claiming, vault RLS, wipe authorisation                  |
-| Hardware       | Dynamic NTAG 424 DNA SDM URL → `/start?...`      | One dynamic URL, one gesture, replay-resistant tap proof      |
+<details>
+<summary>Pre-2026-06 definitions (do not implement)</summary>
 
-## 10. Language policy
+- “Only way into the vault is to physically tap the ring.”
+- “No timeline, history, or search in UI.”
+- “Revisiting sealed moments requires physical tap every time.”
+- “Three equal outcomes: new_ring_binding, daily_access, seal_confirmation” as daily entry model.
+- Small-group Haven with equivalent ring read for all members as the **primary** sharing story.
 
-- Product targets global users (excluding mainland China) with **English as the
-  default UI language** across PWA and app.
-- Optional language packs are available in:
-  - English (`en`)
-  - French (`fr`)
-  - Spanish (`es`)
-  - German (`de`)
-  - Italian (`it`)
-- Recovery copy, security prompts, and wipe confirmations must be translated
-  consistently with the same legal/meaning precision as English.
-
-The ring itself holds the SDM app configuration, not user content. A verified
-SDM response proves *"this specific ring was tapped right now"*, not identity,
-not plaintext content.
-
-## 11. Decision guardrails for future work
-
-Before adding any feature, answer all five:
-
-1. Does this increase the **frequency** of app use? → Reject.
-2. Does this create any way to reach the vault **without** a ring tap
-   (e.g. "remember me", "recent view", "login & browse")? → Reject.
-3. Does this weaken the **ritual** (e.g. "seal without touching the ring",
-   "quick-save draft", "edit a sealed moment")? → Reject.
-4. Does this require the **server** to ever see plaintext, user-typed metadata,
-   or anything that could be correlated to content? → Reject.
-5. Does this create a **recovery or backup path** for the encryption key? → Reject.
-
-If all five are "no", the feature may be discussed.
+</details>

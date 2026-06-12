@@ -1,8 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
+import { userOwnsRing } from "@/lib/haven-access";
 
 type AdminClient = SupabaseClient<Database>;
 
+/**
+ * Resolve an active ring the caller may operate on (pin, token issue, revoke).
+ * Phase 5: owner-only — legacy haven_members broad access removed.
+ *
+ * @deprecated Name retained for imports; pair membership no longer grants ring ops.
+ */
 export async function getRingWithMembership(
   admin: AdminClient,
   ringId: string,
@@ -19,24 +26,9 @@ export async function getRingWithMembership(
     return { ring: null, error };
   }
 
-  if (ring.user_id === userId) {
+  if (userOwnsRing(userId, ring)) {
     return { ring, error: null };
   }
 
-  if (!ring.haven_id) {
-    return { ring: null, error: null };
-  }
-
-  const { data: member, error: memberError } = await admin
-    .from("haven_members")
-    .select("id")
-    .eq("haven_id", ring.haven_id)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (memberError) {
-    return { ring: null, error: memberError };
-  }
-
-  return { ring: member ? ring : null, error: null };
+  return { ring: null, error: null };
 }

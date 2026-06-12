@@ -39,7 +39,7 @@ export function defaultFreeEntitlements(): UserEntitlements {
     trialDaysRemaining: 0,
     maxRings: FREE_RING_LIMIT,
     cloudStorageGB: FREE_STORAGE_GB,
-    canSealWithRing: false,
+    canSealWithRing: true,
     canUseCloudBackup: false,
   };
 }
@@ -62,7 +62,7 @@ export function userEntitlementsFromSubscriptionStatus(
     trialDaysRemaining: isTrialActive ? Math.max(0, s.plusTrialDaysLeft) : 0,
     maxRings: s.ringLimit,
     cloudStorageGB: s.storageGb,
-    canSealWithRing: Boolean(s.canSealWithRing),
+    canSealWithRing: true,
     canUseCloudBackup: isPlus,
   };
 }

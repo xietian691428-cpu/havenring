@@ -33,7 +33,7 @@ const IOS: InstallGuideCopy = {
     "Add to Home Screen only creates a shortcut. It does not install a separate app store package or grant new permissions.",
   safetyDetails: [
     "No access to your photos, contacts, or messages is requested by this step.",
-    "You can remove the icon anytime; your Haven account and memories are unchanged.",
+    "You can remove the icon anytime; your account and memories on this device are unchanged.",
     "Opening from Home Screen simply launches havenring.me in standalone mode.",
   ],
   safetyPrivacy:

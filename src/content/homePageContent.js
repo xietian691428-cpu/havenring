@@ -1,14 +1,12 @@
 const EN = {
   brand: "Haven Ring",
-  title: "Welcome back to your Haven",
+  title: "Welcome back",
   subtitle:
-    "Your private space for memories.",
+    "Your private memory sanctuary.",
   howTitle: "How it works",
-  howBody:
-    "Use your ring for fast access, or continue with Face ID anytime.",
+  howBody: "Sign in for daily use. Touch your ring when you seal.",
   ringSignInTitle: "Ring detected",
-  ringSignInBody:
-    "Sign in to continue. Your ring helps you enter quickly, but your account stays in control of access.",
+  ringSignInBody: "Sign in to continue. Your ring is for sealing only.",
   ringSignInPermissionHint:
     "NFC permission was unavailable on the last tap. You can still continue by signing in.",
   ringSignInApple: "Continue with Apple",
@@ -25,7 +23,7 @@ const EN = {
   ringSecurityRecoveryPlaceholder: "Or enter recovery code",
   ringSecuritySetupAction: "Create password",
   ringSecurityVerifyAction: "Verify and continue",
-  ringSecurityContinue: "Continue to Haven",
+  ringSecurityContinue: "Continue",
   ringSecurityWorking: "Verifying...",
   ringSecurityRecoveryTitle: "Recovery code",
   ringSecurityRecoveryHint:
@@ -43,14 +41,14 @@ const EN = {
   create: "Create New Memory",
   settings: "Settings",
   start: "How to start",
-  ringSetupCta: "Add NFC rings",
+  ringSetupCta: "Link a ring (optional)",
   firstMissionTitle: "Your first step",
   firstMissionBody:
     "Create your first memory now. You can set up your ring right after.",
   firstMissionPrimary: "Create my first memory",
   firstMissionSecondary: "Set up ring (recommended)",
   calmHomeTitle: "Welcome back",
-  calmHomeSubtitle: "Your private memory space is ready when you are.",
+  calmHomeSubtitle: "Sign in to read and write. Your ring is for sealing only.",
   calmHomeLead: "Ready to seal your first memory?",
   calmHomeSealCta: "Seal New",
   calmHomeTimelineCta: "Open Memories",

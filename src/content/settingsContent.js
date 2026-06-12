@@ -3,7 +3,7 @@ const EN = {
   title: "Privacy-first controls",
   upgradeSectionTitle: "Haven Plus",
   upgradeSectionBody:
-    "Haven Plus unlocks Seal with Ring plus optional end-to-end encrypted cloud backup and sync for your private pair. Free plan keeps everything on this device only.",
+    "Haven Plus includes Seal with Ring and optional encrypted cloud backup. Details in Help.",
   upgradeSectionCta: "View plans & pricing",
   back: "Back",
   localSectionTitle: "Local data",
@@ -17,17 +17,19 @@ const EN = {
   clearAll: "Clear All Memories",
   deviceSecuritySectionTitle: "Trusted devices",
   deviceSecurityEnabled:
-    "This Haven is protected by a password on new devices. Trusted devices can open with ring tap only.",
+    "This device is protected with a Haven password for sensitive actions.",
   deviceSecurityNotEnabled:
-    "Device protection is not initialized yet. Complete setup from ring quick access flow.",
+    "Set a device password to protect sealed memories and sensitive actions. See Help.",
   deviceTrustedAtLabel: "Trusted on",
   revokeDevice: "Revoke",
   confirmRevokeDevice:
     "Remove this device trust? It will require password or recovery code next time.",
   deviceRevoked: "Device access revoked.",
   cloudSectionTitle: "Cloud backup (Haven Plus)",
+  cloudQuotaNote: "50 GB hard cap per account. Uploads are compressed and chunked.",
+  cloudStorageFull: "Storage full. Upgrade or delete old memories.",
   cloudToggleLabel:
-    "Enable encrypted cloud backup and sync (Plus). You can turn this off anytime.",
+    "Enable encrypted cloud backup (Plus, 50 GB cap). You can turn this off anytime.",
   cloudOff: "Cloud backup is off — your memories stay on this device only.",
   cloudEnabledNoSignIn: "Cloud backup is enabled but not signed in yet.",
   cloudEnabledSignedIn: "Cloud backup is enabled and linked.",
@@ -64,7 +66,7 @@ const EN = {
   privacyUnbindLine:
     "Retiring a ring does not delete your sealed memories; it stops that ring from being used for sealing and it cannot be transferred to another Haven.",
   privacyE2eLine:
-    "Your sealed memories are protected with end-to-end encryption on supported flows. Rings are keys to your Haven, while each partner keeps their own account identity.",
+    "Your sealed memories are encrypted on supported flows. One account per person; your ring is for sealing only.",
   privacyPolicy: "View Privacy Policy",
   openHelp: "Open Help Center",
   confirmExport: "Export encrypted local backup file now?",
@@ -99,10 +101,10 @@ const EN = {
   loadStatsFailed: "Could not load local storage stats.",
   sessionSectionTitle: "Ring & session",
   keepSignedInLabel:
-    "Stay signed in on this device. Ring-only account login is disabled for shared Haven pairs.",
+    "Stay signed in on this device. Sign-in uses your Apple, Google, or Email account only.",
   revokeAllNfcTitle: "Cloud-linked NFC rings",
   revokeAllNfcBody:
-    "Retire every ring credential for your Haven membership. Lost rings stop working immediately and cannot be transferred.",
+    "Retire ring credentials for this account. Lost rings stop working immediately and cannot be transferred.",
   revokeAllNfcButton: "Retire my ring credentials",
   confirmRevokeAllNfc:
     "Retire ALL NFC ring credentials for this account? Retired rings cannot be transferred to another Haven.",
@@ -125,10 +127,10 @@ const EN = {
   accountCloudOff: "Not signed in for cloud backup.",
   subscriptionSectionTitle: "Subscription",
   subscriptionBody:
-    "Free: local storage only. Plus: local plus optional cloud sync for your private pair. If you cancel Plus, download cloud data within 30 days — cloud copies are then removed automatically. Manage billing from your device’s subscription settings when available.",
+    "Free: local only. Plus: optional cloud backup and explicit sharing. See Help for billing.",
   subscriptionManageCta: "Manage subscription",
   ringsSectionTitle: "Rings",
-  ringsBody: "See up to two linked rings, invite your partner, or retire your own ring if it is lost.",
+  ringsBody: "Optional ring for sealing. Add a second by invite, or retire a lost ring.",
   ringsManageCta: "Manage rings",
   dataPrivacySectionTitle: "Data & privacy",
   legalSectionTitle: "Legal",

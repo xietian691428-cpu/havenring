@@ -166,7 +166,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         if (!active) return;
         if (!res.ok || !payload.keyPackage) {
           setMessage(
-            payload.error || "Invite key missing. Ask your partner to create a fresh invite."
+            payload.error || "Invite key missing. Ask them to create a fresh legacy invite."
           );
           return;
         }
@@ -174,7 +174,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         setInviteKeyPackage(payload.keyPackage);
       } catch {
         if (active) {
-          setMessage("Invite key missing. Ask your partner to create a fresh invite.");
+          setMessage("Invite key missing. Ask them to create a fresh legacy invite.");
         }
       }
     })();
@@ -374,7 +374,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         : "";
       if (inviteCode && !pendingKeyPackage) {
         setBindState("error");
-        setMessage("Invite key missing. Ask your partner to create a fresh invite.");
+        setMessage("Invite key missing. Ask them to create a fresh legacy invite.");
         return;
       }
 
@@ -517,12 +517,10 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     <main style={styles.page}>
       <section style={styles.card}>
         <p style={styles.kicker}>{copy.kicker}</p>
-        <h1 style={styles.title}>{inviteCode ? "Join Haven" : "Bind Ring"}</h1>
-        <p style={styles.body}>
-          {inviteCode
-            ? "Use your own account and ring."
-            : "Bind your ring. Invite your partner later."}
-        </p>
+        <h1 style={styles.title}>
+          {inviteCode ? copy.titleInvite : copy.title}
+        </h1>
+        <p style={styles.body}>{inviteCode ? copy.bodyInvite : copy.body}</p>
         {inviteCode ? (
           <div style={styles.noticeBanner} role="status">
             {copy.joinNoRetap}
@@ -557,11 +555,11 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             {uidLink === "unlinked"
               ? copy.statusUnlinked
               : uidLink === "yours"
-                ? "This ring is already linked to your account."
+                ? copy.statusYours
                 : uidLink === "other"
-                  ? "This ring is already linked to another Haven and cannot be transferred."
+                  ? copy.statusOtherAccount
                   : uidLink === "retired"
-                    ? "This ring was already activated and cannot be transferred to another Haven."
+                    ? copy.statusRetired
                     : uidLink === "linked_unknown"
                       ? copy.signInRequiredShort
                       : copy.statusCheckFailed}

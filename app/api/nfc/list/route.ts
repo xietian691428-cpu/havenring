@@ -7,7 +7,9 @@ import {
 } from "@/lib/supabase/server";
 
 /**
- * GET /api/nfc/list — active NFC ring bindings for the current user.
+ * GET /api/nfc/list — active NFC ring bindings visible to the signed-in account.
+ * Phase 5: includes legacy pair rings in the same haven for display/recovery only.
+ * Seal and sync operate on owner rings only (see haven-access).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -53,8 +55,11 @@ export async function GET(req: NextRequest) {
       rings: (data ?? []).map((ring) => ({
         ...ring,
         ownedByYou: ring.user_id === user.id,
+        /** @deprecated Legacy pair ring in the same haven — not operable on this account. */
+        legacyPairRing: ring.user_id !== user.id,
       })),
       havens: memberships ?? [],
+      accessModel: "personal_first",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error.";

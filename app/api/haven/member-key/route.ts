@@ -1,3 +1,4 @@
+/** @deprecated Legacy haven_member_keys wrap for second-ring invite recovery (Phase 5). */
 import { NextRequest, NextResponse } from "next/server";
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
 import {

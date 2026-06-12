@@ -6,6 +6,7 @@ import {
   parseSealDraftIds,
   sealTicketExpiryMs,
 } from "@/lib/seal-shared";
+import { userCanSealWithRing } from "@/lib/haven-access";
 import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     const admin = getSupabaseAdminClient();
     const { data: boundRing, error: boundErr } = await admin
       .from("user_nfc_rings")
-      .select("id, haven_id, nfc_uid_hash")
+      .select("id, user_id, haven_id, nfc_uid_hash")
       .in("nfc_uid_hash", uidHashCandidates)
       .eq("is_active", true)
       .order("bound_at", { ascending: false })
@@ -104,31 +105,20 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json(
         {
-          error: "This ring is not linked to your Haven.",
+          error: "This ring is not linked to your account.",
           error_code: "RING_NOT_LINKED",
         },
         { status: 404 }
       );
     }
-    if (boundRing.haven_id) {
-      const { data: membership, error: membershipErr } = await admin
-        .from("haven_members")
-        .select("id")
-        .eq("haven_id", boundRing.haven_id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (membershipErr) {
-        return NextResponse.json(
-          { error: "Could not verify Haven membership.", error_code: "HAVEN_VERIFY_FAILED" },
-          { status: 500 }
-        );
-      }
-      if (!membership) {
-        return NextResponse.json(
-          { error: "This ring belongs to another Haven.", error_code: "NOT_HAVEN_MEMBER" },
-          { status: 403 }
-        );
-      }
+    if (!userCanSealWithRing(user.id, boundRing)) {
+      return NextResponse.json(
+        {
+          error: "This ring belongs to another account.",
+          error_code: "RING_OWNER_REQUIRED",
+        },
+        { status: 403 }
+      );
     }
 
     const ticket = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");

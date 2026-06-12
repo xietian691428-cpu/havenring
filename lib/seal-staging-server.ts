@@ -67,6 +67,7 @@ export async function createSealStagingRecord(opts: {
   draftIds: string[];
   ciphertextB64: string;
   iv: string;
+  maxBytes?: number;
 }): Promise<{ id: string; expires_at: string; storage_backend: "db" | "object"; byte_size: number }> {
   const startedAt = Date.now();
   const admin = getSupabaseAdminClient();
@@ -78,7 +79,8 @@ export async function createSealStagingRecord(opts: {
   if (!draftIds.length || !iv || !ciphertextB64) {
     throw new Error("MISSING_STAGING_DATA");
   }
-  if (byteSize > SEAL_STAGING_MAX_BYTES) {
+  const maxBytes = opts.maxBytes ?? SEAL_STAGING_MAX_BYTES;
+  if (byteSize > maxBytes) {
     throw new Error("STAGING_TOO_LARGE");
   }
 

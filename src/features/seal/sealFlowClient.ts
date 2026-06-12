@@ -55,7 +55,16 @@ import {
   uploadSealStaging,
 } from "./sealStagingClient";
 import { getSealStrategy, type SealTransportMode } from "./sealPlatform";
-import { SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
+import { SEAL_LOCAL_MAX_BYTES, SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
+import {
+  buildSealPayloadFromDraft,
+  toServerSealCommitPayload,
+} from "./sealMediaPrep";
+import {
+  clearSealPrepBundle,
+  readSealPrepRelay,
+  writeSealPrepBundle,
+} from "./sealPrepBundle";
 import {
   SEAL_DRAFT_NOT_FOUND,
   SEAL_SESSION_ENDED,
@@ -193,56 +202,19 @@ export function clearSealPrepState(accessToken?: string) {
   const stagingId = getArmedSealStagingId();
   clearPendingSealDraftIds();
   clearSealDraftRelay();
+  clearSealPrepBundle();
   clearSealFlowArm();
   scheduleStagingCleanup(stagingId, accessToken);
 }
 
-const MAX_SEAL_PAYLOAD_BYTES = SEAL_STAGING_MAX_BYTES;
-
-function estimateJsonBytes(value: unknown): number {
-  try {
-    return new Blob([JSON.stringify(value)]).size;
-  } catch {
-    return Number.MAX_SAFE_INTEGER;
-  }
-}
-
-function slimMediaForSealFinalize(items: unknown[]): unknown[] {
-  if (!Array.isArray(items)) return [];
-  const slim: unknown[] = [];
-  let budget = MAX_SEAL_PAYLOAD_BYTES;
-  for (const row of items) {
-    if (!row || typeof row !== "object") continue;
-    const obj = row as Record<string, unknown>;
-    const candidate = {
-      id: obj.id,
-      name: obj.name,
-      mimeType: obj.mimeType,
-      size: obj.size,
-      dataUrl: typeof obj.dataUrl === "string" ? obj.dataUrl : undefined,
-    };
-    const bytes = estimateJsonBytes(candidate);
-    if (bytes > budget) break;
-    budget -= bytes;
-    slim.push(candidate);
-  }
-  return slim;
-}
-
-export function sealPayloadFromDraftItem(
-  item: Awaited<ReturnType<typeof getDraftItem>>
-): SealDraftFinalizePayload | null {
+export async function sealPayloadFromDraftItem(
+  item: Awaited<ReturnType<typeof getDraftItem>>,
+  opts: { forStaging?: boolean } = {}
+): Promise<SealDraftFinalizePayload | null> {
   if (!item) return null;
-  return {
-    id: item.id,
-    title: String(item.title || "Untitled memory"),
-    story: String(item.story || ""),
-    photo: slimMediaForSealFinalize(Array.isArray(item.photo) ? item.photo : []),
-    attachments: slimMediaForSealFinalize(
-      Array.isArray(item.attachments) ? item.attachments : []
-    ),
-    releaseAt: Number(item.releaseAt || 0) || 0,
-  };
+  return buildSealPayloadFromDraft(item, {
+    maxBytes: opts.forStaging ? SEAL_STAGING_MAX_BYTES : SEAL_LOCAL_MAX_BYTES,
+  });
 }
 
 async function payloadsFromLocalSources(
@@ -250,12 +222,12 @@ async function payloadsFromLocalSources(
 ): Promise<SealDraftFinalizePayload[]> {
   const payloads: SealDraftFinalizePayload[] = [];
   for (const id of draftIds) {
-    const fromIdb = sealPayloadFromDraftItem(await getDraftItem(id));
+    const fromIdb = await sealPayloadFromDraftItem(await getDraftItem(id));
     if (fromIdb) {
       payloads.push(fromIdb);
       continue;
     }
-    const relay = readSealDraftRelay(id);
+    const relay = readSealPrepRelay(id) ?? readSealDraftRelay(id);
     if (relay) {
       payloads.push(relay);
     }
@@ -300,19 +272,30 @@ async function persistSealedDraftsLocally(
     (sealedPayloads || []).map((row) => [String(row.id), row])
   );
   for (const id of draftIds) {
+    const localItem = await getDraftItem(id);
     const staged = byId.get(id);
-    const item = staged ? null : await getDraftItem(id);
-    const relay = !item && !staged ? readSealDraftRelay(id) : null;
-    const source = staged ?? item ?? relay;
+    const relay =
+      !localItem && !staged
+        ? readSealPrepRelay(id) ?? readSealDraftRelay(id)
+        : null;
+    const source = localItem ?? staged ?? relay;
     if (!source) continue;
     const payload = {
       id: source.id || id,
       title: String(source.title || "").trim() || "Untitled memory",
       story: String(source.story || ""),
       photo:
-        Array.isArray(source.photo) && source.photo.length ? source.photo : null,
+        Array.isArray(localItem?.photo) && localItem.photo.length
+          ? localItem.photo
+          : Array.isArray(source.photo) && source.photo.length
+            ? source.photo
+            : null,
       voice: null,
-      attachments: Array.isArray(source.attachments) ? source.attachments : [],
+      attachments: Array.isArray(localItem?.attachments)
+        ? localItem.attachments
+        : Array.isArray(source.attachments)
+          ? source.attachments
+          : [],
       timelineAt:
         Number(
           ("updatedAt" in source ? source.updatedAt : 0) ||
@@ -368,7 +351,7 @@ export async function finalizeSealWithTicket(
     strategy.stagingApiEnabled
   ) {
     const item = await getDraftItem(draftIds[0]);
-    const payload = sealPayloadFromDraftItem(item);
+    const payload = await sealPayloadFromDraftItem(item, { forStaging: true });
     if (payload) {
       const stagingId = await uploadSealStaging({
         draftIds,
@@ -414,6 +397,8 @@ export async function finalizeSealWithTicket(
     );
   }
 
+  const serverPayloads = draftPayloads.map(toServerSealCommitPayload);
+
   let commitRes: Response;
   try {
     commitRes = await fetch("/api/seal/finalize", {
@@ -423,7 +408,7 @@ export async function finalizeSealWithTicket(
         seal_ticket: sealTicket,
         draft_ids: draftIds,
         mode: "commit",
-        draft_payloads: draftPayloads,
+        draft_payloads: serverPayloads,
       }),
     });
   } catch {
@@ -475,8 +460,12 @@ export async function prepareSealForRingTap(opts: {
 
   const ids = [id];
   const item = await getDraftItem(id);
-  const payload = sealPayloadFromDraftItem(item);
+  const payload = await sealPayloadFromDraftItem(item);
   if (!payload) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
+  const stagingPayload = await sealPayloadFromDraftItem(item, { forStaging: true });
+  if (!stagingPayload) {
     throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
 
@@ -492,7 +481,7 @@ export async function prepareSealForRingTap(opts: {
     }
     stagingId = await uploadSealStaging({
       draftIds: ids,
-      payloads: [payload],
+      payloads: [stagingPayload],
       accessToken: opts.accessToken,
     });
   }
@@ -500,6 +489,7 @@ export async function prepareSealForRingTap(opts: {
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids, { stagingId });
   writeSealDraftRelay(payload);
+  writeSealPrepBundle({ draftIds: ids, relay: payload });
 
   return { mode: strategy.transport, stagingId };
 }
@@ -519,8 +509,11 @@ export async function primeSealPrepAfterDraftPersisted(
     const ids = [id];
     writePendingSealDraftIds(ids);
     armSealFlowWithPersistence(ids);
-    const payload = sealPayloadFromDraftItem(await getDraftItem(id));
-    if (payload) writeSealDraftRelay(payload);
+    const payload = await sealPayloadFromDraftItem(await getDraftItem(id));
+    if (payload) {
+      writeSealDraftRelay(payload);
+      writeSealPrepBundle({ draftIds: ids, relay: payload });
+    }
     return;
   }
   await prepareSealForRingTap({ draftId, accessToken });

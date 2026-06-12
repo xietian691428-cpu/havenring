@@ -45,20 +45,20 @@ export function LandingPricing() {
 
         <LandingFadeIn className="flex flex-col justify-center rounded-[1.35rem] border border-white/[0.08] bg-white/[0.02] p-8 sm:p-10">
           <p className="text-[10px] font-medium uppercase tracking-[0.42em] text-white/40">
-            Private pair
+            Your sanctuary
           </p>
           <h2 className="mt-4 text-[clamp(1.65rem,3vw,2.25rem)] font-medium tracking-[0.02em] text-white">
-            Built for two rings, not a crowd
+            One account. Optional ring.
           </h2>
           <ul className="mt-8 flex flex-col gap-5 text-[14px] leading-[1.75] text-white/52">
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              One Haven can hold up to two equal rings for a private pair, one per partner account.
+              Sign in to read and write. Bind a ring only for the seal ritual.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              Each partner signs in separately; either ring can add new memories once invited.
+              One account per person. Sharing a memory is explicit with Plus.
             </li>
             <li className="flex gap-3 border-l border-amber-400/25 pl-4">
-              Optional cloud backup with your keys still feeling like yours — not a billboard lease.
+              Once sealed, a memory cannot be edited.
             </li>
           </ul>
           <p className="mt-10 text-[12px] tracking-[0.06em] text-white/32">

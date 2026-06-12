@@ -52,7 +52,7 @@ export function getSubscriptionStatusFromEntitlement(row = null, nowMs = Date.no
     plusTrialDaysLeft,
     ringLimit: isPlus ? PLUS_RING_LIMIT : FREE_RING_LIMIT,
     storageGb: isPlus ? PLUS_STORAGE_GB : FREE_STORAGE_GB,
-    canSealWithRing: isPlus,
+    canSealWithRing: true,
   };
 }
 
@@ -79,7 +79,7 @@ function normalizeSubscriptionPayload(sub) {
     plusTrialDaysLeft: Number(sub.plusTrialDaysLeft) || 0,
     ringLimit: Number(sub.ringLimit) || FREE_RING_LIMIT,
     storageGb: Number(sub.storageGb) || FREE_STORAGE_GB,
-    canSealWithRing: Boolean(sub.canSealWithRing),
+    canSealWithRing: true,
   };
 }
 
@@ -112,7 +112,7 @@ function normalizeEntitlementsPayload(raw) {
       Number.isFinite(cloudStorageGB) && cloudStorageGB >= 0
         ? cloudStorageGB
         : FREE_STORAGE_GB,
-    canSealWithRing: Boolean(raw.canSealWithRing ?? plusLike),
+    canSealWithRing: true,
     canUseCloudBackup: Boolean(raw.canUseCloudBackup ?? plusLike),
   };
 }

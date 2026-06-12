@@ -43,21 +43,22 @@ const EN = {
   securityDeleteNoteOther:
     "Sealed memories need your device lock plus an extra confirmation before they can be removed.",
   storyRequiredHint: "Add a few words about this moment — it's required to seal.",
-  upgradeModalTitle: "Unlock the Ritual Experience",
-  upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional encrypted backup for one private pair. You can link up to 2 rings; sealed memories stay immutable.",
+  upgradeModalTitle: "Haven Plus",
+  upgradeModalBody: "Haven Plus adds encrypted cloud backup.",
+  linkRingFirst: "Link a ring first.",
+  cloudBackupHint: "Plus adds cloud backup.",
   upgradeModalDismiss: "Maybe later",
-  upgradeSealShort: "Haven Plus unlocks Seal with Ring.",
+  upgradeSealShort: "Haven Plus includes Seal with Ring.",
   upgradeSealCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
   title: "Capture this moment",
   freePlanOneLiner:
-    "Free plan: encrypted local storage on this device only. Haven is designed for personal records and private couple memories.",
+    "Free plan: encrypted local storage on this device. Your private memory sanctuary.",
   addPhotosCta: "Add Photos (max 6)",
   addVideoCta: "Add Videos (max 6)",
   addFilesCta: "Add Files (max 5)",
   mediaZoneAria: "Photos, videos, and files",
   mediaLimitsSummary:
-    "Photos: up to 6 (compressed on your device). Videos: up to 6 clips, max 10 MB each (MP4, MOV, WebM). Files: up to 5 attachments, max 10 MB each — PDF, Word, Excel, PowerPoint, audio, zip.",
+    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each.",
   photosSectionHeading: "Photos",
   videosSectionHeading: "Videos",
   filesSectionHeading: "Documents & audio",
@@ -112,8 +113,7 @@ const EN = {
   quickDraftHint: "Save instantly to your Draft Box.",
   sealFabHint: "写完后贴戒指",
   sealFabUpgradeHint: "需要 Haven Plus",
-  upgradeSealWithRing:
-    "Unlock Seal with Ring for a private pair. Free users can still Save Securely with Face ID.",
+  upgradeSealWithRing: "Plus adds encrypted cloud backup.",
   planDualTrackHint:
     "Readable drafts stay in your local Draft Box until you seal. Seal with Ring adds the memory to your encrypted sanctuary timeline.",
   sealNeedsNetworkHint: "需要网络",

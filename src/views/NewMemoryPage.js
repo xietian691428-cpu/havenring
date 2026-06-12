@@ -19,7 +19,6 @@ import {
 import {
   clearComposerSnapshot,
   clearSealPrepState,
-  gateSealWithRingAccess,
   getSealArmedRemainingMs,
   isSealFlowArmed,
   navigateToSealWaitPage,
@@ -51,7 +50,7 @@ import { SealPwaHintCard } from "../components/SealPwaHintCard";
 const MAX_PHOTOS = 6;
 const MAX_VIDEOS = 6;
 const MAX_FILE_ATTACHMENTS = 5;
-const MAX_ATTACHMENT_SIZE_MB = 10;
+const MAX_ATTACHMENT_SIZE_MB = 50;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const STORY_SOFT_MAX = 8000;
 const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
@@ -152,6 +151,8 @@ function buildNewMemoryPageCopy(locale, platform, t) {
     sealVerifyConfirm: en.sealVerifyConfirm,
     sealVerifyCancel: en.sealVerifyCancel,
     backgroundDraftSaved: en.backgroundDraftSaved,
+    linkRingFirst: en.linkRingFirst,
+    cloudBackupHint: en.cloudBackupHint,
   };
 }
 
@@ -183,7 +184,7 @@ export function NewMemoryPage({
   );
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
-  const canSealWithRing = gateSealWithRingAccess(userEntitlements).ok;
+  const showCloudBackupUpsell = !userEntitlements?.canUseCloudBackup;
   const ringReady = getBoundRingCount() > 0;
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
@@ -564,10 +565,13 @@ export function NewMemoryPage({
 
   async function persistDraftForSealPrep() {
     const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
+    const draftAttachments = await prepareAttachmentsForSave(attachments, t);
     const sealPhotos = photos
       .map((p) => ({
         id: p.id,
+        name: p.name,
         mimeType: p.mimeType,
+        size: p.size,
         dataUrl: typeof p.dataUrl === "string" ? p.dataUrl : "",
       }))
       .filter((p) => p.dataUrl);
@@ -575,8 +579,8 @@ export function NewMemoryPage({
       id: editingDraftId || undefined,
       title: title.trim() || t.untitled,
       story: story.trim(),
-      photo: sealPhotos,
-      attachments: [],
+      photo: sealPhotos.length ? sealPhotos : photos,
+      attachments: draftAttachments,
       releaseAt,
     });
   }
@@ -626,7 +630,7 @@ export function NewMemoryPage({
       if (typeof onSaveMemory === "function") {
         setFeedback("");
         setSecureSaveToast(true);
-        if (!canSealWithRing && typeof window !== "undefined") {
+        if (showCloudBackupUpsell && typeof window !== "undefined") {
           try {
             if (!window.localStorage.getItem(SECURE_SAVE_UPSELL_KEY)) {
               window.localStorage.setItem(SECURE_SAVE_UPSELL_KEY, "1");
@@ -699,7 +703,7 @@ export function NewMemoryPage({
       setEditingDraftId(savedDraft.id);
       setSealPromptOpen(true);
       if (shouldPreferSameTabWebNfc(platform) && webNfcAvailable) {
-        await handleSealRingScan();
+        void handleSealRingScan();
         return;
       }
       navigateToSealWaitPage();
@@ -722,9 +726,17 @@ export function NewMemoryPage({
   }
 
   async function handleSealNow() {
-    if (!canSealWithRing) {
-      setSealPromptOpen(false);
-      setUpgradeModalOpen(true);
+    if (!ringReady) {
+      setFeedback(pageCopy.linkRingFirst);
+      return;
+    }
+    if (
+      !title.trim() &&
+      !story.trim() &&
+      photos.length === 0 &&
+      attachments.length === 0
+    ) {
+      setFeedback(t.feedbackNeedContent);
       return;
     }
     if (!isSecurityInitialized()) {
@@ -845,10 +857,6 @@ export function NewMemoryPage({
 
   function handleHeroPrimaryClick() {
     if (saving || sealPromptOpen) return;
-    if (!canSealWithRing) {
-      setUpgradeModalOpen(true);
-      return;
-    }
     void handleSealNow();
   }
 
@@ -860,7 +868,6 @@ export function NewMemoryPage({
   }
 
   function getPrimaryButtonText() {
-    if (!canSealWithRing) return pageCopy.upgradeCta || "Upgrade to Seal with Ring";
     if (sealPromptOpen) return pageCopy.sealPrimaryCtaWaiting;
     if (editingDraftId) return pageCopy.sealPrimaryCtaReady;
     return pageCopy.sealPrimaryCta;
@@ -886,13 +893,7 @@ export function NewMemoryPage({
       return networkOnline ? pageCopy.footerWaitingRing : pageCopy.footerOfflineSeal;
     }
     if (secureSaveToast) {
-      return canSealWithRing
-        ? pageCopy.footerReadySeal
-        : `${pageCopy.upgradeShort} ${pageCopy.upgradeCta}`;
-    }
-    if (!canSealWithRing) {
-      if (hasDraftContent) return `${pageCopy.upgradeShort} ${pageCopy.upgradeCta}`;
-      return "\u00a0";
+      return pageCopy.footerReadySeal;
     }
     if (editingDraftId) return pageCopy.footerReadySeal;
     if (hasDraftContent) return pageCopy.footerSealInvite;
@@ -904,8 +905,8 @@ export function NewMemoryPage({
       {sealPreparingOverlay ? (
         <div style={styles.sealPreparingOverlay} role="status" aria-live="polite">
           <div style={styles.sealPreparingCard}>
-            <p style={styles.sealPreparingTitle}>Preparing seal...</p>
-            <p style={styles.sealPreparingBody}>Please tap your ring.</p>
+            <p style={styles.sealPreparingTitle}>{sealFlow.sealingLabel}</p>
+            <p style={styles.sealPreparingBody}>{sealFlow.readyTitle}</p>
           </div>
         </div>
       ) : null}
@@ -1008,13 +1009,7 @@ export function NewMemoryPage({
               <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>
               <button
                 type="button"
-                onClick={() => {
-                  if (!canSealWithRing) {
-                    setUpgradeModalOpen(true);
-                    return;
-                  }
-                  void handleSealNow();
-                }}
+                onClick={() => void handleSealNow()}
                 disabled={saving || sealPromptOpen}
                 style={styles.secureToastSealBtn}
               >
@@ -1032,13 +1027,9 @@ export function NewMemoryPage({
               ...styles.heroSealButton,
               ...(sealPromptOpen
                 ? styles.heroSealButtonBusy
-                : canSealWithRing
+                : ringReady
                   ? styles.heroSealButtonActive
-                  : {
-                      ...styles.heroSealButtonMuted,
-                      cursor: "pointer",
-                      opacity: 0.82,
-                    }),
+                  : styles.heroSealButtonMuted),
             }}
           >
             {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
@@ -1046,10 +1037,8 @@ export function NewMemoryPage({
             {getPrimaryButtonText()}
           </button>
           {!sealPromptOpen ? <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p> : null}
-          {!canSealWithRing ? (
-            <p style={styles.heroUpgrade}>
-              {pageCopy.upgradeShort} {pageCopy.upgradeCta}
-            </p>
+          {showCloudBackupUpsell && !sealPromptOpen ? (
+            <p style={styles.heroUpgrade}>{pageCopy.cloudBackupHint}</p>
           ) : null}
           <button
             type="button"
@@ -1366,7 +1355,7 @@ export function NewMemoryPage({
           open
           status="error"
           errorMessage={saveDialog.errorMessage}
-          onSealNow={canSealWithRing ? () => void handleSealNow() : () => setUpgradeModalOpen(true)}
+          onSealNow={() => void handleSealNow()}
           onCreateAnother={handleCreateAnother}
         />
       ) : null}

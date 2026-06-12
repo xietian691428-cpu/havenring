@@ -8,9 +8,17 @@ export type HavenPlatform = "ios" | "android" | "other";
 /** Alias for consumers who prefer the shorter name */
 export type Platform = HavenPlatform;
 
-/** Face ID + ring roles — Rings, Help, marketing */
+/** Personal sanctuary + seal ritual — details in Help */
 export const HAVEN_EN_LAYERED_CORE_LINE =
-  "Each partner keeps their own account. Your rings unlock one shared Haven for a private sealing ritual.";
+  "Sign in to browse your memories. Touch your ring only when you seal.";
+
+/** Product model one-liner (landing, pricing, Help). */
+export const HAVEN_PRODUCT_MODEL_EN =
+  "Your private memory sanctuary. Local-first. Ring optional for sealing. Plus: cloud backup and explicit sharing where offered.";
+
+/** Sealed memories are immutable after the ritual. */
+export const HAVEN_SEAL_IMMUTABLE_EN =
+  "Sealed content cannot be edited. View, export, or delete with verification.";
 
 /** @alias */
 export const RING_VS_FACE_ID_SUMMARY_EN = HAVEN_EN_LAYERED_CORE_LINE;
@@ -23,9 +31,9 @@ export type HowHavenWorksRowEn = {
 
 export const HAVEN_EN_HOW_HAVEN_WORKS_ROWS: readonly HowHavenWorksRowEn[] = [
   {
-    action: "Open the app daily",
-    ringRequired: "No (Strongly recommended)",
-    recommended: "Touch your ring (fastest) or Face ID",
+    action: "Open the app",
+    ringRequired: "No",
+    recommended: "Sign in with Apple, Google, or Email",
   },
   {
     action: "Quick notes & drafts",
@@ -60,42 +68,45 @@ export const HAVEN_EN_HOW_HAVEN_WORKS_ROWS: readonly HowHavenWorksRowEn[] = [
 ];
 
 export const HAVEN_EN_QUICK_GUIDE_SUMMARY_LINES: readonly string[] = [
-  "Open daily: touch your ring for the fastest path, or use Face ID.",
-  "Quick notes and drafts: just start writing.",
-  "Seal memories: only a trusted ring can complete the ritual.",
+  "Sign in to read and write on this device.",
+  "Seal with Ring: write, then touch your ring once.",
 ];
 
 export const HAVEN_EN_QUICK_GUIDE_ONE_LINE =
-  "The ring is your magical key for speed and ceremony. Face ID keeps everything secure.";
+  "Your ring confirms a seal — not your daily sign-in. See Help for details.";
 
 /** Short compliance note for Pricing, Settings, upgrade modal, and in-app footers. */
 export const HAVEN_CLOUD_STORAGE_DISCLAIMER_EN =
-  "Free: memories stay on this device only (encrypted local storage). Haven Plus adds optional end-to-end encrypted cloud backup and sync for your private pair where available. If you cancel Plus, cloud copies remain available to download for 30 days, then are deleted automatically. We cannot read your memory content where encryption applies. See the Privacy Policy for details.";
+  "Free: memories stay on this device only. Haven Plus adds optional encrypted cloud backup (50 GB hard cap per account; uploads compressed and chunked) and explicit sharing. See Privacy Policy and Help.";
 
 /** Where we explain local vs cloud storage (settings, upgrade, seal success). */
 export const HAVEN_STORAGE_MODE_EN = {
   freeLocal:
     "Free plan: your sealed memories stay on this device only (encrypted local storage).",
   plusDual:
-    "Haven Plus: local storage plus optional end-to-end encrypted cloud backup and sync for your private pair.",
+    "Haven Plus: optional encrypted cloud backup and explicit sharing when you choose.",
   cancelPlus:
     "If you cancel Plus, you can download cloud backups for 30 days; after that, cloud copies are removed automatically. Memories on your device are not deleted.",
   sealSuccess:
-    "This memory is saved on this device. Haven Plus adds optional encrypted backup and sync for your private pair.",
+    "Saved on this device. Plus adds optional encrypted backup.",
 } as const;
 
 export const BIND_SUCCESS_EN = {
-  title: "Your Ring is Ready!",
-  subtitle: "You can now seal important memories with a simple tap.",
-  sealFirstMemoryCta: "Seal Your First Memory Now",
-  goToMemoriesCta: "Go to My Memories",
-  plusTrialNote:
-    "Your 30-day Haven Plus trial is active — write a memory, then tap your ring to seal it.",
+  title: "Ring linked",
+  subtitle: "Your ring is for sealing memories.",
+  sealFirstMemoryCta: "Write your first memory",
+  goToMemoriesCta: "Open memories",
+  plusTrialNote: "Plus trial active — cloud backup optional.",
+} as const;
+
+export const CLOUD_STORAGE_EN = {
+  quotaSummary: "Plus cloud backup: 50 GB hard cap per account.",
+  fullMessage: "Storage full. Upgrade or delete old memories.",
 } as const;
 
 export const RING_READY_BADGE_EN = {
   ready: "Ring Ready",
-  notLinked: "Link a ring to unlock Seal with Ring",
+  notLinked: "Link a ring to seal with a touch",
 } as const;
 
 const HAVEN_SECURITY_DELETE_NOTE: Record<HavenPlatform, string> = {
@@ -146,11 +157,11 @@ const HAVEN_NEW_MEMORY_SHARED = {
   sealPrimaryCta: "Seal with Ring",
   sealPrimaryCtaReady: "Touch ring to seal",
   sealPrimaryCtaWaiting: "Waiting for ring touch…",
-  upgradeShort: "Haven Plus unlocks Seal with Ring.",
+  upgradeShort: "Haven Plus includes Seal with Ring.",
   upgradeCta: "30-day trial when you link your ring — upgrade anytime in Rings.",
-  upgradeModalTitle: "Unlock the Ritual Experience",
+  upgradeModalTitle: "Haven Plus",
   upgradeModalBody:
-    "Haven Plus unlocks Seal with Ring and optional cloud backup for one private pair — one account and one ring per partner, up to 2 rings per Haven where available. Link your first ring to start a 30-day trial where available.",
+    "Haven Plus includes Seal with Ring and optional encrypted cloud backup. See Help for plans and sharing.",
   upgradeModalCloudDisclaimer: HAVEN_CLOUD_STORAGE_DISCLAIMER_EN,
   upgradeModalDismiss: "Maybe later",
   upgradeModalSubscribe: "Subscribe — $4.90/mo or $49/yr",
@@ -297,6 +308,7 @@ export type StartSdmStateForCopy =
       ringId: string | null;
       ownerId: string | null;
       viewerUserId: string | null;
+      /** @deprecated Legacy pair field from SDM resolve — not used for gating (Phase 5). */
       currentUserIsHavenMember?: boolean;
       resolvedUid?: string | null;
     };
@@ -374,24 +386,25 @@ const HAVEN_START_NEW_RING_BINDING: Record<HavenPlatform, StartCardFields> = {
   },
 };
 
-const HAVEN_START_DAILY_ACCESS_SELF: Record<HavenPlatform, StartCardFields> = {
+/** Idle ring tap (legacy daily_access scene) — ring does not open the app. */
+const HAVEN_START_IDLE_RING_TAP: Record<HavenPlatform, StartCardFields> = {
   ios: {
     eyebrow: "",
-    title: "Opening Haven...",
+    title: "Open the app to seal a memory.",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   android: {
     eyebrow: "",
-    title: "Opening Haven...",
+    title: "Open the app to seal a memory.",
     body: "",
     nextLine: "",
     placementHint: null,
   },
   other: {
     eyebrow: "",
-    title: "Opening Haven...",
+    title: "Open the app to seal a memory.",
     body: "",
     nextLine: "",
     placementHint: null,
@@ -456,32 +469,7 @@ export function getStartSdmCardCopy(
     return { ...HAVEN_START_NEW_RING_BINDING[platform] };
   }
 
-  const self = state.viewerUserId || "";
-  const owner = state.ownerId || "";
-
-  if (state.currentUserIsHavenMember || (self && owner && self === owner)) {
-    return { ...HAVEN_START_DAILY_ACCESS_SELF[platform] };
-  }
-
-  if (self && owner && self !== owner) {
-    const hold = getNfcHoldGuideCopy(platform);
-    return {
-      eyebrow: "",
-      title: hold.signInTitle,
-      body: hold.signInSubtitle,
-      nextLine: "",
-      placementHint: null,
-    };
-  }
-
-  const hold = getNfcHoldGuideCopy(platform);
-  return {
-    eyebrow: "",
-    title: hold.signInTitle,
-    body: hold.signInSubtitle,
-    nextLine: "",
-    placementHint: null,
-  };
+  return { ...HAVEN_START_IDLE_RING_TAP[platform] };
 }
 
 export type NfcHoldGuideCopy = {
@@ -523,13 +511,13 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
   ios: {
     waitTitle: "Tap your ring",
     waitSubtitle: "Hold your ring on the top of your iPhone, near the camera.",
-    waitStep: "Step 1 · Keep it steady for 3–5 seconds until Haven opens.",
+    waitStep: "Keep it steady for 3–5 seconds.",
     resolvingTitle: "Reading your ring…",
     resolvingSubtitle: "Keep the ring on the top of your phone. Do not lift yet.",
     replayTitle: "That tap was already used",
     replaySubtitle: "Tap your ring again on the top of your iPhone.",
-    signInTitle: "Sign in to open Haven",
-    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    signInTitle: "Sign in to continue",
+    signInSubtitle: "Use your Apple, Google, or Email account.",
     sealWaitTitle: "Tap your ring to seal",
     sealWaitSubtitle:
       "Hold your ring on the top of your iPhone until sealing finishes.",
@@ -540,7 +528,7 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     holdSteadyLine: "Keep holding — this usually takes 3–5 seconds.",
     readingCountdownPrefix: "Keep holding",
     retryCountdownPrefix: "Tap again in",
-    redirectCountdownPrefix: "Opening Haven in",
+    redirectCountdownPrefix: "Continuing in",
     stillReadingLine: "Still reading… keep your ring on the phone.",
     listeningCountdownPrefix: "Listening",
     linkingCountdownPrefix: "Linking",
@@ -558,13 +546,13 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
   android: {
     waitTitle: "Tap your ring",
     waitSubtitle: "Hold your ring on the back of your phone, near the camera.",
-    waitStep: "Step 1 · Keep it steady for 2–4 seconds until Haven opens.",
+    waitStep: "Keep it steady for 2–4 seconds.",
     resolvingTitle: "Reading your ring…",
     resolvingSubtitle: "Keep the ring on the back of your phone. Do not lift yet.",
     replayTitle: "That tap was already used",
     replaySubtitle: "Tap your ring again on the back of your phone.",
-    signInTitle: "Sign in to open Haven",
-    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    signInTitle: "Sign in to continue",
+    signInSubtitle: "Use your Apple, Google, or Email account.",
     sealWaitTitle: "Tap your ring to seal",
     sealWaitSubtitle: "Hold your ring on the back of your phone until sealing starts.",
     failedTitle: "We could not finish that tap",
@@ -574,7 +562,7 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     holdSteadyLine: "Keep holding — this usually takes 2–4 seconds.",
     readingCountdownPrefix: "Keep holding",
     retryCountdownPrefix: "Tap again in",
-    redirectCountdownPrefix: "Opening Haven in",
+    redirectCountdownPrefix: "Continuing in",
     stillReadingLine: "Still reading… keep your ring on the phone.",
     listeningCountdownPrefix: "Listening",
     linkingCountdownPrefix: "Linking",
@@ -592,13 +580,13 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
   other: {
     waitTitle: "Tap your ring",
     waitSubtitle: "Hold your ring on the upper back area of your phone.",
-    waitStep: "Step 1 · Keep it steady for 3–5 seconds until Haven opens.",
+    waitStep: "Keep it steady for 3–5 seconds.",
     resolvingTitle: "Reading your ring…",
     resolvingSubtitle: "Keep the ring on your phone. Do not lift yet.",
     replayTitle: "That tap was already used",
     replaySubtitle: "Tap your ring again on the NFC reader area.",
-    signInTitle: "Sign in to open Haven",
-    signInSubtitle: "Your ring is recognized. Continue with your account.",
+    signInTitle: "Sign in to continue",
+    signInSubtitle: "Use your Apple, Google, or Email account.",
     sealWaitTitle: "Tap your ring to seal",
     sealWaitSubtitle: "Hold your ring on your phone until sealing starts.",
     failedTitle: "We could not finish that tap",
@@ -608,7 +596,7 @@ const NFC_HOLD_GUIDE_EN: Record<HavenPlatform, NfcHoldGuideCopy> = {
     holdSteadyLine: "Keep holding — this usually takes a few seconds.",
     readingCountdownPrefix: "Keep holding",
     retryCountdownPrefix: "Tap again in",
-    redirectCountdownPrefix: "Opening Haven in",
+    redirectCountdownPrefix: "Continuing in",
     stillReadingLine: "Still reading… keep your ring on the phone.",
     listeningCountdownPrefix: "Listening",
     linkingCountdownPrefix: "Linking",
@@ -642,7 +630,9 @@ export const START_PAGE_EN = {
   ringVerifyFailedNotice: "We could not finish that tap.",
   footerSecurityReminder: "",
   sealCountdownPrefix: "Time left",
-  openingHavenLine: "Opening Haven…",
+  openingHavenLine: "Open the app to seal a memory.",
+  idleRingAck: "Ring recognized. Open the app to seal a memory.",
+  openAppCta: "Open App",
   sealWaitTitle: "Tap your ring",
   sealWaitBody: "",
   sealWaitFinishingTitle: "Sealing your memory...",
@@ -667,7 +657,7 @@ export const SEAL_FLOW_EN = {
   sealingLabel: "Sealing your memory...",
   sealNotReadyLine: "Open your memory first.",
   successTitle: "Memory sealed",
-  successMessage: "",
+  successMessage: "Saved on this device.",
   successViewMemoriesCta: "View Memories",
   successSealAnotherCta: "Seal Another",
   autoSaving: "Saved to Draft Box",
@@ -812,7 +802,7 @@ export function getOnboardingFlowEn(platform: HavenPlatform): OnboardingFlowBund
         kind: "ready",
         illustration: "ownership",
         title: "Ready to create your first sealed memory?",
-        body: "Bind your first ring now. Later, invite your partner so they can join with their own account and their own ring. Both rings can add new memories; sealed memories remain unchanged.",
+        body: "Link a ring to seal with a touch. Sharing is explicit with Plus — see Help.",
         primaryButton: "Bind my first ring",
         secondaryButton: "Start with Face ID only",
       },
@@ -823,9 +813,9 @@ export function getOnboardingFlowEn(platform: HavenPlatform): OnboardingFlowBund
 /** Pricing / upgrade decision page (EN source of truth). */
 export const HAVEN_PRICING_PAGE_EN = {
   pageTitle: "Haven Plus",
-  heroTitle: "A private memory space for one person or one pair",
+  heroTitle: "Your private memory sanctuary",
   heroSubtitle:
-    "Seal personal records and couple memories with intention. Couples use two separate accounts, one shared Haven, and one ring each.",
+    "Seal with Ring and optional encrypted cloud. Each person uses their own account.",
   trustLine: "Local-first • Strong encryption on supported flows • You choose what leaves your device",
   colFeature: "Feature",
   colFree: "Free",
@@ -837,11 +827,11 @@ export const HAVEN_PRICING_PAGE_EN = {
       free: "2 GB (local)",
       plus: "50 GB (local + optional cloud where offered; see disclaimer below)",
     },
-    { feature: "Number of rings", free: "Up to 2", plus: "Up to 2 linked rings for one private pair" },
+    { feature: "Number of rings", free: "Up to 2", plus: "Up to 2 (see Help)" },
     {
       feature: "Seal with Ring",
       free: "Not available on Free",
-      plus: "Full ritual experience for either ring where offered",
+      plus: "Seal with Ring ritual on your account",
     },
     {
       feature: "Save securely (Face ID / lock)",
@@ -884,7 +874,7 @@ export const HAVEN_PRICING_PAGE_EN = {
   payMethodsNote:
     "Checkout may offer Apple Pay, Google Pay, or card depending on your device and region.",
   socialProof:
-    "Haven is built for personal records and couples who want a quiet place to remember, not a public feed.",
+    "A private memory sanctuary — not a feed. One account per person; sharing is explicit with Plus.",
   faqTitle: "FAQ",
   faqs: [
     {
@@ -893,11 +883,15 @@ export const HAVEN_PRICING_PAGE_EN = {
     },
     {
       q: "Is my data really private?",
-      a: "Haven is built local-first with strong encryption on supported flows. Read the Privacy Policy in Settings for the full picture, including how cloud features work while they roll out.",
+      a: "Local-first with strong encryption on supported flows. Read the Privacy Policy in Settings for cloud and sharing details.",
     },
     {
       q: "Can I use Haven without a ring?",
-      a: "Yes. Save Securely with Face ID or your screen lock stays fully available on Free.",
+      a: "Yes. Sign in to read and write. Link a ring only when you want to seal with a touch.",
+    },
+    {
+      q: "Can I edit a sealed memory?",
+      a: HAVEN_SEAL_IMMUTABLE_EN,
     },
     {
       q: "What about data export?",
@@ -1207,7 +1201,7 @@ export const havenCopy = {
     idleHero: HAVEN_START_IDLE_HERO,
     sealConfirmation: HAVEN_START_SEAL_CONFIRMATION,
     newRingBinding: HAVEN_START_NEW_RING_BINDING,
-    dailyAccessSelf: HAVEN_START_DAILY_ACCESS_SELF,
+    idleRingTap: HAVEN_START_IDLE_RING_TAP,
     strings: START_PAGE_EN,
     claimSuccess: HAVEN_CLAIM_SUCCESS_EN,
   },

@@ -1,87 +1,76 @@
 # Security & QA scenarios (NFC / sync / privacy)
 
-Run these before release; automate where possible.
+> **Product direction (2026-06):** OAuth daily use; ring for Seal/bind only. Tests marked **LEGACY**
+> guard old Haven-pair behavior until Phase 2 migration.
 
-## Multi-ring
+Run before release; automate where possible.
 
-1. **Bind 1 ring** for the first account via `POST /api/nfc/bind` (valid session + `X-Haven-Secondary-Verified: 1`).
-2. Bind the partner ring only through a valid partner invite and the partner's own account.
-3. **Partial unique index**: same UID cannot be active twice; after retire, the same UID cannot be rebound to another account/Haven.
-4. Verify `RingsPage` card fields from cloud/local merge:
-   - nickname
-   - cloud `bound_at`
-   - cloud `last_used_at`
-   - linked memory count per ring id
+---
+
+## 当前生效产品方向（2026-06 更新）— test priorities
+
+| Priority | Scenario |
+|----------|----------|
+| P0 | OAuth required for Timeline; `nfc-login` → **410** |
+| P0 | Stranger + ring cannot read victim memories |
+| P0 | Seal path: arm → SDM → finalize → local memory |
+| P1 | Bind/revoke requires secondary token |
+| P1 | Idle ring tap does **not** grant cross-account access |
+| P2 | **LEGACY** dual-account Haven pair (until deprecated) |
+
+---
+
+## Auth and ring role
+
+1. Unauthenticated `GET /api/cron/*` → 401 without secret.
+2. `POST /api/auth/nfc-login` → **410** for any UID.
+3. Signed-in user opens Timeline **without** ring tap.
+4. `bind` without secondary token → **403**.
+
+## Multi-ring (technical cap)
+
+1. Bind ring via `POST /api/nfc/bind` (session + `X-Haven-Secondary-Token`).
+2. Same UID cannot be active on two accounts.
+3. Retired UID cannot rebind to another account in normal flows.
+4. Max **2** active rings per account/Haven row (code constant).
 
 ## Lost ring / revoke
 
-1. Revoke ring A via `POST /api/nfc/revoke` + secondary header.
-2. Confirm `nfc-login` with that UID returns **401**.
-3. Confirm sealed memories (moments) remain (revoke does not wipe vault).
+1. Revoke via `POST /api/nfc/revoke` + secondary token.
+2. `nfc-login` with that UID → **410**.
+3. Local memories remain on device; server binding inactive.
 
-## Offline seal → sync
+## Seal path
 
-1. Seal locally while offline (PWA).
-2. Compute `computeMemoryBundleHash` / persist `content_sha256` when uploading moment row.
-3. On reconnect, compare stored hash with server — mismatch triggers integrity warning path (implement UI alert).
-4. Confirm backoff/retry metadata updates in timeline:
-   - last attempt
-   - last success
-   - failure streak
-   - next auto retry timestamp
+1. Compose → arm seal → SDM `seal_confirmation` → finalize.
+2. Offline seal draft behavior per platform strategy (`getSealStrategy`).
+3. iOS Private: staging upload/read/purge cron (when enabled).
 
 ## iOS vs Android
 
-1. **Android Chrome**: Web NFC available — bind flow uses UID hash client-side before POST.
-2. **iOS Safari**: Web NFC unavailable — expect wizard branch `blocked_ios`; bind via Android/desktop or native helper.
+1. Android: Web NFC optional for in-app scan helpers.
+2. iOS: ring URL opens `/start`; staging for cross-tab seal.
 
-## iOS + Android mixed-device regression (single user, must-pass)
+---
 
-1. Bind ring A on Android, then sign in on iOS with the same user account and confirm ring list + timeline load.
-2. Create 2 drafts on iOS, get ticket with ring tap, and finalize on iOS from Home Screen launch.
-3. Repeat finalize on Android for a different draft and verify both memories appear after sync.
-4. Retire ring A on iOS, then confirm Android seal is rejected for that ring.
-5. Confirm the retired ring UID cannot be rebound to another account/Haven.
-6. Verify `seal_telemetry_events` captures success/error ratio and key `error_code` values.
+## LEGACY — Dual-account shared Haven regression
 
-## Dual-account shared Haven regression (must-pass)
+> **Deprecated product path.** Keep passing until Haven membership model is removed or narrowed.
+> Do **not** add new features that depend on this.
 
-1. Partner A signs in with Apple/Google and binds ring A → first bind creates one-person Haven.
-2. A creates partner invite from Rings page / `POST /api/haven/invite`.
-3. Partner B opens invite, signs in with B's own Apple/Google account, taps ring B, and binds with `invite_code`.
-4. Confirm A and B list the same Haven rings, with one ring owned by each account.
-5. Confirm B cannot join with A's OAuth account and cannot bind ring B without invite.
-6. Confirm a third account cannot list rings, issue seal tickets, or read moments for the Haven.
-7. Confirm a third active ring in the same Haven returns **409** `HAVEN_PAIR_FULL`.
+1. Partner A binds ring A → one-person Haven created.
+2. Partner invite → B binds ring B with separate OAuth.
+3. Third account cannot access Haven moments.
+4. Third active ring → **409** `HAVEN_PAIR_FULL`.
 
-## Cross-device sync / recovery
+---
 
-1. Device A binds one ring and creates offline drafts.
-2. Device B signs in to the same user account and opens timeline/rings pages.
-3. Verify cloud placeholder groups appear by ring and can be expanded/collapsed.
-4. Trigger "Sync active ring" then "Sync all rings" and confirm issue panel clears.
+## Cross-device sync
 
-## Lost ring single revoke
+1. Same **user account** on two devices → Timeline loads local/cloud per backup settings.
+2. **Target:** Shared memories only when explicitly marked (Plus) — not yet fully implemented.
 
-1. Use Rings page retire on one ring with secondary verification.
-2. Confirm warning text is shown before verification:
-   "This ring credential will stop working for sealing right away and cannot be transferred to another Haven."
-3. Confirm `/api/nfc/revoke` success updates both cloud list and local registry.
-4. Verify retired ring UID cannot be rebound and cannot complete seal.
+## Cron / staging
 
-## Hash mismatch recovery
-
-1. Force mismatch by changing local queued `content_sha256` for one draft.
-2. Run sync and verify mismatch warning + issue reason appears.
-3. Use manual resync action; verify fallback to cloud source path and no data deletion.
-
-## NFC login
-
-1. `POST /api/auth/nfc-login` returns **410** `nfc_login_disabled_for_shared_haven`.
-2. Verify a ring tap never signs Partner B into Partner A's account.
-
-## Privacy gates
-
-1. `bind` without `privacy_acknowledged: true` → **400**.
-2. `bind` without `X-Haven-Secondary-Verified` → **403**.
-3. Policy links open `/privacy-policy` or external URL from env.
+1. `POST /api/cron/purge-seal-staging` requires `CRON_SECRET` (Bearer or `X-Cron-Secret`).
+2. Expired staging rows purged; telemetry logged.

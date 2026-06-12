@@ -33,7 +33,7 @@ export interface PendingMoment {
  * the user wants to revisit sealed moments. Closing the tab revokes access.
  */
 export interface VaultAccess {
-  /** The ring whose vault is unlocked. */
+  /** Legacy hub vault session (deprecated — Timeline uses OAuth + local store). */
   ringId: string;
   /** The opaque NFC token from the tap that granted access. */
   token: string;

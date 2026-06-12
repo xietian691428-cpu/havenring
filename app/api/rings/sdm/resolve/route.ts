@@ -9,6 +9,10 @@ import {
   SEAL_CONFIRMATION_CONTEXT,
 } from "@/lib/seal-shared";
 import {
+  userCanSealWithRing,
+  userHasLegacyHavenAccess,
+} from "@/lib/haven-access";
+import {
   getOptionalAuthenticatedUser,
   getSupabaseAdminClient,
 } from "@/lib/supabase/server";
@@ -217,6 +221,7 @@ export async function POST(req: NextRequest) {
     }
 
     const context = cleanParam(body.context);
+    // daily_access = bound ring tap without seal context; /start shows ack only (no unlock).
     let scene: SdmScene = ring ? "daily_access" : "new_ring_binding";
     let currentUserId = "";
     let currentUserIsHavenMember = false;
@@ -225,17 +230,7 @@ export async function POST(req: NextRequest) {
       const user = await getOptionalAuthenticatedUser(req);
       currentUserId = user?.id || "";
       if (user) {
-        if (ring.haven_id) {
-          const { data: member } = await admin
-            .from("haven_members")
-            .select("id")
-            .eq("haven_id", ring.haven_id)
-            .eq("user_id", user.id)
-            .maybeSingle();
-          currentUserIsHavenMember = Boolean(member);
-        } else {
-          currentUserIsHavenMember = user.id === ring.user_id;
-        }
+        currentUserIsHavenMember = await userHasLegacyHavenAccess(admin, user.id, ring);
       }
       if (context === SEAL_CONFIRMATION_CONTEXT) {
         if (!currentUserId) {
@@ -248,12 +243,12 @@ export async function POST(req: NextRequest) {
             { status: 401 }
           );
         }
-        if (!currentUserIsHavenMember) {
+        if (!userCanSealWithRing(currentUserId, ring)) {
           return NextResponse.json(
             {
               valid: false,
-              error: "This ring belongs to another Haven.",
-              code: "NOT_HAVEN_MEMBER",
+              error: "This ring belongs to another account.",
+              code: "RING_OWNER_REQUIRED",
             },
             { status: 403 }
           );

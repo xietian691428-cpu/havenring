@@ -20,23 +20,19 @@ export function LandingHero() {
         </div>
 
         <div className="flex flex-col rounded-[1.25rem] border border-white/[0.08] bg-white/[0.02] p-6 sm:p-8">
-          <p className="text-[10px] uppercase tracking-[0.38em] text-amber-200/58">Preserve what matters</p>
+          <p className="text-[10px] uppercase tracking-[0.38em] text-amber-200/58">Haven</p>
           <h1 className="mt-4 text-balance text-[clamp(2rem,5.2vw,3rem)] font-medium leading-[1.1] text-white">
-            Preserve what matters.
+            Your Private Memory Sanctuary
           </h1>
-          <p className="landing-pull-quote mt-2 text-[clamp(1.45rem,3.4vw,2.2rem)] italic text-amber-100/82">
-            Privately. On your terms.
-          </p>
-          <p className="mt-6 text-[15px] leading-[1.78] text-white/56">
-            HavenRing is a physical key to your private digital haven. Capture meaningful moments,
-            seal them with a touch, and keep them safe - just for you and the ones you choose.
+          <p className="landing-pull-quote mt-2 text-[clamp(1.15rem,2.6vw,1.45rem)] leading-snug text-amber-100/82">
+            Write what matters. Touch your ring to seal. Encrypted on your device.
           </p>
 
           <ul className="mt-7 space-y-4 border-t border-white/[0.08] pt-6 text-[13px] leading-relaxed text-white/60">
-            <li><span className="text-amber-200/85">Physical key:</span> Your ring unlocks your personal sanctuary.</li>
-            <li><span className="text-amber-200/85">Private by design:</span> Strong encryption on supported flows. You stay in control.</li>
-            <li><span className="text-amber-200/85">Sealed with meaning:</span> Touch your ring to seal what matters most.</li>
-            <li><span className="text-amber-200/85">Only for you and yours:</span> Share by choice. Not by default.</li>
+            <li><span className="text-amber-200/85">Your space:</span> Personal memories, local-first.</li>
+            <li><span className="text-amber-200/85">Seal ritual:</span> Write, then touch your ring once.</li>
+            <li><span className="text-amber-200/85">No ring required:</span> Sign in to read and write anytime.</li>
+            <li><span className="text-amber-200/85">Plus:</span> Optional cloud backup and explicit sharing.</li>
           </ul>
 
           <div className="mt-8 grid grid-cols-2 gap-3">

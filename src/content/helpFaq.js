@@ -1,156 +1,196 @@
 export const HELP_FAQ = {
   en: [
     {
-      q: "Do I need to rewrite the ring every time I save a memory?",
-      a: "No. Your ring keeps one fixed Haven entry. New memories are saved in your local Haven automatically.",
+      q: "What is Haven?",
+      a: "Your private memory sanctuary. Local-first, encrypted on your device.",
+    },
+    {
+      q: "What does the ring do?",
+      a: "Touch it only to seal after you write. The app works without a ring.",
+    },
+    {
+      q: "Do I need to bind a ring?",
+      a: "No. Binding is optional — for the seal ritual.",
+    },
+    {
+      q: "Can I share memories with someone?",
+      a: "Yes. With Plus, share chosen memories explicitly (where offered). Use one account per person.",
+    },
+    {
+      q: "Can I change a sealed memory?",
+      a: "Sealed content cannot be edited. View, export, or delete with verification.",
+    },
+    {
+      q: "Can I use Haven on multiple devices?",
+      a: "Sign in on each device. Memories stay on that device unless you use Plus cloud backup.",
     },
     {
       q: "Where are my memories stored?",
-      a: "By default, memories stay encrypted on your own device. Cloud backup is optional.",
+      a: "Encrypted on this device by default. Plus adds optional cloud backup (50 GB cap per account).",
     },
     {
-      q: "What if tapping does not work the first time?",
-      a: "Keep the ring still near the upper back of your phone for 3-5 seconds and try again.",
+      q: "What happens when cloud storage is full?",
+      a: "Storage full. Upgrade or delete old memories.",
     },
     {
-      q: "Can I use Haven without creating an account?",
-      a: "You can explore locally, but binding a ring or joining a shared Haven requires your own Apple or Google account.",
-    },
-    {
-      q: "Does my partner use my account?",
-      a: "No. Each partner signs in with their own Apple or Google account. One member invites the other, then each person links their own ring to the same private Haven.",
-    },
-    {
-      q: "Is one ring the \"main\" ring?",
-      a: "No. Haven supports up to two equal rings for one private pair, usually one per partner account. Either ring can open the shared Haven and seal new memories; old sealed memories remain unchanged.",
-    },
-    {
-      q: "Does the ring replace my password or account?",
-      a: "No. The ring is a convenience shortcut. Signing in, protecting this device, exporting everything, or removing rings still goes through your account and verification—not the ring alone.",
+      q: "Does the ring replace my password?",
+      a: "No. The ring confirms a seal. Sign-in uses your account.",
     },
     {
       q: "What if I lose my ring?",
-      a: "Retire that ring credential from another trusted device as soon as you can. A retired ring cannot be transferred to another Haven. Shared memories remain in your Haven subject to each member's privacy rights.",
+      a: "Retire the ring from Settings or Rings on a trusted device.",
     },
   ],
   fr: [
     {
-      q: "Dois-je réécrire la bague à chaque sauvegarde ?",
-      a: "Non. La bague garde une entrée Haven fixe. Les nouveaux souvenirs sont enregistrés automatiquement dans votre Haven local.",
+      q: "Qu'est-ce que Haven ?",
+      a: "Votre sanctuaire privé. Local d'abord, chiffré sur cet appareil.",
+    },
+    {
+      q: "À quoi sert la bague ?",
+      a: "Seulement pour sceller après avoir écrit. L'app fonctionne sans bague.",
+    },
+    {
+      q: "Faut-il lier une bague ?",
+      a: "Non. C'est optionnel — pour le rituel de sceau.",
+    },
+    {
+      q: "Puis-je partager des souvenirs ?",
+      a: "Oui. Avec Plus, partage explicite (où disponible). Un compte par personne.",
+    },
+    {
+      q: "Modifier un souvenir scellé ?",
+      a: "Le contenu scellé ne peut pas être modifié. Voir, exporter ou supprimer.",
+    },
+    {
+      q: "Plusieurs appareils ?",
+      a: "Connectez-vous sur chaque appareil. Les souvenirs restent locaux sans sauvegarde Plus.",
     },
     {
       q: "Où sont stockés mes souvenirs ?",
-      a: "Par défaut, vos souvenirs restent chiffrés sur votre appareil. La sauvegarde cloud est optionnelle.",
+      a: "Chiffrés sur cet appareil. Plus ajoute une sauvegarde cloud optionnelle.",
     },
     {
-      q: "Que faire si le tap ne fonctionne pas du premier coup ?",
-      a: "Gardez la bague immobile en haut du dos du téléphone pendant 3-5 secondes puis réessayez.",
+      q: "La bague remplace-t-elle mon mot de passe ?",
+      a: "Non. La bague confirme un sceau. La connexion utilise votre compte.",
     },
     {
-      q: "Puis-je utiliser Haven sans créer de compte ?",
-      a: "Oui. Haven est pensé pour rester simple. La sauvegarde cloud peut être activée plus tard, si vous le souhaitez.",
-    },
-    {
-      q: "Y a-t-il une bague principale ?",
-      a: "Non. Chaque bague liée a votre compte fonctionne pareil — touchez n'importe laquelle pour un acces rapide. Beaucoup ajoutent des bagues de secours, comme des cles materielles de rechange.",
-    },
-    {
-      q: "La bague remplace-t-elle mon mot de passe ou mon compte ?",
-      a: "Non. C'est un raccourci pratique. Connexion, protection de l'appareil, export complet ou retrait de bagues passent par votre compte et des verifications — pas par la bague seule.",
-    },
-    {
-      q: "Et si je perds ma bague ?",
-      a: "Revoquez ou retirez cette bague depuis un autre appareil de confiance des que possible. Vos souvenirs scelles restent lies au compte ; perdre la bague ne les efface pas si vous gardez l'acces.",
+      q: "Bague perdue ?",
+      a: "Retirez-la depuis Réglages ou Bagues sur un appareil de confiance.",
     },
   ],
   es: [
     {
-      q: "¿Debo reescribir el anillo cada vez que guardo un recuerdo?",
-      a: "No. El anillo conserva una entrada fija de Haven. Los recuerdos nuevos se guardan automáticamente en tu Haven local.",
+      q: "¿Qué es Haven?",
+      a: "Tu santuario privado. Local primero, cifrado en este dispositivo.",
     },
     {
-      q: "¿Dónde se guardan mis recuerdos?",
-      a: "De forma predeterminada, se guardan cifrados en tu dispositivo. La copia en la nube es opcional.",
+      q: "¿Para qué sirve el anillo?",
+      a: "Solo para sellar después de escribir. La app funciona sin anillo.",
     },
     {
-      q: "¿Qué hago si el toque no funciona a la primera?",
-      a: "Mantén el anillo quieto cerca de la parte superior trasera del teléfono durante 3-5 segundos y vuelve a intentar.",
+      q: "¿Debo vincular un anillo?",
+      a: "No. Es opcional — para el ritual de sello.",
     },
     {
-      q: "¿Puedo usar Haven sin crear una cuenta?",
-      a: "Sí. Haven está diseñado para ser simple. La copia en la nube se puede activar más adelante, si quieres.",
+      q: "¿Puedo compartir recuerdos?",
+      a: "Sí. Con Plus, comparte explícitamente (donde esté disponible). Una cuenta por persona.",
     },
     {
-      q: "¿Hay un anillo principal?",
-      a: "No. Cada anillo vinculado a tu cuenta funciona igual: toca cualquiera para acceso rapido. Mucha gente añade extras como respaldo, como llaves fisicas de repuesto.",
+      q: "¿Editar un recuerdo sellado?",
+      a: "El contenido sellado no se puede editar. Ver, exportar o eliminar.",
     },
     {
-      q: "¿El anillo sustituye mi contrasena o cuenta?",
-      a: "No. Es un atajo practico. Iniciar sesion, proteger el dispositivo, exportar todo o quitar anillos sigue pasando por tu cuenta y verificaciones, no solo por el anillo.",
+      q: "¿Varios dispositivos?",
+      a: "Inicia sesión en cada uno. Los recuerdos quedan locales sin copia Plus.",
     },
     {
-      q: "¿Y si pierdo el anillo?",
-      a: "Revoca o desvincula ese anillo desde otro dispositivo de confianza cuanto antes. Tus recuerdos sellados siguen en la cuenta; perder el anillo no los borra si aun tienes acceso.",
+      q: "¿Dónde se guardan?",
+      a: "Cifrados en este dispositivo. Plus añade copia en la nube opcional.",
+    },
+    {
+      q: "¿El anillo reemplaza mi contraseña?",
+      a: "No. El anillo confirma un sello. El inicio de sesión usa tu cuenta.",
+    },
+    {
+      q: "¿Perdí el anillo?",
+      a: "Retíralo desde Ajustes o Anillos en un dispositivo de confianza.",
     },
   ],
   de: [
     {
-      q: "Muss ich den Ring bei jedem Speichern neu beschreiben?",
-      a: "Nein. Dein Ring behält einen festen Haven-Einstieg. Neue Erinnerungen werden automatisch lokal gespeichert.",
+      q: "Was ist Haven?",
+      a: "Dein privates Heiligtum. Lokal zuerst, auf diesem Gerät verschlüsselt.",
     },
     {
-      q: "Wo werden meine Erinnerungen gespeichert?",
-      a: "Standardmäßig verschlüsselt auf deinem Gerät. Cloud-Backup ist optional.",
+      q: "Wofür ist der Ring?",
+      a: "Nur zum Siegeln nach dem Schreiben. Die App funktioniert ohne Ring.",
     },
     {
-      q: "Was, wenn das Tippen beim ersten Mal nicht klappt?",
-      a: "Halte den Ring 3-5 Sekunden ruhig am oberen Rücken deines Telefons und versuche es erneut.",
+      q: "Ring binden nötig?",
+      a: "Nein. Optional — für das Siegel-Ritual.",
     },
     {
-      q: "Kann ich Haven ohne Konto nutzen?",
-      a: "Ja. Haven bleibt bewusst niedrigschwellig. Optionales Cloud-Backup kannst du später aktivieren.",
+      q: "Erinnerungen teilen?",
+      a: "Ja. Mit Plus explizit teilen (wo verfügbar). Ein Konto pro Person.",
     },
     {
-      q: "Gibt es einen Haupt-Ring?",
-      a: "Nein. Jeder mit dem Konto verknupfte Ring funktioniert gleich — tippe einen beliebigen fur Schnellzugriff. Viele nutzen weitere Ringe als Backup, ahnlich wie Ersatz-Hardwareschlussel.",
+      q: "Versiegelte Erinnerung ändern?",
+      a: "Versiegelter Inhalt ist nicht editierbar. Ansehen, exportieren oder löschen.",
     },
     {
-      q: "Ersetzt der Ring Passwort oder Konto?",
-      a: "Nein. Der Ring ist eine Komfortverknupfung. Anmeldung, Gerateschutz, Export oder Entfernen von Ringen laufen uber Konto und Prufungen — nicht allein uber den Ring.",
+      q: "Mehrere Geräte?",
+      a: "Auf jedem Gerät anmelden. Ohne Plus-Backup bleiben Daten lokal.",
     },
     {
-      q: "Was, wenn ich den Ring verliere?",
-      a: "Widerrufe oder entknupfe ihn sobald moglich von einem anderen vertrauten Gerat. Deine versiegelten Erinnerungen bleiben am Konto; Verlust des Rings loscht sie nicht, solange du noch Zugang hast.",
+      q: "Wo gespeichert?",
+      a: "Verschlüsselt auf diesem Gerät. Plus bietet optionales Cloud-Backup.",
+    },
+    {
+      q: "Ersetzt der Ring mein Passwort?",
+      a: "Nein. Der Ring bestätigt ein Siegel. Anmeldung über dein Konto.",
+    },
+    {
+      q: "Ring verloren?",
+      a: "Unter Einstellungen oder Ringe auf einem vertrauenswürdigen Gerät entziehen.",
     },
   ],
   it: [
     {
-      q: "Devo riscrivere l'anello ogni volta che salvo un ricordo?",
-      a: "No. L'anello mantiene un ingresso Haven fisso. I nuovi ricordi vengono salvati automaticamente nel tuo Haven locale.",
+      q: "Cos'è Haven?",
+      a: "Il tuo santuario privato. Locale prima, crittografato su questo dispositivo.",
     },
     {
-      q: "Dove vengono salvati i miei ricordi?",
-      a: "Per impostazione predefinita, restano cifrati sul tuo dispositivo. Il backup cloud è opzionale.",
+      q: "A cosa serve l'anello?",
+      a: "Solo per sigillare dopo aver scritto. L'app funziona senza anello.",
     },
     {
-      q: "Cosa faccio se il tocco non funziona al primo tentativo?",
-      a: "Tieni l'anello fermo vicino alla parte alta posteriore del telefono per 3-5 secondi e riprova.",
+      q: "Serve collegare un anello?",
+      a: "No. È opzionale — per il rituale del sigillo.",
     },
     {
-      q: "Posso usare Haven senza creare un account?",
-      a: "Sì. Haven è progettato per essere semplice. Il backup cloud opzionale può essere attivato in seguito.",
+      q: "Posso condividere ricordi?",
+      a: "Sì. Con Plus, condivisione esplicita (dove disponibile). Un account per persona.",
     },
     {
-      q: "C'è un anello principale?",
-      a: "No. Ogni anello collegato all'account funziona allo stesso modo — tocca uno qualsiasi per accesso rapido. Molti aggiungono anelli extra come backup, come chiavi fisiche di riserva.",
+      q: "Modificare un ricordo sigillato?",
+      a: "Il contenuto sigillato non si modifica. Visualizza, esporta o elimina.",
     },
     {
-      q: "L'anello sostituisce password o account?",
-      a: "No. E una scorciatoia comoda. Accesso, protezione del dispositivo, export completo o rimozione anelli passano dal tuo account e dalle verifiche — non dall'anello da solo.",
+      q: "Più dispositivi?",
+      a: "Accedi su ciascuno. Senza backup Plus i ricordi restano sul dispositivo.",
     },
     {
-      q: "E se perdo l'anello?",
-      a: "Revoca o scollegalo al piu presto da un altro dispositivo fidato. I ricordi sigillati restano sul conto; perdere l'anello non li cancella se conservi l'accesso.",
+      q: "Dove sono salvati?",
+      a: "Crittografati su questo dispositivo. Plus aggiunge backup cloud opzionale.",
+    },
+    {
+      q: "L'anello sostituisce la password?",
+      a: "No. L'anello conferma un sigillo. L'accesso usa il tuo account.",
+    },
+    {
+      q: "Anello perso?",
+      a: "Revocalo da Impostazioni o Anelli su un dispositivo attendibile.",
     },
   ],
 };

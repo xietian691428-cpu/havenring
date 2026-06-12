@@ -1,0 +1,27 @@
+---
+description: Haven simplified product direction (2026-06) — personal sanctuary, ring for Seal only
+alwaysApply: true
+---
+
+# Haven product direction (2026-06) — locked
+
+Read **`docs/core-definition.md`** and **`AGENTS.md`** before product, copy, or flow changes.
+
+## Must follow
+
+- Personal **Memory Sanctuary**; OAuth (**Apple / Google / Email**) for login — **never** ring login.
+- Ring = **Seal ritual + bind** only — not daily unlock or "Opening Haven."
+- Daily use: **`/app` Timeline** without ring.
+- Sharing: **explicit Shared** (Plus) or export — not full Haven membership vault.
+- In-flow copy ≤ **1 sentence**; detail in Settings / Help.
+- Local-first; target **20MB+** local attachments (code limits may lag).
+
+## Do not extend
+
+- `daily_access` unlock UX, NFC silent login, mandatory Ring Setup Gate, couple Haven as primary story.
+
+## Legacy code (migrate in Phase 1, do not deepen)
+
+- `haven_members`, partner invite flows, `hub-router`, `RING_SETUP_GATE`. (NFC silent login removed Phase 1.)
+
+If implementation conflicts with this rule, **align with docs first** and report to the user.
