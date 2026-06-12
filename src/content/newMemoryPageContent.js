@@ -58,7 +58,7 @@ const EN = {
   addFilesCta: "Add Files (max 5)",
   mediaZoneAria: "Photos, videos, and files",
   mediaLimitsSummary:
-    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each.",
+    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each. Ring seal handoff: up to 20 MB total (free).",
   photosSectionHeading: "Photos",
   videosSectionHeading: "Videos",
   filesSectionHeading: "Documents & audio",
@@ -151,6 +151,9 @@ const EN = {
   feedbackMissingVerifiedTap: "Tap your ring to continue.",
   feedbackDraftRestored: "Draft restored.",
   feedbackSaveFailed: "Could not save. Please try again.",
+  sealStagingErrorTitle: "内容过大，无法封印",
+  sealStagingTooLarge:
+    "内容超过戒指封印上限（{mb} MB）。请删除视频、文件或部分照片以减小体积，然后重试。",
   feedbackReadyNext: "Ready for your next memory.",
   feedbackSealPrepNeedDraftSave: "Save your draft first.",
   untitled: "Untitled memory",

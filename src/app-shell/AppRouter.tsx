@@ -357,8 +357,14 @@ export function AppRouter() {
       window.location.assign(qs ? `/bind-ring?${qs}` : "/bind-ring");
       return;
     }
+    const fromDraftId = String(
+      params.get("fromDraft") || params.get("draft") || ""
+    ).trim();
     const openNew =
-      params.get("open") === "new" || params.get("seal") === "1" || params.get("seal") === "new";
+      params.get("open") === "new" ||
+      params.get("seal") === "1" ||
+      params.get("seal") === "new" ||
+      Boolean(fromDraftId);
     const autoSeal =
       params.get("autoSeal") === "true" || params.get("autoSeal") === "1";
     if (params.get("ring") === "signin") {
@@ -366,9 +372,14 @@ export function AppRouter() {
       return;
     }
     if (openNew) {
-      navigateTo({ name: "new", memoryId: null, autoSeal }, "forward");
+      navigateTo(
+        { name: "new", memoryId: null, autoSeal, fromDraftId: fromDraftId || undefined },
+        "forward"
+      );
       params.delete("open");
       params.delete("seal");
+      params.delete("fromDraft");
+      params.delete("draft");
       params.delete("autoSeal");
       const qs = params.toString();
       const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}`;

@@ -131,4 +131,8 @@ export {
   SEAL_SESSION_ENDED,
   SEAL_STAGING_OFFLINE,
   SEAL_STAGING_TOO_LARGE,
+  formatSealStagingTooLargeEn,
+  isSealStagingTooLargeError,
+  sealStagingLimitMb,
 } from "./sealUserMessages";
+export { assertDraftFitsSealBudget } from "./sealMediaPrep";

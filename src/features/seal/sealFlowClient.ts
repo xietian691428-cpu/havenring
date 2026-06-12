@@ -55,8 +55,12 @@ import {
   uploadSealStaging,
 } from "./sealStagingClient";
 import { getSealStrategy, type SealTransportMode } from "./sealPlatform";
-import { SEAL_LOCAL_MAX_BYTES, SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
 import {
+  SEAL_LOCAL_MAX_BYTES,
+  resolveSealStagingPlaintextMaxBytes,
+} from "@/lib/seal-staging-shared";
+import {
+  assertDraftFitsSealBudget,
   buildSealPayloadFromDraft,
   toServerSealCommitPayload,
 } from "./sealMediaPrep";
@@ -209,11 +213,13 @@ export function clearSealPrepState(accessToken?: string) {
 
 export async function sealPayloadFromDraftItem(
   item: Awaited<ReturnType<typeof getDraftItem>>,
-  opts: { forStaging?: boolean } = {}
+  opts: { forStaging?: boolean; isPlus?: boolean } = {}
 ): Promise<SealDraftFinalizePayload | null> {
   if (!item) return null;
   return buildSealPayloadFromDraft(item, {
-    maxBytes: opts.forStaging ? SEAL_STAGING_MAX_BYTES : SEAL_LOCAL_MAX_BYTES,
+    maxBytes: opts.forStaging
+      ? resolveSealStagingPlaintextMaxBytes(Boolean(opts.isPlus))
+      : SEAL_LOCAL_MAX_BYTES,
   });
 }
 
@@ -442,6 +448,7 @@ export async function prepareSealForRingTap(opts: {
   draftId: string;
   accessToken: string;
   forceStaging?: boolean;
+  isPlus?: boolean;
 }): Promise<PrepareSealForRingTapResult> {
   const id = String(opts.draftId || "").trim();
   if (!id) {
@@ -464,15 +471,24 @@ export async function prepareSealForRingTap(opts: {
   if (!payload) {
     throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
-  const stagingPayload = await sealPayloadFromDraftItem(item, { forStaging: true });
-  if (!stagingPayload) {
-    throw new Error(SEAL_DRAFT_NOT_FOUND);
-  }
-
+  const isPlus = Boolean(opts.isPlus);
   const platform = resolvePlatformTarget();
   const strategy = getSealStrategy(platform, {
     forceStaging: opts.forceStaging,
   });
+
+  await assertDraftFitsSealBudget(item, {
+    forStaging: strategy.stagingOnPrep,
+    isPlus,
+  });
+
+  const stagingPayload = await sealPayloadFromDraftItem(item, {
+    forStaging: true,
+    isPlus,
+  });
+  if (!stagingPayload) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
 
   let stagingId: string | undefined;
   if (strategy.stagingOnPrep) {
@@ -483,13 +499,15 @@ export async function prepareSealForRingTap(opts: {
       draftIds: ids,
       payloads: [stagingPayload],
       accessToken: opts.accessToken,
+      isPlus,
     });
   }
 
+  const relayPayload = strategy.stagingOnPrep ? stagingPayload : payload;
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids, { stagingId });
-  writeSealDraftRelay(payload);
-  writeSealPrepBundle({ draftIds: ids, relay: payload });
+  writeSealDraftRelay(relayPayload);
+  writeSealPrepBundle({ draftIds: ids, relay: relayPayload });
 
   return { mode: strategy.transport, stagingId };
 }

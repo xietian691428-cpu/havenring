@@ -29,6 +29,14 @@ function stagingObjectPath(userId: string, stagingId: string): string {
   return `${userId}/${stagingId}.bin`;
 }
 
+function stagingPendingChunkPath(
+  userId: string,
+  uploadId: string,
+  chunkIndex: number
+): string {
+  return `${userId}/pending-staging/${uploadId}/${chunkIndex}.bin`;
+}
+
 function binarySizeFromBase64(ciphertextB64: string): number {
   const trimmed = ciphertextB64.trim();
   if (!trimmed) return 0;
@@ -60,6 +68,68 @@ export async function loadSealStagingRow(
     .maybeSingle();
   if (error || !data) return null;
   return data as SealStagingRow;
+}
+
+export async function storeSealStagingChunk(opts: {
+  userId: string;
+  uploadId: string;
+  chunkIndex: number;
+  dataB64: string;
+}): Promise<number> {
+  const admin = getSupabaseAdminClient();
+  const path = stagingPendingChunkPath(opts.userId, opts.uploadId, opts.chunkIndex);
+  const body = Buffer.from(opts.dataB64, "base64");
+  const { error } = await admin.storage.from(SEAL_STAGING_BUCKET).upload(path, body, {
+    contentType: "application/octet-stream",
+    upsert: true,
+  });
+  if (error) throw new Error("STAGING_CHUNK_UPLOAD_FAILED");
+  return body.length;
+}
+
+async function listSealStagingPendingChunks(
+  userId: string,
+  uploadId: string
+): Promise<string[]> {
+  const admin = getSupabaseAdminClient();
+  const prefix = `${userId}/pending-staging/${uploadId}`;
+  const { data, error } = await admin.storage.from(SEAL_STAGING_BUCKET).list(prefix);
+  if (error) throw error;
+  return (data || [])
+    .map((row) => row.name)
+    .filter(Boolean)
+    .sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]))
+    .map((name) => `${prefix}/${name}`);
+}
+
+async function removeSealStagingPaths(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const admin = getSupabaseAdminClient();
+  try {
+    await admin.storage.from(SEAL_STAGING_BUCKET).remove(paths);
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function assembleSealStagingCiphertextFromChunks(opts: {
+  userId: string;
+  uploadId: string;
+  totalChunks: number;
+}): Promise<string> {
+  const pending = await listSealStagingPendingChunks(opts.userId, opts.uploadId);
+  if (pending.length !== opts.totalChunks) {
+    throw new Error("STAGING_CHUNK_SET_INCOMPLETE");
+  }
+  const parts: Buffer[] = [];
+  for (const path of pending) {
+    const admin = getSupabaseAdminClient();
+    const { data: blob, error } = await admin.storage.from(SEAL_STAGING_BUCKET).download(path);
+    if (error || !blob) throw new Error("STAGING_CHUNK_ASSEMBLE_FAILED");
+    parts.push(Buffer.from(await blob.arrayBuffer()));
+  }
+  await removeSealStagingPaths(pending);
+  return Buffer.concat(parts).toString("base64");
 }
 
 export async function createSealStagingRecord(opts: {

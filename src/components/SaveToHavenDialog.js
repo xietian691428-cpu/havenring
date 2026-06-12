@@ -12,13 +12,16 @@ export function SaveToHavenDialog({
   errorMessage = "",
   onSealNow,
   onCreateAnother,
+  onRetry,
+  errorTitle = "",
 }) {
   const t = SAVE_TO_HAVEN_DIALOG_CONTENT[locale] || SAVE_TO_HAVEN_DIALOG_CONTENT.en;
   const title = useMemo(() => {
     if (status === "saving") return t.titleSaving;
     if (status === "success") return t.titleSuccess;
+    if (status === "error" && errorTitle) return errorTitle;
     return t.titleError;
-  }, [status, t]);
+  }, [status, t, errorTitle]);
 
   const subtitle = useMemo(() => {
     if (status === "saving") {
@@ -61,7 +64,11 @@ export function SaveToHavenDialog({
 
         {status === "error" ? (
           <div style={styles.actions}>
-            <button type="button" onClick={onCreateAnother} style={styles.secondaryButton}>
+            <button
+              type="button"
+              onClick={onRetry || onCreateAnother}
+              style={styles.secondaryButton}
+            >
               {t.tryAgain}
             </button>
           </div>

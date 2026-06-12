@@ -27,6 +27,8 @@ import {
 } from "@/src/content/havenCopy";
 import {
   abandonInProgressSealOnStartPage,
+  getArmedSealDraftIds,
+  readPendingSealDraftIds,
   clearSealNfcTapHref,
   clearSealWaitTabActive,
   consumeFreshSealNfcTapHref,
@@ -311,7 +313,15 @@ export default function StartClient() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
     clearSealWaitTabActive();
+    const armedIds = getArmedSealDraftIds();
+    const draftId = armedIds[0] || readPendingSealDraftIds()[0] || "";
     abandonInProgressSealOnStartPage();
+    if (draftId) {
+      window.location.assign(
+        `/app?open=new&fromDraft=${encodeURIComponent(draftId)}`
+      );
+      return;
+    }
     window.location.assign("/app");
   }
 

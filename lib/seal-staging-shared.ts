@@ -6,16 +6,22 @@ export const SEAL_STAGING_TTL_MS = 10 * 60 * 1000;
 
 import {
   SEAL_LOCAL_MAX_BYTES,
+  SEAL_STAGING_CHUNK_BYTES,
+  SEAL_STAGING_INLINE_POST_MAX_BYTES,
   SEAL_STAGING_MAX_BYTES,
   SEAL_STAGING_PLUS_MAX_BYTES,
   resolveSealStagingMaxBytes,
+  resolveSealStagingPlaintextMaxBytes,
 } from "./seal-staging-config";
 
 export {
   SEAL_LOCAL_MAX_BYTES,
+  SEAL_STAGING_CHUNK_BYTES,
+  SEAL_STAGING_INLINE_POST_MAX_BYTES,
   SEAL_STAGING_MAX_BYTES,
   SEAL_STAGING_PLUS_MAX_BYTES,
   resolveSealStagingMaxBytes,
+  resolveSealStagingPlaintextMaxBytes,
 };
 
 /** Encrypted staging upload ceiling (matches SEAL_STAGING_MAX_BYTES by default). */

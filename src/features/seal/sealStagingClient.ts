@@ -1,7 +1,8 @@
 import {
-  SEAL_STAGING_MAX_BYTES,
-  SEAL_STAGING_MAX_CIPHERTEXT_BYTES,
+  SEAL_STAGING_CHUNK_BYTES,
+  SEAL_STAGING_INLINE_POST_MAX_BYTES,
   resolveSealStagingMaxBytes,
+  resolveSealStagingPlaintextMaxBytes,
   parseSealStagingDraftIds,
 } from "@/lib/seal-staging-shared";
 import type { SealDraftFinalizePayload } from "./sealTypes";
@@ -10,7 +11,11 @@ import {
   encryptSealStagingJson,
 } from "./sealStagingCrypto";
 import { getArmedSealStagingId } from "@/lib/seal-flow";
-import { SEAL_STAGING_TOO_LARGE, SEAL_STAGING_OFFLINE } from "./sealUserMessages";
+import {
+  SEAL_STAGING_TOO_LARGE,
+  SEAL_STAGING_OFFLINE,
+  throwSealStagingTooLarge,
+} from "./sealUserMessages";
 
 type StagingCreateResponse = {
   staging_id?: string;
@@ -35,6 +40,22 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
+}
+
+function binarySizeFromBase64(ciphertextB64: string): number {
+  const trimmed = ciphertextB64.trim();
+  if (!trimmed) return 0;
+  const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((trimmed.length * 3) / 4) - padding);
+}
+
+function splitBase64Ciphertext(ciphertextB64: string, chunkChars: number): string[] {
+  const aligned = Math.max(4, Math.floor(chunkChars / 4) * 4);
+  const chunks: string[] = [];
+  for (let i = 0; i < ciphertextB64.length; i += aligned) {
+    chunks.push(ciphertextB64.slice(i, i + aligned));
+  }
+  return chunks;
 }
 
 async function resolveStagingCiphertext(
@@ -76,12 +97,111 @@ export function estimateSealPayloadBytes(payloads: SealDraftFinalizePayload[]): 
 
 export function assertSealPayloadWithinQuota(
   payloads: SealDraftFinalizePayload[],
-  maxBytes: number = SEAL_STAGING_MAX_CIPHERTEXT_BYTES
+  maxBytes: number,
+  isPlus = false
 ): void {
   const bytes = estimateSealPayloadBytes(payloads);
   if (bytes > maxBytes) {
-    throw new Error(SEAL_STAGING_TOO_LARGE);
+    throwSealStagingTooLarge(isPlus, true);
   }
+}
+
+function parseStagingCreateError(
+  json: StagingCreateResponse,
+  res: Response
+): string {
+  if (json.error_code === "STAGING_DISABLED" || res.status === 503) {
+    return "Sealing is briefly unavailable — try again in a moment.";
+  }
+  if (json.error_code === "STAGING_TOO_LARGE" || res.status === 413) {
+    return SEAL_STAGING_TOO_LARGE;
+  }
+  return typeof json.error === "string" && json.error.trim()
+    ? json.error.trim()
+    : "Could not prepare your memory for sealing.";
+}
+
+function throwStagingCreateError(
+  json: StagingCreateResponse,
+  res: Response,
+  isPlus: boolean
+): never {
+  if (json.error_code === "STAGING_TOO_LARGE" || res.status === 413) {
+    throwSealStagingTooLarge(isPlus, true);
+  }
+  throw new Error(parseStagingCreateError(json, res));
+}
+
+async function uploadSealStagingInline(opts: {
+  draftIds: string[];
+  ciphertext: string;
+  iv: string;
+  accessToken: string;
+  isPlus: boolean;
+}): Promise<string> {
+  const res = await fetch("/api/seal/staging", {
+    method: "POST",
+    headers: authHeaders(opts.accessToken),
+    body: JSON.stringify({
+      mode: "create",
+      draft_ids: opts.draftIds,
+      ciphertext: opts.ciphertext,
+      iv: opts.iv,
+    }),
+  });
+  const json = (await res.json().catch(() => ({}))) as StagingCreateResponse;
+  if (!res.ok || !json.staging_id) {
+    throwStagingCreateError(json, res, opts.isPlus);
+  }
+  return String(json.staging_id);
+}
+
+async function uploadSealStagingChunked(opts: {
+  draftIds: string[];
+  ciphertext: string;
+  iv: string;
+  accessToken: string;
+  isPlus: boolean;
+}): Promise<string> {
+  const uploadId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `staging-${Date.now()}`;
+  const chunks = splitBase64Ciphertext(opts.ciphertext, SEAL_STAGING_CHUNK_BYTES);
+  for (let index = 0; index < chunks.length; index += 1) {
+    const res = await fetch("/api/seal/staging", {
+      method: "POST",
+      headers: authHeaders(opts.accessToken),
+      body: JSON.stringify({
+        mode: "chunk",
+        upload_id: uploadId,
+        chunk_index: index,
+        total_chunks: chunks.length,
+        data_b64: chunks[index],
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as StagingCreateResponse;
+    if (!res.ok || json.error) {
+      throwStagingCreateError(json, res, opts.isPlus);
+    }
+  }
+  const commitRes = await fetch("/api/seal/staging", {
+    method: "POST",
+    headers: authHeaders(opts.accessToken),
+    body: JSON.stringify({
+      mode: "commit",
+      upload_id: uploadId,
+      draft_ids: opts.draftIds,
+      iv: opts.iv,
+      total_chunks: chunks.length,
+      byte_size: binarySizeFromBase64(opts.ciphertext),
+    }),
+  });
+  const commitJson = (await commitRes.json().catch(() => ({}))) as StagingCreateResponse;
+  if (!commitRes.ok || !commitJson.staging_id) {
+    throwStagingCreateError(commitJson, commitRes, opts.isPlus);
+  }
+  return String(commitJson.staging_id);
 }
 
 export async function uploadSealStaging(opts: {
@@ -94,34 +214,32 @@ export async function uploadSealStaging(opts: {
     throw new Error(SEAL_STAGING_OFFLINE);
   }
   const { draftIds, payloads, accessToken } = opts;
-  const maxBytes = resolveSealStagingMaxBytes(Boolean(opts.isPlus));
-  assertSealPayloadWithinQuota(payloads, maxBytes);
+  const isPlus = Boolean(opts.isPlus);
+  const plaintextMax = resolveSealStagingPlaintextMaxBytes(isPlus);
+  const ciphertextMax = resolveSealStagingMaxBytes(isPlus);
+  assertSealPayloadWithinQuota(payloads, plaintextMax, isPlus);
   const plaintext = JSON.stringify({ payloads });
   const { ciphertext, iv } = await encryptSealStagingJson(plaintext, accessToken);
-  if (ciphertext.length > maxBytes) {
-    throw new Error(SEAL_STAGING_TOO_LARGE);
+  const cipherBytes = binarySizeFromBase64(ciphertext);
+  if (cipherBytes > ciphertextMax) {
+    throwSealStagingTooLarge(isPlus, true);
   }
-  const res = await fetch("/api/seal/staging", {
-    method: "POST",
-    headers: authHeaders(accessToken),
-    body: JSON.stringify({
-      draft_ids: draftIds,
+  if (cipherBytes <= SEAL_STAGING_INLINE_POST_MAX_BYTES) {
+    return uploadSealStagingInline({
+      draftIds,
       ciphertext,
       iv,
-    }),
-  });
-  const json = (await res.json().catch(() => ({}))) as StagingCreateResponse;
-  if (!res.ok || !json.staging_id) {
-    if (json.error_code === "STAGING_DISABLED" || res.status === 503) {
-      throw new Error("Sealing is briefly unavailable — try again in a moment.");
-    }
-    throw new Error(
-      typeof json.error === "string" && json.error.trim()
-        ? json.error.trim()
-        : "Could not prepare your memory for sealing."
-    );
+      accessToken,
+      isPlus,
+    });
   }
-  return String(json.staging_id);
+  return uploadSealStagingChunked({
+    draftIds,
+    ciphertext,
+    iv,
+    accessToken,
+    isPlus,
+  });
 }
 
 export async function fetchSealStagingPayloads(opts: {

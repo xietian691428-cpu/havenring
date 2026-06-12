@@ -15,6 +15,19 @@ export const SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 * 1024;
 /** Chunk size for resumable Plus cloud / staging uploads. */
 export const SEAL_CLOUD_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
+/** Max single POST body for staging create (Vercel serverless ~4.5MB). */
+export const SEAL_STAGING_INLINE_POST_MAX_BYTES = 3 * 1024 * 1024;
+
+/** Chunk size for encrypted staging upload requests. */
+export const SEAL_STAGING_CHUNK_BYTES = 3 * 1024 * 1024;
+
+/** JSON plaintext budget before encrypt (fits ciphertext cap after AES-GCM + base64). */
+export const SEAL_STAGING_PLAINTEXT_RATIO = 0.68;
+
+export function resolveSealStagingPlaintextMaxBytes(isPlus: boolean): number {
+  return Math.floor(resolveSealStagingMaxBytes(isPlus) * SEAL_STAGING_PLAINTEXT_RATIO);
+}
+
 export const SEAL_STAGING_BUCKET = "seal-staging";
 
 export const SEAL_STAGING_SIGNED_URL_TTL_SEC = 120;

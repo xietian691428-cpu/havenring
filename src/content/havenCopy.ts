@@ -186,6 +186,9 @@ const HAVEN_NEW_MEMORY_SHARED = {
   sealVerifyConfirm: "Verify and seal",
   sealVerifyCancel: "Cancel",
   backgroundDraftSaved: "Saved to Draft Box",
+  sealStagingErrorTitle: "Memory too large to seal",
+  sealStagingTooLarge:
+    "This memory is too large to seal (limit: {mb} MB). Remove a video, file, or some photos to shrink it, then try again.",
 } as const;
 
 const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice> = {
@@ -259,6 +262,8 @@ export type NewMemoryPageCopyEn = NewMemoryHeroCopy & {
   sealVerifyConfirm: string;
   sealVerifyCancel: string;
   backgroundDraftSaved: string;
+  sealStagingErrorTitle: string;
+  sealStagingTooLarge: string;
 };
 
 function buildNewMemoryPageCopy(platform: HavenPlatform): NewMemoryPageCopyEn {

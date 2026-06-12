@@ -25,7 +25,9 @@ import {
   listenForSealRingTapOnce,
   prepareSealForRingTap,
   readComposerSnapshotTextOnly,
+  SEAL_STAGING_TOO_LARGE,
   SEAL_STEP_UP_REQUIRED,
+  isSealStagingTooLargeError,
   shouldPreferSameTabWebNfc,
   subscribeSealBroadcast,
   writeComposerSnapshotTextOnly,
@@ -210,6 +212,7 @@ export function NewMemoryPage({
     open: false,
     status: "saving",
     errorMessage: "",
+    errorTitle: "",
   });
   const [sealPromptOpen, setSealPromptOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -597,8 +600,9 @@ export function NewMemoryPage({
     }
 
     setSaving(true);
+    setSealFinalizeError("");
     setFeedback(t.feedbackSavingLocal);
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
     setSecureSaveToast(false);
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
@@ -661,14 +665,42 @@ export function NewMemoryPage({
     } catch (error) {
       const message = error instanceof Error ? error.message : t.feedbackSaveFailed;
       setFeedback(message);
-      setSaveDialog({ open: true, status: "error", errorMessage: message });
+      setSaveDialog({
+        open: true,
+        status: "error",
+        errorMessage: message,
+        errorTitle: "",
+      });
     } finally {
       setSaving(false);
     }
   }
 
+  function resolveSealLimitMessage(error) {
+    if (isSealStagingTooLargeError(error)) {
+      const template = t.sealStagingTooLarge || pageCopy.sealStagingTooLarge;
+      return template.replace("{mb}", String(error.limitMb));
+    }
+    if (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE) {
+      const limitMb = userEntitlements?.tier === "plus" ? 100 : 20;
+      const template = t.sealStagingTooLarge || pageCopy.sealStagingTooLarge;
+      return template.replace("{mb}", String(limitMb));
+    }
+    return null;
+  }
+
+  function resolveSealErrorDialogTitle(error) {
+    if (
+      isSealStagingTooLargeError(error) ||
+      (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE)
+    ) {
+      return t.sealStagingErrorTitle || pageCopy.sealStagingErrorTitle;
+    }
+    return "";
+  }
+
   function handleCreateAnother() {
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
     setSealPromptOpen(false);
     setSecureSaveToast(false);
     setUpgradeModalOpen(false);
@@ -682,6 +714,26 @@ export function NewMemoryPage({
     setFeedback(t.feedbackReadyNext);
     clearSealPrepState();
     clearDraftSnapshot();
+  }
+
+  function resetSealUiForRetry() {
+    setSealPromptOpen(false);
+    setSealPreparingOverlay(false);
+    setNfcSealScanBusy(false);
+    setSaving(false);
+    setRingTapError("");
+    clearSealPrepState();
+  }
+
+  function handleDialogErrorRetry() {
+    setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
+    if (sealFinalizeError) {
+      setSealFinalizeError("");
+      resetSealUiForRetry();
+      void handleSealNow();
+      return;
+    }
+    void handleSave();
   }
 
   async function runSealNowAfterVerified() {
@@ -699,6 +751,7 @@ export function NewMemoryPage({
       await prepareSealForRingTap({
         draftId: savedDraft.id,
         accessToken,
+        isPlus: userEntitlements?.tier === "plus",
       });
       setEditingDraftId(savedDraft.id);
       setSealPromptOpen(true);
@@ -715,11 +768,19 @@ export function NewMemoryPage({
         setSealVerifyOpen(true);
         return;
       }
+      const limitMessage = resolveSealLimitMessage(error);
       const message =
-        error instanceof Error ? error.message : t.feedbackSaveFailed;
+        limitMessage ||
+        (error instanceof Error ? error.message : t.feedbackSaveFailed);
+      const errorTitle = resolveSealErrorDialogTitle(error);
       setSealFinalizeError(message);
       setFeedback(message);
-      setSaveDialog({ open: true, status: "error", errorMessage: message });
+      setSaveDialog({
+        open: true,
+        status: "error",
+        errorMessage: message,
+        errorTitle,
+      });
     } finally {
       setSealPreparingOverlay(false);
     }
@@ -752,7 +813,7 @@ export function NewMemoryPage({
       return;
     }
     setRingTapError("");
-    setSaveDialog({ open: false, status: "saving", errorMessage: "" });
+    setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
     setSealFinalizeError("");
     await runSealNowAfterVerified();
   }
@@ -1354,9 +1415,11 @@ export function NewMemoryPage({
           locale={locale}
           open
           status="error"
+          errorTitle={saveDialog.errorTitle}
           errorMessage={saveDialog.errorMessage}
           onSealNow={() => void handleSealNow()}
           onCreateAnother={handleCreateAnother}
+          onRetry={handleDialogErrorRetry}
         />
       ) : null}
     </main>

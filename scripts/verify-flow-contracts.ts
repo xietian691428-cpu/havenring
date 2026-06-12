@@ -286,6 +286,7 @@ check("seal staging API and encrypted cross-tab handoff", () => {
 
 check("seal staging phase 3: storage split, cron purge, strategy + limits", () => {
   const config = readRepoFile("lib/seal-staging-config.ts");
+  const stagingRoute = readRepoFile("app/api/seal/staging/route.ts");
   const server = readRepoFile("lib/seal-staging-server.ts");
   const migration = readRepoFile("supabase/migrations/0020_seal_staging_storage.sql");
   const cronRoute = readRepoFile("app/api/cron/purge-seal-staging/route.ts");
@@ -296,7 +297,14 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(config, /SEAL_LOCAL_MAX_BYTES = 50 \* 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_PLUS_MAX_BYTES/);
   assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 \* 1024/);
+  assert.match(config, /SEAL_STAGING_INLINE_POST_MAX_BYTES/);
+  assert.match(config, /SEAL_STAGING_CHUNK_BYTES/);
+  assert.match(server, /storeSealStagingChunk/);
+  assert.match(stagingRoute, /mode === "chunk"/);
+  assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /uploadSealStagingChunked/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealPayloadFromDraft/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsSealBudget/);
+  assert.match(readRepoFile("src/features/seal/sealUserMessages.ts"), /throwSealStagingTooLarge/);
   assert.match(readRepoFile("src/features/seal/sealPrepBundle.ts"), /sealPrepBundle/);
   assert.match(readRepoFile("lib/subscription.ts"), /canSealWithRing: true/);
   assert.match(config, /SEAL_STAGING_FALLBACK_ENABLED/);

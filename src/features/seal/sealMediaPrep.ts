@@ -1,4 +1,9 @@
-import { SEAL_LOCAL_MAX_BYTES, SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
+import {
+  SEAL_LOCAL_MAX_BYTES,
+  SEAL_STAGING_MAX_BYTES,
+  resolveSealStagingPlaintextMaxBytes,
+} from "@/lib/seal-staging-shared";
+import { throwSealStagingTooLarge } from "./sealUserMessages";
 import type { SealDraftFinalizePayload } from "./sealTypes";
 
 type MediaRow = {
@@ -188,6 +193,57 @@ export function toServerSealCommitPayload(
 
 export function getSealPayloadByteBudget(forStaging: boolean): number {
   return forStaging ? SEAL_STAGING_MAX_BYTES : SEAL_LOCAL_MAX_BYTES;
+}
+
+function countMediaWithInlineData(items: unknown[]): number {
+  if (!Array.isArray(items)) return 0;
+  return items.filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    const dataUrl = (row as MediaRow).dataUrl;
+    return typeof dataUrl === "string" && dataUrl.length > 0;
+  }).length;
+}
+
+/**
+ * Fail fast before ring prep when media cannot fit the seal handoff budget.
+ * Surfaces limit errors instead of silent trimming or generic upload failures.
+ */
+export async function assertDraftFitsSealBudget(
+  item: {
+    id: string;
+    title?: string;
+    story?: string;
+    photo?: unknown[];
+    attachments?: unknown[];
+    releaseAt?: number;
+  } | null,
+  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+): Promise<void> {
+  if (!item?.id) return;
+  const isPlus = Boolean(opts.isPlus);
+  const forStaging = Boolean(opts.forStaging);
+  const maxBytes = forStaging
+    ? resolveSealStagingPlaintextMaxBytes(isPlus)
+    : SEAL_LOCAL_MAX_BYTES;
+
+  const payload = await buildSealPayloadFromDraft(item, { maxBytes });
+  if (!payload) return;
+
+  const origPhotoCount = countMediaWithInlineData(
+    Array.isArray(item.photo) ? item.photo : []
+  );
+  const origAttachCount = countMediaWithInlineData(
+    Array.isArray(item.attachments) ? item.attachments : []
+  );
+  const stagedPhotoCount = countMediaWithInlineData(payload.photo);
+  const stagedAttachCount = countMediaWithInlineData(payload.attachments);
+  const trimmed =
+    origPhotoCount > stagedPhotoCount || origAttachCount > stagedAttachCount;
+  const overBudget = estimateJsonBytes(payload) > maxBytes;
+
+  if (trimmed || overBudget) {
+    throwSealStagingTooLarge(isPlus, forStaging);
+  }
 }
 
 export { estimateJsonBytes };
