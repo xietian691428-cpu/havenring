@@ -56,6 +56,7 @@ export function RingsPage({
   const [pendingRevoke, setPendingRevoke] = useState(null);
   const [revokePrepOpen, setRevokePrepOpen] = useState(false);
   const [havens, setHavens] = useState([]);
+  const [serverPairActive, setServerPairActive] = useState(false);
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
   /** When user has rings: `null` = collapsed by default; `true` = expanded. Ignored when `rings.length === 0`. */
   const [howExplicit, setHowExplicit] = useState(null);
@@ -66,40 +67,41 @@ export function RingsPage({
   const rings = useMemo(() => {
     const local = localRings || [];
     const cloud = cloudRings || [];
-    const byCloudId = new Map(cloud.map((row) => [row.id, row]));
-    const rows = local.map((ring) => {
-      const c = ring.cloudRingId ? byCloudId.get(ring.cloudRingId) : null;
-      return {
-        ...ring,
-        cloudRingId: ring.cloudRingId || c?.id || null,
-        cloudBoundAt: c?.bound_at || ring.cloudBoundAt || null,
-        cloudLastUsedAt: c?.last_used_at || ring.cloudLastUsedAt || null,
-        havenId: c?.haven_id || ring.havenId || null,
-        ownedByYou: c?.ownedByYou ?? true,
-        nickname: c?.nickname || ring.label,
-      };
-    });
-    for (const c of cloud) {
-      if (!c?.id || rows.some((row) => row.cloudRingId === c.id)) continue;
-      rows.push({
-        uidKey: c.nfc_uid_hash || c.id,
-        cloudRingId: c.id,
-        havenId: c.haven_id || null,
-        cloudBoundAt: c.bound_at || null,
-        cloudLastUsedAt: c.last_used_at || null,
-        nickname: c.nickname || (c.ownedByYou ? "Your ring" : t.partnerRingLabel || "Legacy pair ring"),
-        label: c.nickname || (c.ownedByYou ? "Your ring" : t.partnerRingLabel || "Legacy pair ring"),
-        colorKey: c.ownedByYou ? "gold" : "rose",
-        icon: "ring",
-        ownedByYou: Boolean(c.ownedByYou),
+    const partnerLabel = t.partnerRingLabel || "Partner's ring";
+    const yourLabel = t.yourRingLabel || "Your ring";
+
+    if (cloud.length > 0) {
+      const rows = cloud.map((c) => {
+        const localMatch = local.find((ring) => ring.cloudRingId === c.id);
+        const ownedByYou = Boolean(c.ownedByYou);
+        const defaultLabel = ownedByYou ? yourLabel : partnerLabel;
+        return {
+          uidKey: localMatch?.uidKey || c.nfc_uid_hash || c.id,
+          cloudRingId: c.id,
+          havenId: c.haven_id || null,
+          cloudBoundAt: c.bound_at || null,
+          cloudLastUsedAt: c.last_used_at || null,
+          nickname: c.nickname || localMatch?.label || defaultLabel,
+          label: c.nickname || localMatch?.label || defaultLabel,
+          colorKey: ownedByYou ? localMatch?.colorKey || "gold" : "rose",
+          icon: localMatch?.icon || "ring",
+          ownedByYou,
+          createdAt: localMatch?.createdAt || null,
+        };
+      });
+      return rows.sort((a, b) => {
+        const da = Date.parse(a.cloudBoundAt || "") || a.createdAt || 0;
+        const db = Date.parse(b.cloudBoundAt || "") || b.createdAt || 0;
+        return db - da;
       });
     }
-    return rows.sort((a, b) => {
-      const da = Date.parse(a.cloudBoundAt || "") || a.createdAt || 0;
-      const db = Date.parse(b.cloudBoundAt || "") || b.createdAt || 0;
-      return db - da;
-    });
-  }, [localRings, cloudRings, t.partnerRingLabel]);
+
+    return local.map((ring) => ({
+      ...ring,
+      ownedByYou: ring.ownedByYou !== false,
+      nickname: ring.nickname || ring.label,
+    }));
+  }, [localRings, cloudRings, t.partnerRingLabel, t.yourRingLabel]);
 
   function colorHex(key) {
     return RING_COLOR_OPTIONS.find((c) => c.key === key)?.hex ?? sanctuaryTheme.accent;
@@ -127,6 +129,7 @@ export function RingsPage({
         setCloudRings([]);
         setMemoryCountByRingId({});
         setHavens([]);
+        setServerPairActive(false);
         return;
       }
 
@@ -143,6 +146,7 @@ export function RingsPage({
       const cloudRows = Array.isArray(listPayload.rings) ? listPayload.rings : [];
       setCloudRings(cloudRows);
       setHavens(Array.isArray(listPayload.havens) ? listPayload.havens : []);
+      setServerPairActive(Boolean(listPayload.pairActive));
 
       const localNow = getBoundRings();
       for (const ring of localNow) {
@@ -288,8 +292,9 @@ export function RingsPage({
   const ringLimitReached = !canUseFeature(userEntitlements, "expand_ring_slots", {
     currentRingCount: rings.length,
   });
-  const canInvitePartner = rings.length === 1 && !ringLimitReached;
-  const pairActive = rings.filter((ring) => ring.cloudRingId).length >= 2;
+  const ownedCloudRingCount = rings.filter((ring) => ring.cloudRingId && ring.ownedByYou).length;
+  const canInvitePartner = ownedCloudRingCount === 1 && !serverPairActive && !ringLimitReached;
+  const pairActive = serverPairActive;
 
   const showHowDetail = rings.length === 0 || (!loading && howExplicit === true);
 

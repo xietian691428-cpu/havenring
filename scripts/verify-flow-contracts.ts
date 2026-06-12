@@ -215,8 +215,11 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(pairSync, /syncPairMemoriesFromServer/);
   assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
-  assert.match(ringsPage, /pairActive/);
+  assert.match(ringsPage, /serverPairActive/);
+  assert.match(ringsPage, /listPayload\.pairActive/);
   assert.match(ringsContent, /pairActiveBanner/);
+  assert.match(readRepoFile("lib/join-pair-haven.ts"), /joinExistingRingToInviteHaven/);
+  assert.match(readRepoFile("app/api/nfc/bind/route.ts"), /joinExistingRingToInviteHaven/);
   assert.match(coreDef, /Pair mode/);
 });
 

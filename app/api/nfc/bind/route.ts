@@ -11,6 +11,10 @@ import {
   activatePlusTrialForUser,
   getUserSubscriptionStatus,
 } from "@/lib/subscription";
+import {
+  JoinPairError,
+  joinExistingRingToInviteHaven,
+} from "@/lib/join-pair-haven";
 import { requireSecondaryVerificationToken } from "@/lib/secondary-verification";
 
 type BindBody = {
@@ -56,7 +60,8 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as BindBody;
     const rawUid = typeof body.nfc_uid === "string" ? body.nfc_uid : "";
     const normalized = normalizeNfcUidInput(rawUid);
-    if (!normalized) {
+    const inviteCode = String(body.invite_code ?? "").trim();
+    if (!normalized && !inviteCode) {
       return NextResponse.json({ error: "Invalid nfc_uid." }, { status: 400 });
     }
     if (body.privacy_acknowledged !== true) {
@@ -66,15 +71,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const admin = getSupabaseAdminClient();
+
+    if (!normalized && inviteCode) {
+      try {
+        const joined = await joinExistingRingToInviteHaven(admin, user.id, inviteCode);
+        return NextResponse.json({
+          success: true,
+          joinedExistingRing: true,
+          havenId: joined.havenId,
+          role: joined.role,
+          ring: joined.ring,
+          ringId: joined.ring.id,
+          message: "Ring linked. Ready for sealing.",
+          plusTrialActivated: joined.plusTrialActivated,
+          plusTrialEnd: joined.plusTrialEnd,
+          subscription: joined.subscription,
+        });
+      } catch (error) {
+        if (error instanceof JoinPairError) {
+          return NextResponse.json(
+            {
+              error: error.message,
+              code: error.code,
+              ringLimit: error.ringLimit,
+            },
+            { status: error.status }
+          );
+        }
+        throw error;
+      }
+    }
+
     const uidHashCandidates = hashNfcUidAliases(rawUid);
     if (!uidHashCandidates.length) {
       return NextResponse.json({ error: "Invalid nfc_uid." }, { status: 400 });
     }
     const uidHash = uidHashCandidates[0];
     const nickname = String(body.nickname ?? "").trim() || "Ring";
-    const inviteCode = String(body.invite_code ?? "").trim();
 
-    const admin = getSupabaseAdminClient();
     const { data: existingGlobal, error: existingErr } = await admin
       .from("user_nfc_rings")
       .select("id, user_id, haven_id, nickname, bound_at, last_used_at, is_active, retired_at")
@@ -92,6 +127,41 @@ export async function POST(req: NextRequest) {
     }
     if (existingGlobal) {
       if (existingGlobal.user_id === user.id && existingGlobal.is_active) {
+        if (inviteCode) {
+          try {
+            const joined = await joinExistingRingToInviteHaven(
+              admin,
+              user.id,
+              inviteCode,
+              rawUid
+            );
+            return NextResponse.json({
+              success: true,
+              joinedExistingRing: true,
+              alreadyLinkedToYou: true,
+              havenId: joined.havenId,
+              role: joined.role,
+              ring: joined.ring,
+              ringId: joined.ring.id,
+              message: "Ring linked. Ready for sealing.",
+              plusTrialActivated: joined.plusTrialActivated,
+              plusTrialEnd: joined.plusTrialEnd,
+              subscription: joined.subscription,
+            });
+          } catch (error) {
+            if (error instanceof JoinPairError) {
+              return NextResponse.json(
+                {
+                  error: error.message,
+                  code: error.code,
+                  ringLimit: error.ringLimit,
+                },
+                { status: error.status }
+              );
+            }
+            throw error;
+          }
+        }
         return NextResponse.json({
           success: true,
           alreadyLinkedToYou: true,
@@ -136,6 +206,40 @@ export async function POST(req: NextRequest) {
       );
     }
     if ((existingUserRings?.length ?? 0) >= 1) {
+      if (inviteCode) {
+        try {
+          const joined = await joinExistingRingToInviteHaven(
+            admin,
+            user.id,
+            inviteCode,
+            rawUid
+          );
+          return NextResponse.json({
+            success: true,
+            joinedExistingRing: true,
+            havenId: joined.havenId,
+            role: joined.role,
+            ring: joined.ring,
+            ringId: joined.ring.id,
+            message: "Ring linked. Ready for sealing.",
+            plusTrialActivated: joined.plusTrialActivated,
+            plusTrialEnd: joined.plusTrialEnd,
+            subscription: joined.subscription,
+          });
+        } catch (error) {
+          if (error instanceof JoinPairError) {
+            return NextResponse.json(
+              {
+                error: error.message,
+                code: error.code,
+                ringLimit: error.ringLimit,
+              },
+              { status: error.status }
+            );
+          }
+          throw error;
+        }
+      }
       return NextResponse.json(
         {
           error: "Each account can link one active ring. Invite someone with their own account to add a second ring.",

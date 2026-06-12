@@ -7,6 +7,8 @@ export const BIND_RING_PAGE_EN = {
   statusOtherAccount: "This ring belongs to another account.",
   statusRetired: "This ring cannot be transferred.",
   statusYours: "This ring is already linked to you.",
+  statusYoursInvite:
+    "This ring is on your account. Finish joining the Pair below — no need to tap again.",
   joinHavenTitle: "Link second ring",
   bindRingTitle: "Link ring",
   bindRingBody: "Sign in, then finish linking.",
@@ -48,6 +50,10 @@ export const BIND_RING_PAGE_EN = {
     "After you sign in, hold your ring near the top of your iPhone once. You won't need to tap it again on the next screen.",
   joinStep2BodySignedIn:
     "Hold your ring near the top of your iPhone once. When the next screen opens, finish joining — no need to tap again.",
+  joinExistingRingBody:
+    "Your ring is already linked on this account. Join the Pair below — no need to retire or tap again.",
+  joinExistingRingCta: "Join Pair",
+  joinExistingRingCtaSetup: "Create password & join Pair",
   joinNoRetap: "Ring detected. Finish joining below — no need to tap your ring again.",
   joinBindCta: "Link my ring",
   joinBindCtaSetup: "Create password & link ring",

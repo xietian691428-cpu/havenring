@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { API_RATE_POLICIES, enforceUserIpRateLimit } from "@/lib/api-rate-limit";
+import { resolveHavenPairScope } from "@/lib/haven-pair-scope";
 import {
   getSupabaseAdminClient,
   requireAuthenticatedUser,
@@ -35,8 +36,17 @@ export async function GET(req: NextRequest) {
 
     const havenIds = [...new Set((memberships ?? []).map((row) => row.haven_id).filter(Boolean))];
     if (!havenIds.length) {
-      return NextResponse.json({ rings: [], havens: [] });
+      return NextResponse.json({
+        rings: [],
+        havens: [],
+        pairActive: false,
+        memberCount: 0,
+        primaryHavenId: null,
+        accessModel: "pair_shared_sealed",
+      });
     }
+
+    const scope = await resolveHavenPairScope(admin, user.id);
 
     const { data, error } = await admin
       .from("user_nfc_rings")
@@ -59,6 +69,9 @@ export async function GET(req: NextRequest) {
         legacyPairRing: ring.user_id !== user.id,
       })),
       havens: memberships ?? [],
+      pairActive: scope.pairActive,
+      memberCount: scope.memberCount,
+      primaryHavenId: scope.havenIds[0] ?? null,
       accessModel: "pair_shared_sealed",
     });
   } catch (e) {

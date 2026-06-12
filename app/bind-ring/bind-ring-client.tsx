@@ -10,6 +10,8 @@ import { normalizeNfcUidInput } from "@/lib/nfc-uid-browser";
 import {
   addBoundRing,
   computeRingUidKey,
+  getBoundRings,
+  updateRingCloudMetadata,
   upsertBoundRingByUidKey,
 } from "@/src/services/ringRegistryService";
 import {
@@ -124,6 +126,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [message, setMessage] = useState("");
   const [uidLink, setUidLink] = useState<UidLinkState>("idle");
   const [inviteKeyPackage, setInviteKeyPackage] = useState("");
+  const [hasExistingRing, setHasExistingRing] = useState(false);
+  const [existingRingCheckDone, setExistingRingCheckDone] = useState(false);
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
@@ -210,6 +214,38 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }, []);
 
   useEffect(() => {
+    if (!inviteCode || !isPermanentSupabaseSession(session)) {
+      queueMicrotask(() => {
+        setHasExistingRing(false);
+        setExistingRingCheckDone(Boolean(inviteCode));
+      });
+      return;
+    }
+    let active = true;
+    queueMicrotask(() => setExistingRingCheckDone(false));
+    void (async () => {
+      try {
+        const res = await fetch("/api/nfc/list", {
+          headers: { Authorization: `Bearer ${session!.access_token}` },
+        });
+        const payload = (await res.json().catch(() => ({}))) as {
+          rings?: Array<{ ownedByYou?: boolean }>;
+        };
+        if (!active) return;
+        const owned = (payload.rings ?? []).filter((ring) => ring.ownedByYou);
+        setHasExistingRing(owned.length >= 1);
+      } catch {
+        if (active) setHasExistingRing(false);
+      } finally {
+        if (active) setExistingRingCheckDone(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [inviteCode, session]);
+
+  useEffect(() => {
     if (!uid) {
       queueMicrotask(() => setUidLink("idle"));
       return;
@@ -283,6 +319,21 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
 
   async function saveLocalRing(payload: BindResponse) {
     const label = nickname.trim() || "Ring";
+    const cloudMeta = {
+      cloudRingId: payload.ring?.id || undefined,
+      havenId: payload.havenId || payload.ring?.haven_id || undefined,
+      cloudBoundAt: payload.ring?.bound_at || undefined,
+      cloudLastUsedAt: payload.ring?.last_used_at || undefined,
+    };
+
+    if (!uid && cloudMeta.cloudRingId) {
+      const match = getBoundRings().find((ring) => ring.cloudRingId === cloudMeta.cloudRingId);
+      if (match?.uidKey) {
+        updateRingCloudMetadata(match.uidKey, cloudMeta);
+        return;
+      }
+    }
+
     try {
       await addBoundRing({
         serialNumber: uid,
@@ -290,10 +341,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         label,
         colorKey: "gold",
         icon: "ring",
-        cloudRingId: payload.ring?.id || undefined,
-        havenId: payload.havenId || payload.ring?.haven_id || undefined,
-        cloudBoundAt: payload.ring?.bound_at || undefined,
-        cloudLastUsedAt: payload.ring?.last_used_at || undefined,
+        ...cloudMeta,
       });
     } catch (error) {
       const code =
@@ -306,10 +354,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         label,
         colorKey: "gold",
         icon: "ring",
-        cloudRingId: payload.ring?.id || undefined,
-        havenId: payload.havenId || payload.ring?.haven_id || undefined,
-        cloudBoundAt: payload.ring?.bound_at || undefined,
-        cloudLastUsedAt: payload.ring?.last_used_at || undefined,
+        ...cloudMeta,
       });
     }
   }
@@ -343,7 +388,8 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }
 
   async function handleBind() {
-    if (!uid) {
+    const joinWithExistingRing = Boolean(inviteCode && (hasExistingRing || uidLink === "yours"));
+    if (!uid && !joinWithExistingRing) {
       setBindState("error");
       setMessage("Missing ring ID. Tap the ring again and retry.");
       return;
@@ -386,7 +432,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
           "X-Haven-Secondary-Token": secondaryToken,
         },
         body: JSON.stringify({
-          nfc_uid: uid,
+          nfc_uid: uid || undefined,
           nickname: nickname.trim() || "Ring",
           invite_code: inviteCode || undefined,
           privacy_acknowledged: true,
@@ -441,10 +487,17 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }
 
   const needsPasswordSetup = !securityReady;
+  const joinWithExistingRing = Boolean(
+    inviteCode && (hasExistingRing || uidLink === "yours")
+  );
   const primaryBindLabel = inviteCode
-    ? needsPasswordSetup
-      ? copy.joinBindCtaSetup
-      : copy.joinBindCta
+    ? joinWithExistingRing
+      ? needsPasswordSetup
+        ? copy.joinExistingRingCtaSetup
+        : copy.joinExistingRingCta
+      : needsPasswordSetup
+        ? copy.joinBindCtaSetup
+        : copy.joinBindCta
     : needsPasswordSetup
       ? copy.createHavenCtaSetup
       : copy.createHavenCta;
@@ -462,7 +515,11 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
           <p style={styles.body}>
             {inviteCode ? copy.joinStep1Body : holdCopy.waitSubtitle}
           </p>
-          {inviteCode ? (
+          {inviteCode && hasExistingRing ? (
+            <div style={styles.noticeBanner} role="status">
+              {copy.joinExistingRingBody}
+            </div>
+          ) : inviteCode ? (
             <div style={styles.stepCard}>
               <p style={styles.stepLabel}>Next</p>
               <p style={styles.stepText}>{copy.joinStep2Body}</p>
@@ -496,6 +553,56 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                 {busyProvider === "google" ? copy.openingSignIn : copy.signInGoogle}
               </button>
             </div>
+          ) : inviteCode && existingRingCheckDone && hasExistingRing ? (
+            <div style={styles.stack}>
+              <p style={styles.notice}>{copy.joinExistingRingBody}</p>
+              <p style={styles.notice}>
+                {needsPasswordSetup ? copy.devicePasswordCreateHint : copy.devicePasswordEnterHint}
+              </p>
+              <label style={styles.label}>
+                {needsPasswordSetup ? copy.devicePasswordCreateLabel : copy.devicePasswordLabel}
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  style={styles.input}
+                  autoComplete={needsPasswordSetup ? "new-password" : "current-password"}
+                  minLength={needsPasswordSetup ? 6 : undefined}
+                />
+              </label>
+              {needsPasswordSetup ? (
+                <label style={styles.label}>
+                  {copy.devicePasswordConfirmLabel}
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    style={styles.input}
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </label>
+              ) : (
+                <label style={styles.label}>
+                  {copy.recoveryCodeLabel}
+                  <input
+                    type="text"
+                    value={recoveryCode}
+                    onChange={(event) => setRecoveryCode(event.target.value)}
+                    style={styles.input}
+                    placeholder={copy.recoveryOptional}
+                  />
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleBind()}
+                disabled={bindState === "binding"}
+                style={styles.primaryButton}
+              >
+                {bindState === "binding" ? copy.binding : primaryBindLabel}
+              </button>
+            </div>
           ) : inviteCode ? (
             <p style={styles.notice}>{copy.joinStep2BodySignedIn}</p>
           ) : null}
@@ -514,7 +621,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
 
   const signedOut = authState === "signed_out" || !isPermanentSupabaseSession(session);
   const blockNewBind =
-    uidLink === "yours" ||
+    (uidLink === "yours" && !inviteCode) ||
     uidLink === "other" ||
     uidLink === "retired" ||
     uidLink === "checking";
@@ -529,7 +636,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         <p style={styles.body}>{inviteCode ? copy.bodyInvite : copy.body}</p>
         {inviteCode ? (
           <div style={styles.noticeBanner} role="status">
-            {copy.joinNoRetap}
+            {joinWithExistingRing ? copy.joinExistingRingBody : copy.joinNoRetap}
           </div>
         ) : null}
         <div style={styles.uidBox}>
@@ -561,7 +668,9 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             {uidLink === "unlinked"
               ? copy.statusUnlinked
               : uidLink === "yours"
-                ? copy.statusYours
+                ? inviteCode
+                  ? copy.statusYoursInvite
+                  : copy.statusYours
                 : uidLink === "other"
                   ? copy.statusOtherAccount
                   : uidLink === "retired"
