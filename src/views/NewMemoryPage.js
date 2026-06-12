@@ -23,10 +23,11 @@ import {
   isSealFlowArmed,
   navigateToSealWaitPage,
   listenForSealRingTapOnce,
+  evaluateComposerSealSize,
+  getSealStrategy,
   prepareSealForRingTap,
   readComposerSnapshotTextOnly,
   SEAL_STAGING_TOO_LARGE,
-  SEAL_STEP_UP_REQUIRED,
   isSealStagingTooLargeError,
   shouldPreferSameTabWebNfc,
   subscribeSealBroadcast,
@@ -41,12 +42,6 @@ import { getNewMemoryPageCopy, getNfcHoldGuideCopy, getSealFlowCopy } from "../c
 import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { getBoundRingCount } from "../services/ringRegistryService";
-import {
-  isSecurityInitialized,
-  requiresSealStepUp,
-  verifyAndTrustCurrentDevice,
-} from "../services/deviceTrustService";
-import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
 import { SealPwaHintCard } from "../components/SealPwaHintCard";
 
 const MAX_PHOTOS = 6;
@@ -226,11 +221,13 @@ export function NewMemoryPage({
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [sealPreparingOverlay, setSealPreparingOverlay] = useState(false);
   const [sealFinalizeError, setSealFinalizeError] = useState("");
-  const [sealVerifyOpen, setSealVerifyOpen] = useState(false);
-  const [sealVerifyPassword, setSealVerifyPassword] = useState("");
-  const [sealVerifyRecovery, setSealVerifyRecovery] = useState("");
-  const [sealVerifyError, setSealVerifyError] = useState("");
-  const [sealVerifyBusy, setSealVerifyBusy] = useState(false);
+  const [sealSizeStatus, setSealSizeStatus] = useState({
+    withinLimit: true,
+    limitMb: 20,
+    usedMb: 0,
+    wouldTrimMedia: false,
+    message: "",
+  });
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
@@ -245,8 +242,6 @@ export function NewMemoryPage({
   const attachmentsRef = useRef(attachments);
   const handleSaveRef = useRef(null);
   const autoArmBusyRef = useRef(false);
-
-  const ringsCopy = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
 
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -346,6 +341,62 @@ export function NewMemoryPage({
     const timer = window.setTimeout(() => setSecureSaveToast(false), 7000);
     return () => window.clearTimeout(timer);
   }, [secureSaveToast]);
+
+  useEffect(() => {
+    if (!hasDraftContent) {
+      setSealSizeStatus({
+        withinLimit: true,
+        limitMb: userEntitlements?.tier === "plus" ? 100 : 20,
+        usedMb: 0,
+        wouldTrimMedia: false,
+        message: "",
+      });
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const isPlus = userEntitlements?.tier === "plus";
+        const forStaging = getSealStrategy(platform).stagingOnPrep;
+        const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
+        const status = await evaluateComposerSealSize(
+          {
+            title: title.trim(),
+            story: story.trim(),
+            photo: photos,
+            attachments,
+            releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
+          },
+          { forStaging, isPlus }
+        );
+        if (cancelled) return;
+        const template = status.withinLimit
+          ? t.sealSizeMeterOk || pageCopy.sealSizeMeterOk
+          : t.sealSizeMeterOver || pageCopy.sealSizeMeterOver;
+        const message = template
+          .replace("{used}", String(status.usedMb))
+          .replace("{limit}", String(status.limitMb));
+        setSealSizeStatus({ ...status, message });
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    title,
+    story,
+    photos,
+    attachments,
+    releaseAtInput,
+    hasDraftContent,
+    platform,
+    userEntitlements,
+    t.sealSizeMeterOk,
+    t.sealSizeMeterOver,
+    pageCopy.sealSizeMeterOk,
+    pageCopy.sealSizeMeterOver,
+  ]);
 
   useEffect(() => {
     if (sealPromptOpen && sealRemainingMs > 0) {
@@ -761,13 +812,6 @@ export function NewMemoryPage({
       }
       navigateToSealWaitPage();
     } catch (error) {
-      if (error instanceof Error && error.message === SEAL_STEP_UP_REQUIRED) {
-        setSealVerifyError("");
-        setSealVerifyPassword("");
-        setSealVerifyRecovery("");
-        setSealVerifyOpen(true);
-        return;
-      }
       const limitMessage = resolveSealLimitMessage(error);
       const message =
         limitMessage ||
@@ -800,41 +844,15 @@ export function NewMemoryPage({
       setFeedback(t.feedbackNeedContent);
       return;
     }
-    if (!isSecurityInitialized()) {
-      setSealFinalizeError(pageCopy.sealStepUpSetupRequired);
-      setFeedback(pageCopy.sealStepUpSetupRequired);
-      return;
-    }
-    if (requiresSealStepUp()) {
-      setSealVerifyError("");
-      setSealVerifyPassword("");
-      setSealVerifyRecovery("");
-      setSealVerifyOpen(true);
+    if (hasDraftContent && !sealSizeStatus.withinLimit) {
+      setSealFinalizeError(sealSizeStatus.message);
+      setFeedback(sealSizeStatus.message);
       return;
     }
     setRingTapError("");
     setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
     setSealFinalizeError("");
     await runSealNowAfterVerified();
-  }
-
-  async function handleConfirmSealVerify() {
-    setSealVerifyBusy(true);
-    setSealVerifyError("");
-    try {
-      await verifyAndTrustCurrentDevice({
-        password: sealVerifyPassword,
-        recoveryCode: sealVerifyRecovery,
-      });
-      setSealVerifyOpen(false);
-      setSealVerifyPassword("");
-      setSealVerifyRecovery("");
-      await runSealNowAfterVerified();
-    } catch {
-      setSealVerifyError(ringsCopy.verifyError);
-    } finally {
-      setSealVerifyBusy(false);
-    }
   }
 
   handleSaveRef.current = handleSave;
@@ -1017,6 +1035,20 @@ export function NewMemoryPage({
 
           <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
             <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
+            {hasDraftContent && sealSizeStatus.message ? (
+              <p
+                style={{
+                  ...styles.sealSizeMeter,
+                  ...(sealSizeStatus.withinLimit
+                    ? styles.sealSizeMeterOk
+                    : styles.sealSizeMeterOver),
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                {sealSizeStatus.message}
+              </p>
+            ) : null}
 
             <div style={styles.mediaRow}>
               <button
@@ -1264,12 +1296,20 @@ export function NewMemoryPage({
               <button
                 type="button"
                 onClick={handleHeroPrimaryClick}
-                disabled={saving || sealPromptOpen}
+                disabled={
+                  saving ||
+                  sealPromptOpen ||
+                  (hasDraftContent && !sealSizeStatus.withinLimit)
+                }
                 aria-busy={saving || sealPromptOpen}
                 aria-label={`${getPrimaryButtonText()}. ${pageCopy.sealPrimaryHint}`}
                 style={{
                   ...styles.heroSealButton,
-                  ...(ringReady ? styles.heroSealButtonActive : styles.heroSealButtonMuted),
+                  ...(saving || sealPromptOpen
+                    ? styles.heroSealButtonBusy
+                    : ringReady && sealSizeStatus.withinLimit
+                      ? styles.heroSealButtonActive
+                      : styles.heroSealButtonMuted),
                 }}
               >
                 {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
@@ -1293,62 +1333,6 @@ export function NewMemoryPage({
           ) : null}
         </section>
       </div>
-
-      {sealVerifyOpen ? (
-        <div
-          style={styles.upgradeModalOverlay}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="haven-seal-verify-title"
-          onClick={() => setSealVerifyOpen(false)}
-        >
-          <section
-            style={styles.upgradeModalCard}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="haven-seal-verify-title" style={styles.upgradeModalTitle}>
-              {pageCopy.sealVerifyTitle}
-            </h2>
-            <p style={styles.upgradeModalBody}>{pageCopy.sealVerifyHint}</p>
-            <input
-              type="password"
-              value={sealVerifyPassword}
-              onChange={(e) => setSealVerifyPassword(e.target.value)}
-              placeholder={ringsCopy.verifyPassword}
-              style={styles.verifyInput}
-              autoComplete="current-password"
-            />
-            <input
-              type="text"
-              value={sealVerifyRecovery}
-              onChange={(e) => setSealVerifyRecovery(e.target.value)}
-              placeholder={ringsCopy.verifyRecovery}
-              style={styles.verifyInput}
-            />
-            {sealVerifyError ? (
-              <p style={styles.verifyError}>{sealVerifyError}</p>
-            ) : null}
-            <div style={styles.upgradeModalActions}>
-              <button
-                type="button"
-                onClick={() => void handleConfirmSealVerify()}
-                style={styles.upgradeModalSubscribe}
-                disabled={sealVerifyBusy}
-              >
-                {pageCopy.sealVerifyConfirm}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSealVerifyOpen(false)}
-                style={styles.upgradeModalDismiss}
-                disabled={sealVerifyBusy}
-              >
-                {pageCopy.sealVerifyCancel}
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
 
       {upgradeModalOpen ? (
         <div
@@ -1891,6 +1875,23 @@ const styles = {
     fontSize: 12,
     lineHeight: 1.5,
     color: "rgba(212, 198, 188, 0.82)",
+  },
+  sealSizeMeter: {
+    margin: 0,
+    padding: "10px 12px",
+    borderRadius: 12,
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  sealSizeMeterOk: {
+    border: "1px solid rgba(120, 140, 110, 0.35)",
+    background: "rgba(40, 56, 44, 0.35)",
+    color: "#d8eedc",
+  },
+  sealSizeMeterOver: {
+    border: "1px solid rgba(201, 123, 132, 0.45)",
+    background: "rgba(72, 36, 34, 0.55)",
+    color: "#ffd9cf",
   },
   mediaSubLabel: {
     margin: "4px 0 0",

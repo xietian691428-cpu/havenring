@@ -135,4 +135,8 @@ export {
   isSealStagingTooLargeError,
   sealStagingLimitMb,
 } from "./sealUserMessages";
-export { assertDraftFitsSealBudget } from "./sealMediaPrep";
+export {
+  assertDraftFitsSealBudget,
+  evaluateComposerSealSize,
+} from "./sealMediaPrep";
+export type { ComposerSealSizeStatus } from "./sealMediaPrep";

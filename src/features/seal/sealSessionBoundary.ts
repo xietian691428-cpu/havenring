@@ -6,8 +6,6 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { clearSealWaitTabActive } from "./sealCrossTab";
 import { clearSealPrepState } from "./sealFlowClient";
-import { markSealStepUpRequired } from "../../services/deviceTrustService";
-
 export function abandonSealPrepOnSessionBoundary(): void {
   if (typeof window === "undefined") return;
   void getSupabaseBrowserClient()
@@ -19,7 +17,6 @@ export function abandonSealPrepOnSessionBoundary(): void {
       clearSealPrepState();
     });
   clearSealWaitTabActive();
-  markSealStepUpRequired();
 }
 
 /** App-wide: lock screen / tab hidden ends in-progress seal prep. */

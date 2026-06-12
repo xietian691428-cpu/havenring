@@ -329,22 +329,23 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(readRepoFile("lib/seal-staging-telemetry.ts"), /endpoint: "staging"/);
 });
 
-check("seal session boundary: no background auto-arm; step-up before re-seal", () => {
+check("seal session boundary: no background auto-arm; live size meter on compose", () => {
   const newMemory = readRepoFile("src/views/NewMemoryPage.js");
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
   const sessionBoundary = readRepoFile("src/features/seal/sealSessionBoundary.ts");
   const appRouter = readRepoFile("src/app-shell/AppRouter.tsx");
   const deviceTrust = readRepoFile("src/services/deviceTrustService.js");
+  const sealMediaPrep = readRepoFile("src/features/seal/sealMediaPrep.ts");
   assert.doesNotMatch(newMemory, /triggerAutoSealPrep/);
   assert.doesNotMatch(newMemory, /redirectToSealWaitIfArmed/);
   assert.doesNotMatch(newMemory, /openSealPromptOnSuccess/);
+  assert.doesNotMatch(newMemory, /requiresSealStepUp/);
   assert.match(newMemory, /persistDraftOnBackgroundRef/);
-  assert.match(newMemory, /requiresSealStepUp/);
-  assert.match(newMemory, /verifyAndTrustCurrentDevice/);
-  assert.match(sealFlow, /SEAL_STEP_UP_REQUIRED/);
-  assert.match(sealFlow, /requiresSealStepUp\(\)/);
+  assert.match(newMemory, /evaluateComposerSealSize/);
+  assert.match(sealMediaPrep, /evaluateComposerSealSize/);
+  assert.doesNotMatch(sealFlow, /requiresSealStepUp\(\)/);
   assert.match(sessionBoundary, /abandonSealPrepOnSessionBoundary/);
-  assert.match(sessionBoundary, /markSealStepUpRequired/);
+  assert.doesNotMatch(sessionBoundary, /markSealStepUpRequired/);
   assert.match(appRouter, /bindSealSessionBoundaryListeners/);
   assert.match(deviceTrust, /markSealStepUpRequired/);
   assert.match(deviceTrust, /clearSealStepUpRequired/);

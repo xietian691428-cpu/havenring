@@ -154,6 +154,9 @@ const EN = {
   sealStagingErrorTitle: "内容过大，无法封印",
   sealStagingTooLarge:
     "内容超过戒指封印上限（{mb} MB）。请删除视频、文件或部分照片以减小体积，然后重试。",
+  sealSizeMeterOk: "约 {used} MB / {limit} MB（戒指封印上限）",
+  sealSizeMeterOver:
+    "约 {used} MB，已超过 {limit} MB 戒指封印上限。请删除视频、文件或部分照片。",
   feedbackReadyNext: "Ready for your next memory.",
   feedbackSealPrepNeedDraftSave: "Save your draft first.",
   untitled: "Untitled memory",

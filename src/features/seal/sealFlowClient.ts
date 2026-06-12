@@ -48,7 +48,6 @@ import {
   readSealDraftRelay,
   writeSealDraftRelay,
 } from "./sealDraftRelay";
-import { requiresSealStepUp } from "../../services/deviceTrustService";
 import {
   deleteSealStaging,
   fetchSealStagingPayloads,
@@ -454,9 +453,6 @@ export async function prepareSealForRingTap(opts: {
   if (!id) {
     throw new Error("Missing draft.");
   }
-  if (requiresSealStepUp()) {
-    throw new Error(SEAL_STEP_UP_REQUIRED);
-  }
   if (!opts.accessToken) {
     throw new Error("Sign in to seal with your ring.");
   }
@@ -520,7 +516,6 @@ export async function primeSealPrepAfterDraftPersisted(
   if (!accessToken) {
     const id = String(draftId || "").trim();
     if (!id) return;
-    if (requiresSealStepUp()) throw new Error(SEAL_STEP_UP_REQUIRED);
     clearSealCompleteRelay();
     clearSealWaitTabActive();
     clearSealNfcTapHref();

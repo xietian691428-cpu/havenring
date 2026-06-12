@@ -208,6 +208,59 @@ function countMediaWithInlineData(items: unknown[]): number {
  * Fail fast before ring prep when media cannot fit the seal handoff budget.
  * Surfaces limit errors instead of silent trimming or generic upload failures.
  */
+export type ComposerSealSizeStatus = {
+  withinLimit: boolean;
+  limitMb: number;
+  usedMb: number;
+  wouldTrimMedia: boolean;
+};
+
+export async function evaluateComposerSealSize(
+  item: {
+    title?: string;
+    story?: string;
+    photo?: unknown[];
+    attachments?: unknown[];
+    releaseAt?: number;
+  },
+  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+): Promise<ComposerSealSizeStatus> {
+  const isPlus = Boolean(opts.isPlus);
+  const forStaging = Boolean(opts.forStaging);
+  const maxBytes = forStaging
+    ? resolveSealStagingPlaintextMaxBytes(isPlus)
+    : SEAL_LOCAL_MAX_BYTES;
+  const limitMb = Math.floor(maxBytes / (1024 * 1024));
+
+  const draft = {
+    id: "composer-estimate",
+    title: String(item.title || ""),
+    story: String(item.story || ""),
+    photo: Array.isArray(item.photo) ? item.photo : [],
+    attachments: Array.isArray(item.attachments) ? item.attachments : [],
+    releaseAt: Number(item.releaseAt || 0) || 0,
+  };
+
+  const payload = await buildSealPayloadFromDraft(draft, { maxBytes });
+  const usedBytes = payload ? estimateJsonBytes(payload) : 0;
+  const usedMb = Math.max(0.1, Math.round((usedBytes / (1024 * 1024)) * 10) / 10);
+
+  const origPhotoCount = countMediaWithInlineData(draft.photo);
+  const origAttachCount = countMediaWithInlineData(draft.attachments);
+  const stagedPhotoCount = countMediaWithInlineData(payload?.photo ?? []);
+  const stagedAttachCount = countMediaWithInlineData(payload?.attachments ?? []);
+  const wouldTrimMedia =
+    origPhotoCount > stagedPhotoCount || origAttachCount > stagedAttachCount;
+  const overBudget = usedBytes > maxBytes;
+
+  return {
+    withinLimit: !wouldTrimMedia && !overBudget,
+    limitMb,
+    usedMb,
+    wouldTrimMedia,
+  };
+}
+
 export async function assertDraftFitsSealBudget(
   item: {
     id: string;
