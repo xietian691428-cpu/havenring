@@ -995,127 +995,9 @@ export function NewMemoryPage({
             {sealFlow.autoSealHint}
           </p>
         ) : null}
-        <section
-          style={styles.heroSeal}
-          aria-labelledby={sealPromptOpen ? "haven-seal-ready-title" : "haven-hero-seal-title"}
-        >
-          {ringReady ? <RingReadyBadge ready /> : null}
-          <div
-            style={{
-              ...styles.sealReadyPanel,
-              display: sealPromptOpen ? "grid" : "none",
-            }}
-            role="status"
-            aria-live="polite"
-            aria-hidden={!sealPromptOpen}
-          >
-            <div style={styles.sealReadyPulseWrap} aria-hidden>
-              <span style={styles.sealReadyHalo} />
-              <span style={styles.sealReadyHaloOuter} />
-              <span style={styles.sealReadyRingMark} title="Haven Ring">
-                ◎
-              </span>
-            </div>
-            <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
-              {sealFlow.readyTitle}
-            </h2>
-            <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
-            <p style={styles.sealWaitingStep}>{sealFlow.sealWaitingStep2}</p>
-            {sealRemainingMs > 0 ? (
-              <p style={styles.sealCountdownLine} aria-live="polite">
-                {sealFlow.sealWaitingCountdownPrefix} {sealRemainingLabel}
-              </p>
-            ) : null}
-            {!networkOnline ? (
-              <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
-            ) : null}
-            {webNfcAvailable ? (
-              <button
-                type="button"
-                onClick={() => void handleSealRingScan()}
-                disabled={nfcSealScanBusy}
-                style={styles.sealScanRingBtn}
-              >
-                {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
-              </button>
-            ) : null}
-            {nfcSealScanBusy ? (
-              <IndeterminateStepStatus
-                active
-                label={nfcHoldCopy.listeningStatusLine}
-                slowLabel={nfcHoldCopy.stillListeningLine}
-                style={styles.sealCountdownLine}
-              />
-            ) : null}
-            {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
-            {sealFinalizeError ? (
-              <p style={styles.error}>{sealFinalizeError}</p>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleCancelSeal}
-              style={{ ...styles.cancelSealBtn, alignSelf: "center", marginTop: 12 }}
-            >
-              {pageCopy.cancelSealFlow}
-            </button>
-          </div>
-          <div style={{ display: sealPromptOpen ? "none" : "block" }} aria-hidden={sealPromptOpen}>
-            <h2 id="haven-hero-seal-title" style={styles.heroTitle}>
-              {pageCopy.heroTitle}
-            </h2>
-            <p style={styles.heroSubtitle}>{pageCopy.heroSubtitle}</p>
-          </div>
-          {secureSaveToast ? (
-            <div style={styles.secureToastStack} role="status" aria-live="polite">
-              <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>
-              <button
-                type="button"
-                onClick={() => void handleSealNow()}
-                disabled={saving || sealPromptOpen}
-                style={styles.secureToastSealBtn}
-              >
-                {pageCopy.sealAfterSecureSaveCta}
-              </button>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            onClick={handleHeroPrimaryClick}
-            disabled={saving || sealPromptOpen}
-            aria-busy={saving || sealPromptOpen}
-            aria-label={`${getPrimaryButtonText()}. ${pageCopy.sealPrimaryHint}`}
-            style={{
-              ...styles.heroSealButton,
-              ...(sealPromptOpen
-                ? styles.heroSealButtonBusy
-                : ringReady
-                  ? styles.heroSealButtonActive
-                  : styles.heroSealButtonMuted),
-            }}
-          >
-            {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
-            {sealPromptOpen ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
-            {getPrimaryButtonText()}
-          </button>
-          {!sealPromptOpen ? <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p> : null}
-          {showCloudBackupUpsell && !sealPromptOpen ? (
-            <p style={styles.heroUpgrade}>{pageCopy.cloudBackupHint}</p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void handleSaveSecurelyFallback()}
-            disabled={saving}
-            style={styles.saveSecureLink}
-          >
-            {pageCopy.saveSecureLink}
-          </button>
-        </section>
 
         <section style={styles.editorSection} aria-labelledby="haven-editor-heading">
-          <h3 id="haven-editor-heading" style={styles.editorHeading}>
-            {t.editorSectionTitle}
-          </h3>
-          <label style={styles.srOnly} htmlFor="haven-memory-story">
+          <label id="haven-editor-heading" style={styles.storyFieldLabel} htmlFor="haven-memory-story">
             {t.storyLabel}
           </label>
           <p style={styles.storyRequiredNote}>{pageCopy.storyRequiredHint}</p>
@@ -1132,8 +1014,6 @@ export function NewMemoryPage({
             {t.storyCharCount.replace("{n}", String(story.length))}
             {story.length > STORY_SOFT_MAX ? ` — ${t.storyCharSoftMaxWarn}` : ""}
           </p>
-
-          <p style={styles.feedbackInline}>{feedback || "\u00a0"}</p>
 
           <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
             <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
@@ -1297,21 +1177,122 @@ export function NewMemoryPage({
               </label>
             </div>
           ) : null}
+        </section>
 
-          <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
-          {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
-          {platform === "android" ? <p style={styles.iosHint}>{t.androidComposeHint}</p> : null}
+        <section
+          style={styles.composeActions}
+          aria-labelledby={sealPromptOpen ? "haven-seal-ready-title" : "haven-compose-actions-title"}
+        >
+          {sealPromptOpen ? (
+            <div style={styles.sealReadyPanel} role="status" aria-live="polite">
+              <div style={styles.sealReadyPulseWrap} aria-hidden>
+                <span style={styles.sealReadyHalo} />
+                <span style={styles.sealReadyHaloOuter} />
+                <span style={styles.sealReadyRingMark} title="Haven Ring">
+                  ◎
+                </span>
+              </div>
+              <h2 id="haven-seal-ready-title" style={styles.sealReadyTitle}>
+                {sealFlow.readyTitle}
+              </h2>
+              <p style={styles.sealReadyPlacement}>{getSealPlacementHint()}</p>
+              <p style={styles.sealWaitingStep}>{sealFlow.sealWaitingStep2}</p>
+              {sealRemainingMs > 0 ? (
+                <p style={styles.sealCountdownLine} aria-live="polite">
+                  {sealFlow.sealWaitingCountdownPrefix} {sealRemainingLabel}
+                </p>
+              ) : null}
+              {!networkOnline ? (
+                <p style={styles.sealReadyOffline}>{pageCopy.footerOfflineSeal}</p>
+              ) : null}
+              {webNfcAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => void handleSealRingScan()}
+                  disabled={nfcSealScanBusy}
+                  style={styles.sealScanRingBtn}
+                >
+                  {nfcSealScanBusy ? sealFlow.sealScanRingBusy : sealFlow.sealScanRingCta}
+                </button>
+              ) : null}
+              {nfcSealScanBusy ? (
+                <IndeterminateStepStatus
+                  active
+                  label={nfcHoldCopy.listeningStatusLine}
+                  slowLabel={nfcHoldCopy.stillListeningLine}
+                  style={styles.sealCountdownLine}
+                />
+              ) : null}
+              {ringTapError ? <p style={styles.error}>{ringTapError}</p> : null}
+              {sealFinalizeError ? <p style={styles.error}>{sealFinalizeError}</p> : null}
+              <button
+                type="button"
+                onClick={handleCancelSeal}
+                style={{ ...styles.cancelSealBtn, alignSelf: "center", marginTop: 12 }}
+              >
+                {pageCopy.cancelSealFlow}
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2 id="haven-compose-actions-title" style={styles.srOnly}>
+                Save and seal
+              </h2>
+              {ringReady ? <RingReadyBadge ready /> : null}
+              {secureSaveToast ? (
+                <div style={styles.secureToastStack} role="status" aria-live="polite">
+                  <p style={styles.secureToastBanner}>{pageCopy.secureSaveMessage}</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleSealNow()}
+                    disabled={saving || sealPromptOpen}
+                    style={styles.secureToastSealBtn}
+                  >
+                    {pageCopy.sealAfterSecureSaveCta}
+                  </button>
+                </div>
+              ) : null}
+              <p style={styles.composeActionsLead}>{pageCopy.heroSubtitle}</p>
+              <button
+                type="button"
+                onClick={() => void handleSaveSecurelyFallback()}
+                disabled={saving || sealPromptOpen}
+                style={styles.saveSecureButton}
+              >
+                {saving ? t.footerSaving : pageCopy.saveSecureLink}
+              </button>
+              <button
+                type="button"
+                onClick={handleHeroPrimaryClick}
+                disabled={saving || sealPromptOpen}
+                aria-busy={saving || sealPromptOpen}
+                aria-label={`${getPrimaryButtonText()}. ${pageCopy.sealPrimaryHint}`}
+                style={{
+                  ...styles.heroSealButton,
+                  ...(ringReady ? styles.heroSealButtonActive : styles.heroSealButtonMuted),
+                }}
+              >
+                {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
+                {getPrimaryButtonText()}
+              </button>
+              <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p>
+              {showCloudBackupUpsell ? (
+                <p style={styles.heroUpgrade}>{pageCopy.cloudBackupHint}</p>
+              ) : null}
+              <p style={styles.freePlanLine}>{t.freePlanOneLiner}</p>
+              {platform === "ios" ? <p style={styles.iosHint}>{t.iosComposeHint}</p> : null}
+              {platform === "android" ? <p style={styles.iosHint}>{t.androidComposeHint}</p> : null}
+            </>
+          )}
+          <p style={styles.feedbackInline}>{feedback || "\u00a0"}</p>
+          <p style={styles.statusFooterText} role="status" aria-live="polite">
+            {footerStatusLine()}
+          </p>
+          {!sealPromptOpen && !saving ? (
+            <p style={styles.footerSecurityNote}>{pageCopy.securityDeleteNote}</p>
+          ) : null}
         </section>
       </div>
-
-      <footer style={styles.statusFooter}>
-        <p style={styles.statusFooterText} role="status" aria-live="polite">
-          {footerStatusLine()}
-        </p>
-        {!sealPromptOpen && !saving ? (
-          <p style={styles.footerSecurityNote}>{pageCopy.securityDeleteNote}</p>
-        ) : null}
-      </footer>
 
       {sealVerifyOpen ? (
         <div
@@ -1607,35 +1588,41 @@ const styles = {
     color: "rgba(212, 175, 55, 0.85)",
     textAlign: "center",
   },
-  heroSeal: {
+  composeActions: {
     display: "grid",
     gap: 12,
-    padding: "18px 16px 20px",
-    borderRadius: 18,
-    border: "1px solid rgba(90, 72, 62, 0.55)",
-    background: "linear-gradient(165deg, rgba(48, 36, 30, 0.55), rgba(18, 14, 12, 0.92))",
-    textAlign: "center",
+    paddingTop: 20,
+    marginTop: 4,
+    borderTop: "1px solid rgba(72, 58, 50, 0.55)",
   },
-  heroTitle: {
-    margin: 0,
-    fontSize: 26,
-    fontWeight: 700,
-    letterSpacing: "-0.03em",
-    lineHeight: 1.15,
-    color: "#faf6f1",
-  },
-  heroSubtitle: {
+  composeActionsLead: {
     margin: 0,
     fontSize: 14,
     lineHeight: 1.5,
-    color: "rgba(232, 216, 206, 0.88)",
-    maxWidth: 420,
-    justifySelf: "center",
+    color: "rgba(232, 216, 206, 0.82)",
+  },
+  storyFieldLabel: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 600,
+    color: "#f3ece6",
+  },
+  saveSecureButton: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 14,
+    border: "1px solid rgba(120, 100, 90, 0.75)",
+    background: "rgba(28, 22, 18, 0.55)",
+    color: "#f3ece6",
+    fontSize: 16,
+    fontWeight: 600,
+    cursor: "pointer",
+    WebkitTapHighlightColor: "transparent",
   },
   sealReadyPanel: {
     display: "grid",
     gap: 10,
-    padding: "20px 16px 18px",
+    padding: "16px 14px",
     borderRadius: 16,
     border: "1px solid rgba(217, 166, 122, 0.55)",
     background:
@@ -1779,10 +1766,8 @@ const styles = {
   },
   heroSealButton: {
     width: "100%",
-    maxWidth: 400,
-    justifySelf: "center",
-    borderRadius: 18,
-    minHeight: 56,
+    borderRadius: 14,
+    minHeight: 52,
     padding: "16px 20px",
     fontWeight: 800,
     fontSize: 18,
@@ -1823,6 +1808,7 @@ const styles = {
   heroSealHint: {
     margin: 0,
     fontSize: 13,
+    lineHeight: 1.45,
     color: "rgba(210, 196, 186, 0.75)",
   },
   heroUpgrade: {
@@ -1831,30 +1817,9 @@ const styles = {
     lineHeight: 1.45,
     color: "rgba(224, 206, 194, 0.78)",
   },
-  saveSecureLink: {
-    margin: "4px auto 0",
-    border: "none",
-    background: "transparent",
-    color: "rgba(200, 188, 178, 0.82)",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    textDecoration: "underline",
-    textUnderlineOffset: 3,
-    WebkitTapHighlightColor: "transparent",
-  },
   editorSection: {
     display: "grid",
     gap: 12,
-    paddingTop: 8,
-  },
-  editorHeading: {
-    margin: 0,
-    fontSize: 13,
-    fontWeight: 650,
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-    color: "rgba(224, 206, 194, 0.65)",
   },
   storyRequiredNote: {
     margin: "-2px 0 6px",
@@ -1885,12 +1850,10 @@ const styles = {
     textAlign: "right",
   },
   scrollBody: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "16px 16px 96px",
+    padding: "12px 16px 24px",
     display: "flex",
     flexDirection: "column",
-    gap: 14,
+    gap: 16,
     maxWidth: 720,
     margin: "0 auto",
     width: "100%",
@@ -2097,33 +2060,14 @@ const styles = {
     color: "#ffb8a3",
     fontSize: 12,
   },
-  statusFooter: {
-    position: "fixed",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 30,
-    display: "grid",
-    gap: 4,
-    padding: "10px 16px calc(10px + env(safe-area-inset-bottom, 0px))",
-    maxWidth: 720,
-    margin: "0 auto",
-    width: "100%",
-    boxSizing: "border-box",
-    borderTop: "1px solid rgba(55, 44, 38, 0.9)",
-    background: "linear-gradient(180deg, rgba(22, 18, 16, 0.88), rgba(14, 12, 11, 0.98))",
-    backdropFilter: "blur(10px)",
-  },
   statusFooterText: {
     margin: 0,
-    textAlign: "center",
     fontSize: 13,
     lineHeight: 1.45,
-    color: "rgba(224, 206, 194, 0.88)",
+    color: "rgba(224, 206, 194, 0.72)",
   },
   footerSecurityNote: {
     margin: 0,
-    textAlign: "center",
     fontSize: 11,
     lineHeight: 1.4,
     color: "rgba(190, 178, 168, 0.62)",

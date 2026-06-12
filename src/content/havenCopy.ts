@@ -168,7 +168,7 @@ const HAVEN_NEW_MEMORY_SHARED = {
   upgradeModalPricingHint:
     "Pricing may vary by region—confirm at checkout. Trial availability depends on store rules.",
   footerNeedDraft: "Save a draft first — then you can seal with your ring.",
-  footerSealInvite: "Tap Seal with Ring above to save and prepare — then touch your ring.",
+  footerSealInvite: "When you're ready, save or seal below — then touch your ring.",
   footerOfflineSeal:
     "You need an internet connection to finish sealing after the ring touch. Stay online or try again when you’re back.",
   cancelSealFlow: "Cancel this seal",
@@ -196,7 +196,7 @@ const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice
     heroSubtitle:
       "Mark this moment with a ring ritual — a lasting, intentional way to keep this memory.",
     sealPrimaryHint: "Touch your Haven ring to the top of your iPhone when you’re ready.",
-    saveSecureLink: "Or save securely with Face ID",
+    saveSecureLink: "Save securely",
     footerReadySeal: "Lift your ring and hold it near your iPhone to complete the ritual.",
     footerWaitingRing: "Waiting for your ring — hold it to the top of your iPhone.",
     sealWaitingBannerBody:
@@ -205,7 +205,7 @@ const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice
   android: {
     heroSubtitle: "Seal this memory fast with your ring — one touch completes it.",
     sealPrimaryHint: "Touch your Haven ring to the NFC area on the back of your phone.",
-    saveSecureLink: "Or save securely with fingerprint / screen lock",
+    saveSecureLink: "Save securely",
     footerReadySeal: "Ring is ready — one light touch finishes it.",
     footerWaitingRing: "Waiting for your ring — keep it steady near the NFC spot.",
     sealWaitingBannerBody:
@@ -214,7 +214,7 @@ const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice
   other: {
     heroSubtitle: "Confirm this memory with your Haven ring when you’re ready.",
     sealPrimaryHint: "Use your phone’s NFC with your Haven ring to confirm.",
-    saveSecureLink: "Or save securely to this device",
+    saveSecureLink: "Save securely",
     footerReadySeal: "Ready — touch your ring to seal when your phone prompts you.",
     footerWaitingRing: "Waiting for your ring — follow the on-screen NFC steps.",
     sealWaitingBannerBody:
