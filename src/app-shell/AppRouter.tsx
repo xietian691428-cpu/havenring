@@ -210,12 +210,17 @@ export function AppRouter() {
     return "timeline";
   }, [route.name]);
 
-  const showBottomNav = !["new", "detail", "help", "pricing"].includes(route.name);
+  const immersiveRoute = ["new", "detail", "help", "pricing"].includes(route.name);
+  const showBottomNav = !immersiveRoute;
+  const showTopChrome = !immersiveRoute;
+  const chromeResetKey = `${route.name}:${route.memoryId ?? ""}`;
 
   const shellProps = useMemo(
     (): ComponentProps<typeof AppChrome> => ({
       locale,
       showBottomNav,
+      showTopChrome,
+      chromeResetKey,
       activeTab,
       onTabTimeline: async () => {
         await refresh();
@@ -239,6 +244,8 @@ export function AppRouter() {
     [
       locale,
       showBottomNav,
+      showTopChrome,
+      chromeResetKey,
       activeTab,
       refresh,
       temporaryModeBanner,

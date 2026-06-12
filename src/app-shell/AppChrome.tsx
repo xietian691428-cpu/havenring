@@ -1,8 +1,15 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { APP_CHROME_CONTENT } from "../content/appChromeContent";
 import { getSubscriptionLabel } from "../features/subscription";
+import { useScrollChromeVisibility } from "../hooks/useScrollChromeVisibility";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 
 export type ActiveTab = "timeline" | "explore" | "seal" | "rings";
@@ -10,6 +17,8 @@ export type ActiveTab = "timeline" | "explore" | "seal" | "rings";
 export type AppChromeProps = {
   locale?: string;
   showBottomNav?: boolean;
+  showTopChrome?: boolean;
+  chromeResetKey?: string;
   activeTab?: ActiveTab;
   showTemporaryBanner?: boolean;
   statusSignedIn?: boolean;
@@ -26,11 +35,13 @@ export type AppChromeProps = {
 };
 
 /**
- * iOS-style shell: header + tab bar stay pinned; only the middle pane scrolls.
+ * App shell: top + bottom chrome overlay the scroll pane and auto-hide on scroll down.
  */
 export function AppChrome({
   locale = "en",
   showBottomNav = true,
+  showTopChrome = true,
+  chromeResetKey = "",
   activeTab = "timeline",
   showTemporaryBanner = false,
   statusSignedIn = false,
@@ -48,6 +59,33 @@ export function AppChrome({
   const subscriptionPillLabel =
     subscriptionLabel ?? getSubscriptionLabel(undefined);
   const t = APP_CHROME_CONTENT[locale as keyof typeof APP_CHROME_CONTENT] || APP_CHROME_CONTENT.en;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const topChromeRef = useRef<HTMLDivElement>(null);
+  const tabBarRef = useRef<HTMLElement>(null);
+  const { chromeVisible } = useScrollChromeVisibility(scrollRef, chromeResetKey);
+  const [chromeInsets, setChromeInsets] = useState({ top: 0, bottom: 0 });
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      setChromeInsets({
+        top: showTopChrome ? topChromeRef.current?.offsetHeight ?? 0 : 0,
+        bottom: showBottomNav ? tabBarRef.current?.offsetHeight ?? 0 : 0,
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (topChromeRef.current) observer.observe(topChromeRef.current);
+    if (tabBarRef.current) observer.observe(tabBarRef.current);
+    return () => observer.disconnect();
+  }, [showTopChrome, showBottomNav, showTemporaryBanner, subscriptionPillLabel]);
+
+  const scrollPaddingTop =
+    showTopChrome && chromeVisible ? chromeInsets.top : 0;
+  const scrollPaddingBottom =
+    showBottomNav && chromeVisible
+      ? chromeInsets.bottom
+      : "max(12px, env(safe-area-inset-bottom, 0px))";
+
   const tab = (
     id: ActiveTab,
     label: string,
@@ -80,67 +118,80 @@ export function AppChrome({
         ...sanctuaryBackgroundStyle(),
       }}
     >
-      <header style={styles.topBar}>
-        <div style={styles.brandWrap}>
-          <p style={styles.brand}>{t.brand}</p>
-          <div
-            className="haven-app-status-pills"
-            style={styles.statusPills}
-            role="status"
-            aria-live="polite"
-          >
-            <span style={styles.statusPill}>
-              {statusSignedIn ? t.statusSignedIn : t.statusSignedOut}
-            </span>
-            <span style={styles.statusPill}>
-              {statusRingBound ? t.statusRingBound : t.statusRingNotBound}
-            </span>
-            <span style={styles.statusPill}>
-              {statusSealRequiresRing ? t.statusSealRingRecommended : t.statusSealSecureOnly}
-            </span>
-            <span style={styles.statusPill}>{subscriptionPillLabel}</span>
-          </div>
-        </div>
-        <div style={styles.topActions}>
-          <button
-            type="button"
-            onClick={onNavigateHelp}
-            style={styles.iconBtn}
-            aria-label={t.helpAria}
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            onClick={onNavigateSettings}
-            style={styles.iconBtn}
-            aria-label={t.settingsAria}
-          >
-            ⚙
-          </button>
-        </div>
-      </header>
-
-      {showTemporaryBanner ? (
-        <div style={styles.temporaryBanner} role="status" aria-live="polite">
-          {t.temporaryBanner}
-        </div>
-      ) : null}
-
       <div
+        ref={scrollRef}
         className="haven-app-main-scroll"
         style={{
           ...styles.mainArea,
-          paddingBottom: showBottomNav
-            ? 0
-            : "max(20px, env(safe-area-inset-bottom, 0px))",
+          paddingTop: scrollPaddingTop,
+          paddingBottom: scrollPaddingBottom,
         }}
       >
         {children}
       </div>
 
+      {showTopChrome ? (
+        <div
+          ref={topChromeRef}
+          className={`haven-app-chrome-top${chromeVisible ? "" : " haven-app-chrome-hidden"}`}
+          style={styles.topChromeWrap}
+        >
+          <header style={styles.topBar}>
+            <div style={styles.brandWrap}>
+              <p style={styles.brand}>{t.brand}</p>
+              <div
+                className="haven-app-status-pills"
+                style={styles.statusPills}
+                role="status"
+                aria-live="polite"
+              >
+                <span style={styles.statusPill}>
+                  {statusSignedIn ? t.statusSignedIn : t.statusSignedOut}
+                </span>
+                <span style={styles.statusPill}>
+                  {statusRingBound ? t.statusRingBound : t.statusRingNotBound}
+                </span>
+                <span style={styles.statusPill}>
+                  {statusSealRequiresRing ? t.statusSealRingRecommended : t.statusSealSecureOnly}
+                </span>
+                <span style={styles.statusPill}>{subscriptionPillLabel}</span>
+              </div>
+            </div>
+            <div style={styles.topActions}>
+              <button
+                type="button"
+                onClick={onNavigateHelp}
+                style={styles.iconBtn}
+                aria-label={t.helpAria}
+              >
+                ?
+              </button>
+              <button
+                type="button"
+                onClick={onNavigateSettings}
+                style={styles.iconBtn}
+                aria-label={t.settingsAria}
+              >
+                ⚙
+              </button>
+            </div>
+          </header>
+
+          {showTemporaryBanner ? (
+            <div style={styles.temporaryBanner} role="status" aria-live="polite">
+              {t.temporaryBanner}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {showBottomNav ? (
-        <nav style={styles.tabBar} aria-label={t.bottomNavAria}>
+        <nav
+          ref={tabBarRef}
+          className={`haven-app-chrome-bottom${chromeVisible ? "" : " haven-app-chrome-hidden"}`}
+          style={styles.tabBar}
+          aria-label={t.bottomNavAria}
+        >
           <div style={styles.tabInner}>
             {tab("timeline", t.tabTimeline, onTabTimeline, activeTab === "timeline")}
             {tab("explore", t.tabExplore, onTabExplore, activeTab === "explore")}
@@ -178,12 +229,25 @@ const styles: Record<string, CSSProperties> = {
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
     position: "relative",
-    display: "flex",
-    flexDirection: "column",
     overflow: "hidden",
   },
+  mainArea: {
+    height: "100%",
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
+    transition: "padding 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+  },
+  topChromeWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+  },
   temporaryBanner: {
-    flexShrink: 0,
     padding: "8px 14px",
     borderBottom: "1px solid rgba(201, 123, 132, 0.35)",
     background: "rgba(72, 36, 34, 0.92)",
@@ -194,11 +258,10 @@ const styles: Record<string, CSSProperties> = {
     backdropFilter: "blur(12px)",
   },
   topBar: {
-    flexShrink: 0,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: `calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px`,
+    padding: `calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px`,
     borderBottom: `1px solid rgba(232, 220, 208, 0.12)`,
     background: sanctuaryTheme.headerGlass,
     backdropFilter: "blur(14px)",
@@ -214,7 +277,7 @@ const styles: Record<string, CSSProperties> = {
   brandWrap: {
     display: "flex",
     flexDirection: "column",
-    gap: 6,
+    gap: 4,
     minWidth: 0,
     flex: 1,
   },
@@ -259,16 +322,12 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     lineHeight: 1,
   },
-  mainArea: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    overscrollBehavior: "contain",
-  },
   tabBar: {
-    flexShrink: 0,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     paddingBottom: "env(safe-area-inset-bottom, 0px)",
     background: sanctuaryTheme.tabBarBg,
     backdropFilter: "blur(16px)",
@@ -282,7 +341,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
     maxWidth: 560,
     margin: "0 auto",
-    padding: "8px 12px 10px",
+    padding: "6px 12px 8px",
   },
   tabBtn: {
     border: "none",
@@ -324,7 +383,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 2,
     justifySelf: "center",
-    marginBottom: 4,
+    marginBottom: 2,
     minWidth: 88,
     transition: "transform 0.2s ease, box-shadow 0.2s ease",
   },

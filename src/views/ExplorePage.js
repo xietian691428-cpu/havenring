@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { OnlineStatusBadge } from "../components/OnlineStatusBadge";
 import { EXPLORE_PAGE_CONTENT } from "../content/explorePageContent";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING } from "../theme/pageLayout";
 
 /**
  * Explore — On This Day + quiet review prompts (placeholder).
@@ -65,7 +66,7 @@ export function ExplorePage({
 const styles = {
   page: {
     minHeight: "min-content",
-    padding: "20px 20px 28px",
+    padding: APP_PAGE_PADDING,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

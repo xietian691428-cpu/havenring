@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { havenCopy } from "../content/havenCopy";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING_WIDE } from "../theme/pageLayout";
 
 /**
  * Haven Plus — pricing & comparison (EN copy from havenCopy.pricingPage).
@@ -91,7 +92,7 @@ export function PricingPage({ onBack, onStartTrial, onSubscribe }) {
 const styles = {
   page: {
     minHeight: "min-content",
-    padding: "12px 18px calc(88px + env(safe-area-inset-bottom, 0px))",
+    padding: APP_PAGE_PADDING_WIDE,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

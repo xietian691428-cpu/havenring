@@ -9,6 +9,7 @@ import { triggerSuccessFeedback } from "../utils/feedbackEffects";
 import { listDraftItems } from "../services/draftBoxService";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING } from "../theme/pageLayout";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -376,12 +377,12 @@ function isTimelineMemorySealed(memory) {
 const styles = {
   page: {
     minHeight: "min-content",
-    padding: "12px 20px 24px",
+    padding: APP_PAGE_PADDING,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 820,
+    maxWidth: 720,
     margin: "0 auto",
     display: "grid",
     gap: 14,
@@ -453,7 +454,7 @@ const styles = {
   },
   emptyPanel: {
     textAlign: "center",
-    padding: "28px 16px",
+    padding: "20px 16px",
     borderRadius: 18,
     border: "1px dashed rgba(196, 149, 106, 0.35)",
     background: "rgba(26, 21, 18, 0.35)",

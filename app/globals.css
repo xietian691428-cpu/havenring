@@ -281,7 +281,7 @@ body:not(.high-contrast) [style*="linear-gradient(180deg, #e6b48d, #d9a67a)"] {
   }
 }
 
-/* PWA shell (/app): lock document scroll; chrome header + tab bar stay pinned. */
+/* PWA shell (/app): lock document scroll; chrome overlays and hides on scroll. */
 html.haven-app-route,
 body.haven-app-route {
   height: 100%;
@@ -297,7 +297,40 @@ body.haven-app-route {
   scrollbar-gutter: stable;
 }
 
+.haven-app-chrome-top,
+.haven-app-chrome-bottom {
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.28s ease;
+  will-change: transform;
+}
+
+.haven-app-chrome-top.haven-app-chrome-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.haven-app-chrome-bottom.haven-app-chrome-hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .haven-app-chrome-top,
+  .haven-app-chrome-bottom,
+  .haven-app-main-scroll {
+    transition: none !important;
+  }
+
+  .haven-app-chrome-top.haven-app-chrome-hidden,
+  .haven-app-chrome-bottom.haven-app-chrome-hidden {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   @keyframes havenNfcPulse {
     0%,
     100% {

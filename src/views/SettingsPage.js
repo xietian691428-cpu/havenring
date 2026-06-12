@@ -30,6 +30,7 @@ import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
 import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import { havenCopy } from "../content/havenCopy";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 
@@ -802,12 +803,12 @@ function formatBytes(value) {
 const styles = {
   page: {
     minHeight: "min-content",
-    padding: "16px 20px 24px",
+    padding: APP_PAGE_PADDING,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 860,
+    maxWidth: 720,
     margin: "0 auto",
     display: "grid",
     gap: 12,

@@ -6,6 +6,7 @@ import { HELP_FAQ } from "../content/helpFaq";
 import { getHelpCenterContent } from "../content/helpCenterContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING } from "../theme/pageLayout";
 
 function normalizeSearch(s) {
   return String(s || "")
@@ -258,7 +259,7 @@ const styles = {
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 820,
+    maxWidth: 720,
     margin: "0 auto",
     display: "grid",
     gap: 14,
@@ -458,7 +459,7 @@ const styles = {
   },
   footer: {
     textAlign: "center",
-    padding: "20px 8px 32px",
+    padding: APP_PAGE_PADDING,
     display: "grid",
     gap: 8,
     justifyItems: "center",

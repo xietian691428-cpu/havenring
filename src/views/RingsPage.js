@@ -10,6 +10,7 @@ import {
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import {
   fetchSecondaryVerificationToken,
   verifyAndTrustCurrentDevice,
@@ -564,7 +565,7 @@ export function RingsPage({
 const styles = {
   page: {
     minHeight: "min-content",
-    padding: "20px 20px 28px",
+    padding: APP_PAGE_PADDING,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
   },

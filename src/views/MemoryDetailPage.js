@@ -4,6 +4,7 @@ import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
 import { getMemoryDetailUiCopy } from "../content/memoryDetailPageContent";
 import { usePlatformTarget } from "../hooks/usePlatformTarget";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
+import { APP_PAGE_PADDING_WIDE } from "../theme/pageLayout";
 
 function isVideoMime(mime) {
   return String(mime || "")
@@ -649,8 +650,7 @@ export function MemoryDetailPage({
 const styles = {
   page: {
     minHeight: "min-content",
-    padding:
-      "8px 16px calc(96px + env(safe-area-inset-bottom, 0px))",
+    padding: APP_PAGE_PADDING_WIDE,
     color: sanctuaryTheme.cream,
     fontFamily: sanctuaryTheme.font,
     fontSize: "clamp(15px, 2.8vw, 17px)",
@@ -971,7 +971,7 @@ const styles = {
     position: "sticky",
     bottom: 0,
     marginTop: 8,
-    padding: "14px 16px calc(14px + env(safe-area-inset-bottom, 0px))",
+    padding: "12px 16px",
     borderRadius: 16,
     border: "1px solid rgba(120, 90, 160, 0.25)",
     background: "rgba(18, 14, 24, 0.75)",
