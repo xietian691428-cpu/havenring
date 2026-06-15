@@ -51,22 +51,36 @@ export function setCloudBackupEnabled(enabled) {
   return next;
 }
 
-export async function signInWithApple() {
+/** Link cloud-backup prefs to the active Haven app session (same Apple/Google account). */
+export async function syncCloudBackupFromAuthSession() {
   const prev = readBackupSettings();
-  const fakeUser = {
-    id: "pending-provider-user-id",
-    provider: "apple",
-    email: null,
-    linkedAt: Date.now(),
-  };
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase.auth.getSession();
+  const sessionUser = data.session?.user;
+  if (!sessionUser?.id) {
+    return prev;
+  }
+  const provider =
+    (typeof sessionUser.app_metadata?.provider === "string" &&
+      sessionUser.app_metadata.provider) ||
+    prev.provider ||
+    "apple";
   const next = {
     ...prev,
-    enabled: true,
-    provider: "apple",
-    user: fakeUser,
+    provider,
+    user: {
+      id: sessionUser.id,
+      provider,
+      email: sessionUser.email || null,
+      linkedAt: Date.now(),
+    },
   };
   writeBackupSettings(next);
-  return fakeUser;
+  return next;
+}
+
+export async function signInWithApple() {
+  return syncCloudBackupFromAuthSession();
 }
 
 export async function signOutCloudBackup() {

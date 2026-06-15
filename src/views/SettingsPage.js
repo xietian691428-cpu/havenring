@@ -11,6 +11,7 @@ import {
   restoreFromCloud,
   setCloudBackupEnabled,
   signOutCloudBackup,
+  syncCloudBackupFromAuthSession,
 } from "../services/cloudBackupService";
 import { SETTINGS_CONTENT } from "../content/settingsContent";
 import {
@@ -33,6 +34,8 @@ import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import { havenCopy } from "../content/havenCopy";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
+import { canUseFeature } from "../features/subscription";
+import { getFreeEntitlements } from "../services/subscriptionService";
 
 /**
  * Settings Page
@@ -47,6 +50,7 @@ export function SettingsPage({
   onOpenRings,
   onLocalDataCleared,
   locale = "en",
+  userEntitlements = getFreeEntitlements(),
 }) {
   const localeCopy = SETTINGS_CONTENT[locale] || SETTINGS_CONTENT.en;
   const ex = havenCopy.settingsExport;
@@ -70,16 +74,24 @@ export function SettingsPage({
   const [exportFormat, setExportFormat] = useState("full");
   const [exportPickerOpen, setExportPickerOpen] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [pendingProtectedAction, setPendingProtectedAction] = useState("");
   const { soundEnabled, hapticEnabled, updateFeedbackPrefs } = useFeedbackPrefs();
+
+  const canUseCloudBackup = canUseFeature(userEntitlements, "cloud_backup");
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
+    if (!canUseCloudBackup) return localeCopy.cloudRequiresPlus;
     if (!cloud.user) return localeCopy.cloudEnabledNoSignIn;
     return localeCopy.cloudEnabledSignedIn;
-  }, [cloud.enabled, cloud.user, localeCopy]);
+  }, [canUseCloudBackup, cloud.enabled, cloud.user, localeCopy]);
 
   useEffect(() => {
-    void refreshLocalStats();
+    void (async () => {
+      await refreshLocalStats();
+      const synced = await syncCloudBackupFromAuthSession();
+      setCloud(synced);
+    })();
   }, []);
 
   async function refreshLocalStats() {
@@ -210,7 +222,14 @@ export function SettingsPage({
     setStatus(localeCopy.signingIn);
     try {
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = `${canonicalAuthOriginFromLocation()}/app`;
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        const next = await syncCloudBackupFromAuthSession();
+        setCloud(next);
+        setStatus(localeCopy.signInDone);
+        return;
+      }
+      const redirectTo = `${canonicalAuthOriginFromLocation()}/app?settings=cloud`;
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: { redirectTo },
@@ -219,7 +238,6 @@ export function SettingsPage({
         setStatus(localeCopy.signInFailed);
         return;
       }
-      // Redirect starts immediately on success.
       setStatus(localeCopy.signInDone);
     } catch {
       setStatus(localeCopy.signInFailed);
@@ -532,37 +550,43 @@ export function SettingsPage({
             />
           </label>
           <p style={styles.copy}>{cloudStateText}</p>
+          <p style={styles.copyMuted}>{localeCopy.cloudPairSharingNote}</p>
           <p style={styles.copyMuted}>{localeCopy.cloudQuotaNote}</p>
           <div style={styles.actions}>
+            {!canUseCloudBackup && onOpenPricing ? (
+              <button type="button" onClick={() => onOpenPricing()} style={styles.primaryButton}>
+                {localeCopy.upgradeSectionCta}
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={handleSignInApple}
-              disabled={busy || !cloud.enabled}
-              style={styles.secondaryButton}
+              onClick={() => void handleSignInApple()}
+              disabled={busy || !cloud.enabled || Boolean(cloud.user) || !canUseCloudBackup}
+              style={buttonStyle(busy || !cloud.enabled || Boolean(cloud.user) || !canUseCloudBackup)}
             >
-              {localeCopy.signInApple}
+              {cloud.user ? localeCopy.cloudEnabledSignedIn : localeCopy.signInApple}
             </button>
             <button
               type="button"
-              onClick={handleCloudBackupNow}
-              disabled={busy || !cloud.enabled || !cloud.user}
-              style={styles.secondaryButton}
+              onClick={() => void handleCloudBackupNow()}
+              disabled={busy || !cloud.enabled || !cloud.user || !canUseCloudBackup}
+              style={buttonStyle(busy || !cloud.enabled || !cloud.user || !canUseCloudBackup)}
             >
               {localeCopy.backupNow}
             </button>
             <button
               type="button"
-              onClick={handleCloudRestore}
-              disabled={busy || !cloud.enabled || !cloud.user}
-              style={styles.secondaryButton}
+              onClick={() => void handleCloudRestore()}
+              disabled={busy || !cloud.enabled || !cloud.user || !canUseCloudBackup}
+              style={buttonStyle(busy || !cloud.enabled || !cloud.user || !canUseCloudBackup)}
             >
               {localeCopy.restore}
             </button>
             <button
               type="button"
-              onClick={handleCloudSignOut}
+              onClick={() => void handleCloudSignOut()}
               disabled={busy || !cloud.user}
-              style={styles.secondaryButton}
+              style={buttonStyle(busy || !cloud.user)}
             >
               {localeCopy.unlink}
             </button>
@@ -772,6 +796,14 @@ export function SettingsPage({
       </section>
     </main>
   );
+}
+
+function buttonStyle(disabled) {
+  return {
+    ...styles.secondaryButton,
+    opacity: disabled ? 0.45 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
 }
 
 async function estimateStorage(unavailableText) {

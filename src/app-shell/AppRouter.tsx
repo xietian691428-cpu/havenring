@@ -743,6 +743,7 @@ export function AppRouter() {
       <FadePage pageKey="settings" direction={transitionDirection}>
         <SettingsPage
           locale={locale}
+          userEntitlements={entitlements}
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onOpenHelp={() =>
             navigateTo({ name: "help", memoryId: null }, "forward")
