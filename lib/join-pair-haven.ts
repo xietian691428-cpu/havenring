@@ -2,10 +2,8 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { hashNfcUidAliases, normalizeNfcUidInput } from "@/lib/nfc-uid";
-import {
-  activatePlusTrialForUser,
-  getUserSubscriptionStatus,
-} from "@/lib/subscription";
+import { resolvePlusForHaven } from "@/lib/haven-plus";
+import { getUserSubscriptionStatus } from "@/lib/subscription";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -44,7 +42,7 @@ export type JoinPairSuccess = {
   joinedExistingRing: true;
   plusTrialActivated: boolean;
   plusTrialEnd: string | null;
-  subscription: Awaited<ReturnType<typeof activatePlusTrialForUser>> | null;
+  subscription: Awaited<ReturnType<typeof resolvePlusForHaven>>["status"] | null;
 };
 
 /**
@@ -154,15 +152,15 @@ export async function joinExistingRingToInviteHaven(
       throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
     }
 
-    const plusTrial = await activatePlusTrialForUser(admin, userId).catch(() => null);
+    const resolved = await resolvePlusForHaven(admin, invite.haven_id);
     return {
       havenId: invite.haven_id,
       role: "member",
       ring: activeRing,
       joinedExistingRing: true,
-      plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
-      plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
-      subscription: plusTrial,
+      plusTrialActivated: false,
+      plusTrialEnd: resolved.status.plusTrialEnd,
+      subscription: resolved.status,
     };
   }
 
@@ -272,15 +270,15 @@ export async function joinExistingRingToInviteHaven(
     throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
   }
 
-  const plusTrial = await activatePlusTrialForUser(admin, userId).catch(() => null);
+  const resolved = await resolvePlusForHaven(admin, invite.haven_id);
 
   return {
     havenId: invite.haven_id,
     role: "member",
     ring: movedRing as ActiveRingRow,
     joinedExistingRing: true,
-    plusTrialActivated: Boolean(plusTrial?.trialJustActivated),
-    plusTrialEnd: plusTrial?.plusTrialEnd ?? null,
-    subscription: plusTrial,
+    plusTrialActivated: false,
+    plusTrialEnd: resolved.status.plusTrialEnd,
+    subscription: resolved.status,
   };
 }

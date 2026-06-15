@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { APP_ENTRY_PATH } from "@/lib/site";
 import { BIND_SUCCESS_EN } from "@/src/content/havenCopy";
@@ -23,6 +23,11 @@ export function BindSuccessClient({
     showPairPrompt ? "pending" : "yes"
   );
   const sealFirstHref = `${APP_ENTRY_PATH}?open=new&autoSeal=true`;
+
+  useEffect(() => {
+    if (!showPairPrompt) return;
+    setPairSharingEnabled(true);
+  }, [showPairPrompt]);
 
   function confirmPairShare(enabled: boolean) {
     setPairSharingEnabled(enabled);

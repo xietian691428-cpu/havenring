@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserSubscriptionStatus } from "@/lib/subscription";
+import { getUserSubscriptionContext } from "@/lib/subscription";
 import { userEntitlementsFromSubscriptionStatus } from "@/src/features/subscription/subscriptionTypes";
 import {
   getSupabaseAdminClient,
@@ -18,9 +18,14 @@ export async function GET(req: NextRequest) {
     requireBearerToken(req);
     const user = await requireAuthenticatedUser(req);
     const admin = getSupabaseAdminClient();
-    const subscription = await getUserSubscriptionStatus(admin, user.id);
-    const entitlements = userEntitlementsFromSubscriptionStatus(subscription);
-    return NextResponse.json({ ok: true, entitlements, subscription });
+    const ctx = await getUserSubscriptionContext(admin, user.id);
+    const entitlements = userEntitlementsFromSubscriptionStatus(ctx.subscription);
+    return NextResponse.json({
+      ok: true,
+      entitlements,
+      subscription: ctx.subscription,
+      havenPlus: ctx.havenPlus,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "UNAUTHENTICATED") {

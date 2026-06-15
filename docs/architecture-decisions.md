@@ -36,7 +36,7 @@ It must stay aligned with `docs/core-definition.md`.
 |---|---|
 | **Name** | **Haven** / Haven Ring — personal memory sanctuary; NFC ring for **Seal** ritual. |
 | **Audience** | US/EU; English-first UI. |
-| **Business** | Hardware + **Haven Plus** (Seal with Ring, E2E cloud, Shared memories, storage). Ring bind may still trigger Plus trial in code (`lib/subscription.ts`). |
+| **Business** | Hardware + **Haven Plus** per **Haven/Pair** (one payer, both benefit). Seal with Ring, E2E cloud, shared sealed sync. |
 | **Data** | **Local-first** IndexedDB; optional Plus cloud (target: true E2E implementation). |
 | **Core loop** | OAuth → Timeline → write → **Seal with Ring** → SDM tap → local encrypted memory. |
 
@@ -112,6 +112,15 @@ lib/
 - **Seal** still requires **your** ring (`userCanSealWithRing` = owner only).
 - Plus **cloud backup** uploads full sealed payloads for cross-device recovery.
 - Opt-out: client flag `haven.pair.share_enabled.v1` (Rings page toggle).
+
+### Haven Plus billing (one per Pair)
+
+- **One Haven Plus** covers the whole Pair (max 2 accounts). Western copy: *Couples share one Haven Plus. One partner subscribes, both benefit.*
+- `havens.plus_billing_user_id` — which member pays; any member may reassign via `POST /api/haven/plus-billing`.
+- **Trial:** one 30-day trial per **Haven** (`plus_trial_*` on `havens`), triggered when the first ring creates/links the Haven — not per member.
+- **Paid subscription:** read from `user_entitlements` on the billing user only; `resolvePlusForHaven(havenId)` grants both members Plus for Haven-scoped features.
+- **Cloud:** 50 GB quota **shared** per Haven; `cloud_backup_usage` keyed to billing user.
+- **Seal** remains free for non-payers; Plus is not an extra ring-slot upsell.
 
 ---
 

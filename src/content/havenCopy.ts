@@ -94,10 +94,10 @@ export const HAVEN_STORAGE_MODE_EN = {
 export const BIND_SUCCESS_EN = {
   title: "Ring linked",
   subtitle: "Your ring is for sealing memories.",
-  pairPromptTitle: "Share sealed memories with your partner?",
+  pairPromptTitle: "Share sealed memories as a Pair? (Recommended)",
   pairPromptBody:
-    "When you form a Pair (two rings, two accounts), sealed memories appear for both of you. Drafts stay private until you seal.",
-  pairPromptYes: "Yes — share when sealed",
+    "Sealed memories sync between you. Drafts stay private until you seal. Pair sharing is on by default — turn off anytime in Rings.",
+  pairPromptYes: "Keep sharing when sealed",
   pairPromptNo: "Not now",
   pairActiveNote: "Pair sharing is on. Turn off anytime in Rings.",
   sealFirstMemoryCta: "Write your first memory",
@@ -106,7 +106,7 @@ export const BIND_SUCCESS_EN = {
 } as const;
 
 export const CLOUD_STORAGE_EN = {
-  quotaSummary: "Plus cloud backup: 50 GB hard cap per account.",
+  quotaSummary: "Plus cloud backup: 50 GB shared per Haven (one subscription per Pair).",
   fullMessage: "Storage full. Upgrade or delete old memories.",
 } as const;
 
@@ -881,18 +881,24 @@ export const HAVEN_PRICING_PAGE_EN = {
     },
   ],
   footnoteTrial:
-    "30-day free trial when you bind your first ring — where that offer is available.",
+    "One 30-day Haven Plus trial per Haven when the first ring is linked — couples share it.",
   footnoteCancel: "Cancel anytime. No questions asked.",
   footnoteBelief:
     "We believe your memories belong to you — not to an ad platform.",
+  footnoteCouplePlus:
+    "Couples share one Haven Plus. One partner subscribes, both benefit inside the same Haven.",
   ctaTrial: "Start 30-day free trial",
   ctaSubscribe: "Subscribe now",
   payMethodsNote:
     "Checkout may offer Apple Pay, Google Pay, or card depending on your device and region.",
   socialProof:
-    "A private memory sanctuary — not a feed. One account per person; sharing is explicit with Plus.",
+    "A private memory sanctuary — not a feed. Couples share one Haven Plus. One partner subscribes, both benefit.",
   faqTitle: "FAQ",
   faqs: [
+    {
+      q: "Do both partners need Haven Plus?",
+      a: "No. One Haven Plus covers your whole Pair (up to two accounts). Choose which partner pays; both get Plus benefits in the same Haven.",
+    },
     {
       q: "What happens if I cancel?",
       a: "Your local memories stay on this device. Cloud features simply stop renewing — nothing is sold to advertisers.",
@@ -1174,7 +1180,7 @@ export const HAVEN_HELP_CENTER_EN = {
   categoryBillingTitle: "Subscription & Billing",
   categoryBillingSubtitle: "Plus, trial, and cancellation in plain language.",
   categoryBillingBody:
-    "Haven Plus adds Seal with Ring and optional cloud space where we ship it. You can cancel anytime.",
+    "Couples share one Haven Plus — one partner subscribes, both benefit inside the same Haven. Solo users choose Plus on their own account. Cancel anytime.",
   categoryTroubleTitle: "Troubleshooting",
   categoryTroubleSubtitle: "NFC, lost rings, and quick fixes.",
   linkRingsCta: "Manage my rings",

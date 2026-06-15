@@ -72,6 +72,9 @@ export type HavenRow = {
   id: string;
   created_by: string;
   created_at: string;
+  plus_billing_user_id: string | null;
+  plus_trial_start: string | null;
+  plus_trial_end: string | null;
 };
 
 export type HavenMemberRow = {
@@ -165,6 +168,9 @@ export type Database = {
           id?: string;
           created_by: string;
           created_at?: string;
+          plus_billing_user_id?: string | null;
+          plus_trial_start?: string | null;
+          plus_trial_end?: string | null;
         };
         Update: Partial<HavenRow>;
         Relationships: [];

@@ -185,6 +185,20 @@ check("start page: seal + bind only; daily_access is ack not unlock", () => {
   assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);
 });
 
+check("Haven-level Plus billing", () => {
+  const havenPlus = readRepoFile("lib/haven-plus.ts");
+  const migration = readRepoFile("supabase/migrations/0023_haven_plus_billing.sql");
+  const billingRoute = readRepoFile("app/api/haven/plus-billing/route.ts");
+  const subStatus = readRepoFile("app/api/subscription/status/route.ts");
+  assert.match(havenPlus, /resolvePlusForHaven/);
+  assert.match(havenPlus, /activatePlusTrialForHaven/);
+  assert.match(migration, /plus_billing_user_id/);
+  assert.match(migration, /plus_trial_end/);
+  assert.match(billingRoute, /setHavenPlusBillingUser/);
+  assert.match(subStatus, /havenPlus/);
+  assert.match(readRepoFile("src/content/havenCopy.ts"), /Couples share one Haven Plus/);
+});
+
 check("ring bind is optional not gated", () => {
   const machine = readRepoFile("src/state/appFlowMachine.js");
   const router = readRepoFile("src/app-shell/AppRouter.tsx");

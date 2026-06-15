@@ -5,6 +5,7 @@ import {
   CLOUD_STORAGE_QUOTA_BYTES,
 } from "./cloud-storage-config";
 import { getUserSubscriptionStatus } from "./subscription";
+import { resolveCloudQuotaUserId } from "./haven-plus";
 
 export type CloudQuotaSnapshot = {
   usedBytes: number;
@@ -30,10 +31,11 @@ export async function requirePlusCloudBackup(userId: string): Promise<void> {
 
 export async function readCloudUsageBytes(userId: string): Promise<number> {
   const admin = getSupabaseAdminClient();
+  const quotaUserId = await resolveCloudQuotaUserId(admin, userId);
   const { data, error } = await admin
     .from("cloud_backup_usage" as never)
     .select("bytes_used")
-    .eq("user_id", userId)
+    .eq("user_id", quotaUserId)
     .maybeSingle();
   if (error) throw error;
   const row = data as { bytes_used?: number } | null;
@@ -162,9 +164,10 @@ export async function commitCloudUpload(opts: {
   await removePaths(pending);
 
   const nextUsed = used + byteSize;
+  const quotaUserId = await resolveCloudQuotaUserId(admin, opts.userId);
   const { error: upsertErr } = await admin.from("cloud_backup_usage" as never).upsert(
     {
-      user_id: opts.userId,
+      user_id: quotaUserId,
       bytes_used: nextUsed,
       updated_at: new Date().toISOString(),
     } as never,

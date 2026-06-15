@@ -35,7 +35,12 @@ const EN = {
   cloudEnabledSignedIn: "Cloud backup is enabled and linked to your Haven sign-in.",
   cloudRequiresPlus: "Haven Plus is required for encrypted cloud backup.",
   cloudPairSharingNote:
-    "Pair sharing of sealed memories does not use this switch — it works through Rings after both accounts join the same Haven.",
+    "Pair sealed-memory sync does not use this switch — it works through Rings after both accounts join the same Haven.",
+  cloudCouplePlusNote:
+    "Couples share one Haven Plus. One partner subscribes, both benefit. Cloud quota is shared for the Haven.",
+  cloudBillingYou: "Your account pays for Haven Plus.",
+  cloudBillingPartner: "Your partner's account pays for Haven Plus.",
+  cloudBillingChoose: "Use my account for Haven Plus billing",
   signInApple: "Link Haven sign-in",
   signInAppleOAuth: "Sign in with Apple",
   backupNow: "Backup Now",

@@ -46,6 +46,7 @@ export function PricingPage({ onBack, onStartTrial, onSubscribe }) {
 
         <ul style={styles.footnotes}>
           <li>{t.footnoteTrial}</li>
+          <li>{t.footnoteCouplePlus}</li>
           <li>{t.footnoteCancel}</li>
           <li>{t.footnoteBelief}</li>
         </ul>

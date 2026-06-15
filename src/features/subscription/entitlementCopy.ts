@@ -25,7 +25,7 @@ export function getSubscriptionSummary(
     const d = Math.max(0, entitlements.trialDaysRemaining);
     return `Plus trial: ${d} day${d === 1 ? "" : "s"} left. Cloud backup up to ${PLUS_STORAGE_GB} GB (hard cap).`;
   }
-  return `Plus: optional cloud backup up to ${PLUS_STORAGE_GB} GB (hard cap). Local memories stay on your device.`;
+  return `Plus: shared cloud backup up to ${PLUS_STORAGE_GB} GB per Haven (one subscription per Pair).`;
 }
 
 /** Plan badge line (“Haven Plus” / “Trial” / “Free”). */

@@ -79,6 +79,8 @@ export function SettingsPage({
 
   const canUseCloudBackup = canUseFeature(userEntitlements, "cloud_backup");
 
+  const [havenPlus, setHavenPlus] = useState(null);
+
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
     if (!canUseCloudBackup) return localeCopy.cloudRequiresPlus;
@@ -91,6 +93,20 @@ export function SettingsPage({
       await refreshLocalStats();
       const synced = await syncCloudBackupFromAuthSession();
       setCloud(synced);
+      try {
+        const sb = getSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch("/api/haven/plus-billing", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (body?.havenPlus) setHavenPlus(body.havenPlus);
+      } catch {
+        /* optional */
+      }
     })();
   }, []);
 
@@ -194,6 +210,39 @@ export function SettingsPage({
       setStatus(localeCopy.clearDone);
     } catch {
       setStatus(localeCopy.clearFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetMyBilling() {
+    if (!havenPlus?.havenId) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const sb = getSupabaseBrowserClient();
+      const {
+        data: { session },
+      } = await sb.auth.getSession();
+      const userId = session?.user?.id;
+      if (!session?.access_token || !userId) return;
+      const res = await fetch("/api/haven/plus-billing", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          haven_id: havenPlus.havenId,
+          billing_user_id: userId,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "billing_update_failed");
+      setHavenPlus(body.havenPlus || havenPlus);
+      setStatus(localeCopy.cloudBillingYou);
+    } catch {
+      setStatus(localeCopy.signInFailed);
     } finally {
       setBusy(false);
     }
@@ -551,8 +600,26 @@ export function SettingsPage({
           </label>
           <p style={styles.copy}>{cloudStateText}</p>
           <p style={styles.copyMuted}>{localeCopy.cloudPairSharingNote}</p>
+          <p style={styles.copyMuted}>{localeCopy.cloudCouplePlusNote}</p>
+          {havenPlus?.pairActive ? (
+            <p style={styles.copy}>
+              {havenPlus.isBillingAccount
+                ? localeCopy.cloudBillingYou
+                : localeCopy.cloudBillingPartner}
+            </p>
+          ) : null}
           <p style={styles.copyMuted}>{localeCopy.cloudQuotaNote}</p>
           <div style={styles.actions}>
+            {havenPlus?.pairActive && !havenPlus?.isBillingAccount ? (
+              <button
+                type="button"
+                onClick={() => void handleSetMyBilling()}
+                disabled={busy}
+                style={styles.secondaryButton}
+              >
+                {localeCopy.cloudBillingChoose}
+              </button>
+            ) : null}
             {!canUseCloudBackup && onOpenPricing ? (
               <button type="button" onClick={() => onOpenPricing()} style={styles.primaryButton}>
                 {localeCopy.upgradeSectionCta}

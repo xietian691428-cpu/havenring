@@ -8,7 +8,7 @@ import {
   requireAuthenticatedUser,
 } from "@/lib/supabase/server";
 import {
-  activatePlusTrialForUser,
+  activatePlusTrialForHaven,
   getUserSubscriptionStatus,
 } from "@/lib/subscription";
 import {
@@ -347,7 +347,7 @@ export async function POST(req: NextRequest) {
       } else {
         const { data: haven, error: havenErr } = await admin
           .from("havens")
-          .insert({ created_by: user.id })
+          .insert({ created_by: user.id, plus_billing_user_id: user.id })
           .select("id")
           .single();
         if (havenErr || !haven?.id) {
@@ -407,7 +407,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: mirrorErr.message }, { status: 500 });
     }
 
-    const plusTrial = await activatePlusTrialForUser(admin, user.id).catch(() => null);
+    const plusTrial = await activatePlusTrialForHaven(admin, havenId, user.id).catch(
+      () => null
+    );
 
     return NextResponse.json({
       success: true,

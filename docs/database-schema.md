@@ -412,6 +412,7 @@ Applied via `supabase/migrations/0013_user_entitlements.sql`:
 - Haven Plus: larger storage, Seal with Ring, optional E2E cloud, **Shared** memories (target), same ring cap in code.
 - **Legacy copy** referenced “private pair” — product is now **personal sanctuary**; constants unchanged until Phase 2.
 - Successful hardware claim or NFC bind grants a one-time 30-day Plus trial via `plus_trial_start` and `plus_trial_end`.
+- **Haven Plus billing (2026-06):** trial + `plus_billing_user_id` on `havens` (`0023_haven_plus_billing.sql`); one trial per Haven; paid Plus on billing user only; `resolvePlusForHaven`.
 - After `plus_trial_end`, the app computes the user as Free unless `plus_subscription_status = 'active'`.
 
 ## `moments.content_sha256`

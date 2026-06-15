@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./supabase/types";
+import {
+  activatePlusTrialForHaven,
+  getPrimaryHavenIdForUser,
+  resolvePlusForHaven,
+  resolvePlusForUser,
+} from "./haven-plus";
 
 export const FREE_STORAGE_GB = 2;
 export const PLUS_STORAGE_GB = 50;
@@ -60,6 +66,11 @@ export async function getUserSubscriptionStatus(
   supabase: SupabaseClient<Database>,
   userId: string
 ) {
+  const resolved = await resolvePlusForUser(supabase, userId);
+  if (resolved) {
+    return resolved.status;
+  }
+
   const { data, error } = await supabase
     .from("user_entitlements")
     .select("plan, plus_trial_end, plus_subscription_status, plus_subscription_end")
@@ -69,11 +80,41 @@ export async function getUserSubscriptionStatus(
   return getSubscriptionStatusFromEntitlement(data);
 }
 
+export async function getUserSubscriptionContext(
+  supabase: SupabaseClient<Database>,
+  userId: string
+) {
+  const resolved = await resolvePlusForUser(supabase, userId);
+  if (resolved) {
+    return {
+      subscription: resolved.status,
+      havenPlus: {
+        havenId: resolved.havenId,
+        billingUserId: resolved.billingUserId,
+        isBillingAccount: resolved.billingUserId === userId,
+        pairActive: resolved.pairActive,
+        memberCount: resolved.memberCount,
+      },
+    };
+  }
+
+  const subscription = await getUserSubscriptionStatus(supabase, userId);
+  return {
+    subscription,
+    havenPlus: null,
+  };
+}
+
 export async function activatePlusTrialForUser(
   supabase: SupabaseClient<Database>,
   userId: string,
   now = new Date()
 ) {
+  const havenId = await getPrimaryHavenIdForUser(supabase, userId);
+  if (havenId) {
+    return activatePlusTrialForHaven(supabase, havenId, userId, now);
+  }
+
   const trialStart = now.toISOString();
   const trialEnd = new Date(
     now.getTime() + PLUS_TRIAL_DAYS * 24 * 60 * 60 * 1000
@@ -111,3 +152,6 @@ export async function activatePlusTrialForUser(
     trialJustActivated: !hasExistingTrial,
   };
 }
+
+/** @deprecated Prefer activatePlusTrialForHaven — kept for imports. */
+export { activatePlusTrialForHaven } from "./haven-plus";
