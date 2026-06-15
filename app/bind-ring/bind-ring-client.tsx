@@ -43,6 +43,7 @@ type BindState = "idle" | "binding" | "success" | "error";
 type BindResponse = {
   success?: boolean;
   alreadyLinkedToYou?: boolean;
+  joinedExistingRing?: boolean;
   message?: string;
   havenId?: string | null;
   role?: "owner" | "member";
@@ -418,7 +419,10 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const pendingKeyPackage = inviteCode
         ? inviteKeyPackage || readPendingInviteKeyPackage()
         : "";
-      if (inviteCode && !pendingKeyPackage) {
+      const joinWithExistingRing = Boolean(
+        inviteCode && (hasExistingRing || uidLink === "yours")
+      );
+      if (inviteCode && !pendingKeyPackage && !joinWithExistingRing) {
         setBindState("error");
         setMessage("Invite key missing. Ask them to create a fresh legacy invite.");
         return;

@@ -149,6 +149,7 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(readRepoFile("app/start/StartClient.tsx"), /sdmResolveWatchdogMs/);
   assert.match(readRepoFile("lib/nfc-flow-timing.ts"), /withTimeout/);
   assert.match(bindClient, /initializeSecurity/);
+  assert.match(bindClient, /joinWithExistingRing/);
   assert.match(bindClient, /joinBindCtaSetup/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);
   assert.match(bindClient, /uploadWrappedHavenKey/);
