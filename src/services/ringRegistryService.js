@@ -249,6 +249,35 @@ export function removeBoundRingByCloudId(cloudRingId) {
   return removeBoundRingByUidKey(target.uidKey);
 }
 
+/**
+ * Drop local registry rows that no longer match server bindings.
+ * Prevents showing two rings when cloud only has one (stale PWA cache).
+ */
+export function pruneStaleLocalRingsFromCloud(cloudRings = []) {
+  if (!Array.isArray(cloudRings) || !cloudRings.length) {
+    return 0;
+  }
+  const cloudIds = new Set(
+    cloudRings.map((row) => String(row?.id || "")).filter(Boolean)
+  );
+  const cloudHashes = new Set(
+    cloudRings.map((row) => String(row?.nfc_uid_hash || "")).filter(Boolean)
+  );
+  let removed = 0;
+  for (const ring of getBoundRings()) {
+    const uidKey = String(ring?.uidKey || "");
+    if (!uidKey) continue;
+    if (ring.cloudRingId && !cloudIds.has(ring.cloudRingId)) {
+      if (removeBoundRingByUidKey(uidKey)) removed += 1;
+      continue;
+    }
+    if (!ring.cloudRingId && !cloudHashes.has(uidKey)) {
+      if (removeBoundRingByUidKey(uidKey)) removed += 1;
+    }
+  }
+  return removed;
+}
+
 export const RING_COLOR_OPTIONS = [
   { key: "gold", hex: "#d9a67a" },
   { key: "rose", hex: "#c97b84" },

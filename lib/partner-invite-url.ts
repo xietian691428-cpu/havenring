@@ -9,8 +9,8 @@ export function buildPartnerInviteUrl(
   return url.toString();
 }
 
-/** Legacy invite share — product moving to explicit Shared memories (Plus). */
+/** Partner link share sheet copy. */
 export const PARTNER_INVITE_SHARE = {
-  title: "Haven invite",
-  text: "Open this link on your phone and sign in with your own account.",
+  title: "Link with me on Haven",
+  text: "Open this link on your phone to link our rings.",
 } as const;

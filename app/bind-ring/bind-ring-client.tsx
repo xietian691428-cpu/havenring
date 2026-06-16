@@ -30,10 +30,12 @@ import {
   savePendingPartnerInvite,
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
+import { readPendingPartnerInviteCode } from "@/lib/partner-invite-pending";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
 import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
 import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
-import { BIND_RING_PAGE_EN } from "@/src/content/bindRingPageContent";
+import { APP_ENTRY_PATH } from "@/lib/site";
+import { BIND_RING_PAGE_EN, formatJoinPrompt } from "@/src/content/bindRingPageContent";
 import { getNfcHoldGuideCopy, type HavenPlatform } from "@/src/content/havenCopy";
 import { usePlatform } from "@/src/hooks/usePlatform";
 
@@ -76,6 +78,13 @@ type UidLinkState =
   | "retired"
   | "linked_unknown"
   | "error";
+
+type InvitePreview = {
+  inviterName: string;
+  valid: boolean;
+  expired: boolean;
+  alreadyComplete: boolean;
+};
 
 interface BindRingClientProps {
   initialUid: string;
@@ -129,10 +138,18 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [inviteKeyPackage, setInviteKeyPackage] = useState("");
   const [hasExistingRing, setHasExistingRing] = useState(false);
   const [existingRingCheckDone, setExistingRingCheckDone] = useState(false);
+  const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [invitePreviewDone, setInvitePreviewDone] = useState(false);
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
     let active = true;
+
+    const storedInvite = readPendingPartnerInviteCode();
+    if (storedInvite && storedInvite !== inviteCode) {
+      clearPendingPartnerInvite();
+      setInviteKeyPackage("");
+    }
 
     void (async () => {
       const ktFromUrl = (new URLSearchParams(window.location.search).get("kt") || "").trim();
@@ -171,7 +188,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         if (!active) return;
         if (!res.ok || !payload.keyPackage) {
           setMessage(
-            payload.error || "Invite key missing. Ask them to create a fresh legacy invite."
+            payload.error || copy.inviteKeyMissing
           );
           return;
         }
@@ -179,11 +196,57 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         setInviteKeyPackage(payload.keyPackage);
       } catch {
         if (active) {
-          setMessage("Invite key missing. Ask them to create a fresh legacy invite.");
+          setMessage(copy.inviteKeyMissing);
         }
       }
     })();
 
+    return () => {
+      active = false;
+    };
+  }, [inviteCode]);
+
+  useEffect(() => {
+    if (!inviteCode) {
+      queueMicrotask(() => {
+        setInvitePreview(null);
+        setInvitePreviewDone(true);
+      });
+      return;
+    }
+    let active = true;
+    queueMicrotask(() => setInvitePreviewDone(false));
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/haven/invite/preview?invite=${encodeURIComponent(inviteCode)}`
+        );
+        const payload = (await res.json().catch(() => ({}))) as {
+          inviterName?: string;
+          valid?: boolean;
+          expired?: boolean;
+          alreadyComplete?: boolean;
+        };
+        if (!active) return;
+        setInvitePreview({
+          inviterName: String(payload.inviterName || "your partner"),
+          valid: Boolean(payload.valid),
+          expired: Boolean(payload.expired),
+          alreadyComplete: Boolean(payload.alreadyComplete),
+        });
+      } catch {
+        if (active) {
+          setInvitePreview({
+            inviterName: "your partner",
+            valid: true,
+            expired: false,
+            alreadyComplete: false,
+          });
+        }
+      } finally {
+        if (active) setInvitePreviewDone(true);
+      }
+    })();
     return () => {
       active = false;
     };
@@ -328,7 +391,10 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     };
 
     if (!uid && cloudMeta.cloudRingId) {
-      const match = getBoundRings().find((ring) => ring.cloudRingId === cloudMeta.cloudRingId);
+      const match = getBoundRings().find(
+        (ring: { cloudRingId?: string; uidKey?: string }) =>
+          ring.cloudRingId === cloudMeta.cloudRingId
+      );
       if (match?.uidKey) {
         updateRingCloudMetadata(match.uidKey, cloudMeta);
         return;
@@ -424,7 +490,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       );
       if (inviteCode && !pendingKeyPackage && !joinWithExistingRing) {
         setBindState("error");
-        setMessage("Invite key missing. Ask them to create a fresh legacy invite.");
+        setMessage(copy.inviteKeyMissing);
         return;
       }
 
@@ -446,9 +512,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const payload = (await response.json().catch(() => ({}))) as BindResponse;
       if (!response.ok) {
         setBindState("error");
-        setMessage(
-          payload.error || (response.status === 409 ? copy.alreadyBound : copy.bindFailed)
-        );
+        setMessage(mapJoinErrorMessage(payload, response.status));
         return;
       }
 
@@ -491,54 +555,127 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }
 
   const needsPasswordSetup = !securityReady;
-  const joinWithExistingRing = Boolean(
-    inviteCode && (hasExistingRing || uidLink === "yours")
-  );
-  const primaryBindLabel = inviteCode
-    ? joinWithExistingRing
-      ? needsPasswordSetup
-        ? copy.joinExistingRingCtaSetup
-        : copy.joinExistingRingCta
-      : needsPasswordSetup
-        ? copy.joinBindCtaSetup
-        : copy.joinBindCta
-    : needsPasswordSetup
-      ? copy.createHavenCtaSetup
-      : copy.createHavenCta;
+  const joinPrompt = formatJoinPrompt(invitePreview?.inviterName || "your partner");
+  const primaryBindLabel = needsPasswordSetup
+    ? inviteCode
+      ? copy.joinCtaSetup
+      : copy.linkRingCtaSetup
+    : inviteCode
+      ? copy.joinCta
+      : copy.linkRingCta;
 
-  if (!uid) {
-    const signedOutInvite =
-      inviteCode && (authState === "signed_out" || !isPermanentSupabaseSession(session));
+  function goToApp() {
+    window.location.href = APP_ENTRY_PATH;
+  }
+
+  function mapJoinErrorMessage(payload: BindResponse, status: number): string {
+    if (payload.code === "INVITE_REQUIRES_SEPARATE_ACCOUNT") {
+      return copy.joinErrorSeparateAccount;
+    }
+    if (payload.error) return payload.error;
+    if (status === 409) return copy.alreadyBound;
+    return inviteCode ? copy.joinErrorGeneric : copy.bindFailed;
+  }
+
+  function resolveInvitePhase():
+    | "loading"
+    | "invalid"
+    | "sign_in"
+    | "need_ring"
+    | "confirm"
+    | "blocked" {
+    if (!invitePreviewDone || authState === "checking") return "loading";
+    if (
+      isPermanentSupabaseSession(session) &&
+      inviteCode &&
+      !existingRingCheckDone
+    ) {
+      return "loading";
+    }
+    if (uid && uidLink === "checking") return "loading";
+    if (invitePreview && !invitePreview.valid) return "invalid";
+    if (authState === "signed_out" || !isPermanentSupabaseSession(session)) {
+      return "sign_in";
+    }
+    if (uid && (uidLink === "other" || uidLink === "retired")) return "blocked";
+    if (!hasExistingRing && !uid) return "need_ring";
+    return "confirm";
+  }
+
+  function renderDevicePasswordFields() {
+    return (
+      <>
+        <label style={styles.label}>
+          {needsPasswordSetup ? copy.devicePasswordCreateLabel : copy.devicePasswordLabel}
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            style={styles.input}
+            autoComplete={needsPasswordSetup ? "new-password" : "current-password"}
+            minLength={needsPasswordSetup ? 6 : undefined}
+          />
+        </label>
+        {needsPasswordSetup ? (
+          <label style={styles.label}>
+            {copy.devicePasswordConfirmLabel}
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              style={styles.input}
+              autoComplete="new-password"
+              minLength={6}
+            />
+          </label>
+        ) : (
+          <label style={styles.label}>
+            {copy.recoveryCodeLabel}
+            <input
+              type="text"
+              value={recoveryCode}
+              onChange={(event) => setRecoveryCode(event.target.value)}
+              style={styles.input}
+              placeholder={copy.recoveryOptional}
+            />
+          </label>
+        )}
+      </>
+    );
+  }
+
+  if (inviteCode) {
+    const phase = resolveInvitePhase();
+    const blockedMessage =
+      uidLink === "other"
+        ? copy.statusOtherAccount
+        : uidLink === "retired"
+          ? copy.statusRetired
+          : copy.joinErrorGeneric;
+
     return (
       <main style={styles.page}>
         <section style={styles.card}>
-          <p style={styles.kicker}>{inviteCode ? copy.joinKicker : copy.kicker}</p>
-          <h1 style={styles.title}>
-            {inviteCode ? copy.joinStep1Title : holdCopy.waitTitle}
-          </h1>
-          <p style={styles.body}>
-            {inviteCode ? copy.joinStep1Body : holdCopy.waitSubtitle}
-          </p>
-          {inviteCode && hasExistingRing ? (
-            <div style={styles.noticeBanner} role="status">
-              {copy.joinExistingRingBody}
-            </div>
-          ) : inviteCode ? (
-            <div style={styles.stepCard}>
-              <p style={styles.stepLabel}>Next</p>
-              <p style={styles.stepText}>{copy.joinStep2Body}</p>
-            </div>
-          ) : (
-            <NfcHoldGuide platform={platform} />
-          )}
-          {authState === "checking" ? (
+          <h1 style={styles.title}>{joinPrompt}</h1>
+          {phase === "loading" ? (
             <IndeterminateStepStatus
               active
-              label={holdCopy.checkingStatusLine}
-              slowLabel={holdCopy.stillCheckingLine}
+              label={copy.syncing}
+              slowLabel={copy.syncing}
               style={styles.muted}
             />
-          ) : signedOutInvite ? (
+          ) : null}
+          {phase === "invalid" ? (
+            <div style={styles.stack}>
+              <p style={styles.body}>
+                {invitePreview?.alreadyComplete ? copy.inviteComplete : copy.inviteExpired}
+              </p>
+              <button type="button" onClick={goToApp} style={styles.primaryButton}>
+                {copy.openHavenCta}
+              </button>
+            </div>
+          ) : null}
+          {phase === "sign_in" ? (
             <div style={styles.stack}>
               <button
                 type="button"
@@ -556,48 +693,23 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               >
                 {busyProvider === "google" ? copy.openingSignIn : copy.signInGoogle}
               </button>
+              <button type="button" onClick={goToApp} style={styles.secondaryButton}>
+                {copy.cancelCta}
+              </button>
             </div>
-          ) : inviteCode && existingRingCheckDone && hasExistingRing ? (
+          ) : null}
+          {phase === "need_ring" ? (
             <div style={styles.stack}>
-              <p style={styles.notice}>{copy.joinExistingRingBody}</p>
-              <p style={styles.notice}>
-                {needsPasswordSetup ? copy.devicePasswordCreateHint : copy.devicePasswordEnterHint}
-              </p>
-              <label style={styles.label}>
-                {needsPasswordSetup ? copy.devicePasswordCreateLabel : copy.devicePasswordLabel}
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  style={styles.input}
-                  autoComplete={needsPasswordSetup ? "new-password" : "current-password"}
-                  minLength={needsPasswordSetup ? 6 : undefined}
-                />
-              </label>
-              {needsPasswordSetup ? (
-                <label style={styles.label}>
-                  {copy.devicePasswordConfirmLabel}
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    style={styles.input}
-                    autoComplete="new-password"
-                    minLength={6}
-                  />
-                </label>
-              ) : (
-                <label style={styles.label}>
-                  {copy.recoveryCodeLabel}
-                  <input
-                    type="text"
-                    value={recoveryCode}
-                    onChange={(event) => setRecoveryCode(event.target.value)}
-                    style={styles.input}
-                    placeholder={copy.recoveryOptional}
-                  />
-                </label>
-              )}
+              <p style={styles.body}>{copy.joinTapRingHint}</p>
+              <NfcHoldGuide platform={platform} />
+              <button type="button" onClick={goToApp} style={styles.secondaryButton}>
+                {copy.cancelCta}
+              </button>
+            </div>
+          ) : null}
+          {phase === "confirm" ? (
+            <div style={styles.stack}>
+              {renderDevicePasswordFields()}
               <button
                 type="button"
                 onClick={() => void handleBind()}
@@ -606,18 +718,49 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
               >
                 {bindState === "binding" ? copy.binding : primaryBindLabel}
               </button>
+              <button type="button" onClick={goToApp} style={styles.secondaryButton}>
+                {copy.cancelCta}
+              </button>
             </div>
-          ) : inviteCode ? (
-            <p style={styles.notice}>{copy.joinStep2BodySignedIn}</p>
+          ) : null}
+          {phase === "blocked" ? (
+            <div style={styles.stack}>
+              <p style={styles.body}>{blockedMessage}</p>
+              <button type="button" onClick={goToApp} style={styles.primaryButton}>
+                {copy.openHavenCta}
+              </button>
+            </div>
           ) : null}
           {message ? (
             <p style={styles.status} role="alert">
               {message}
             </p>
           ) : null}
-          <button type="button" onClick={() => window.history.back()} style={styles.secondaryButton}>
-            Back
-          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (!uid) {
+    return (
+      <main style={styles.page}>
+        <section style={styles.card}>
+          <h1 style={styles.title}>{holdCopy.waitTitle}</h1>
+          <p style={styles.body}>{holdCopy.waitSubtitle}</p>
+          <NfcHoldGuide platform={platform} />
+          {authState === "checking" ? (
+            <IndeterminateStepStatus
+              active
+              label={holdCopy.checkingStatusLine}
+              slowLabel={holdCopy.stillCheckingLine}
+              style={styles.muted}
+            />
+          ) : null}
+          {message ? (
+            <p style={styles.status} role="alert">
+              {message}
+            </p>
+          ) : null}
         </section>
       </main>
     );
@@ -625,28 +768,20 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
 
   const signedOut = authState === "signed_out" || !isPermanentSupabaseSession(session);
   const blockNewBind =
-    (uidLink === "yours" && !inviteCode) ||
-    uidLink === "other" ||
-    uidLink === "retired" ||
-    uidLink === "checking";
+    uidLink === "yours" || uidLink === "other" || uidLink === "retired" || uidLink === "checking";
 
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.kicker}>{copy.kicker}</p>
-        <h1 style={styles.title}>
-          {inviteCode ? copy.titleInvite : copy.title}
-        </h1>
-        <p style={styles.body}>{inviteCode ? copy.bodyInvite : copy.body}</p>
-        {inviteCode ? (
-          <div style={styles.noticeBanner} role="status">
-            {joinWithExistingRing ? copy.joinExistingRingBody : copy.joinNoRetap}
+        <h1 style={styles.title}>{copy.title}</h1>
+        <p style={styles.body}>{copy.body}</p>
+
+        {!inviteCode ? (
+          <div style={styles.uidBox}>
+            <span style={styles.uidLabel}>UID</span>
+            <span style={styles.uidValue}>{uid}</span>
           </div>
         ) : null}
-        <div style={styles.uidBox}>
-          <span style={styles.uidLabel}>UID</span>
-          <span style={styles.uidValue}>{uid}</span>
-        </div>
 
         {uidLink === "checking" ? (
           <IndeterminateStepStatus
@@ -672,15 +807,13 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             {uidLink === "unlinked"
               ? copy.statusUnlinked
               : uidLink === "yours"
-                ? inviteCode
-                  ? copy.statusYoursInvite
-                  : copy.statusYours
+                ? copy.statusYours
                 : uidLink === "other"
                   ? copy.statusOtherAccount
                   : uidLink === "retired"
                     ? copy.statusRetired
                     : uidLink === "linked_unknown"
-                      ? copy.signInRequiredShort
+                      ? copy.signInRequired
                       : copy.statusCheckFailed}
           </div>
         ) : null}
@@ -694,9 +827,6 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
           />
         ) : signedOut ? (
           <div style={styles.stack}>
-            <p style={styles.notice}>
-              Use your own account.
-            </p>
             <button
               type="button"
               onClick={() => void signInWith("apple")}
@@ -726,44 +856,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
                 placeholder="Ring"
               />
             </label>
-            <p style={styles.notice}>
-              {needsPasswordSetup ? copy.devicePasswordCreateHint : copy.devicePasswordEnterHint}
-            </p>
-            <label style={styles.label}>
-              {needsPasswordSetup ? copy.devicePasswordCreateLabel : copy.devicePasswordLabel}
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                style={styles.input}
-                autoComplete={needsPasswordSetup ? "new-password" : "current-password"}
-                minLength={needsPasswordSetup ? 6 : undefined}
-              />
-            </label>
-            {needsPasswordSetup ? (
-              <label style={styles.label}>
-                {copy.devicePasswordConfirmLabel}
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  style={styles.input}
-                  autoComplete="new-password"
-                  minLength={6}
-                />
-              </label>
-            ) : (
-              <label style={styles.label}>
-                {copy.recoveryCodeLabel}
-                <input
-                  type="text"
-                  value={recoveryCode}
-                  onChange={(event) => setRecoveryCode(event.target.value)}
-                  style={styles.input}
-                  placeholder={copy.recoveryOptional}
-                />
-              </label>
-            )}
+            {renderDevicePasswordFields()}
             {shownRecoveryCode ? (
               <div style={styles.recoveryBox} role="status">
                 <p style={styles.recoveryTitle}>{copy.recoveryTitle}</p>

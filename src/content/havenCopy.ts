@@ -93,16 +93,15 @@ export const HAVEN_STORAGE_MODE_EN = {
 
 export const BIND_SUCCESS_EN = {
   title: "Ring linked",
-  subtitle: "Your ring is for sealing memories.",
-  pairPromptTitle: "Share sealed memories as a Pair? (Recommended)",
-  pairPromptBody:
-    "Sealed memories sync between you. Drafts stay private until you seal. Pair sharing is on by default — turn off anytime in Rings.",
-  pairPromptYes: "Keep sharing when sealed",
-  pairPromptNo: "Not now",
-  pairActiveNote: "Pair sharing is on. Turn off anytime in Rings.",
+  subtitle: "You're all set.",
+  pairPromptTitle: "",
+  pairPromptBody: "",
+  pairPromptYes: "",
+  pairPromptNo: "",
+  pairActiveNote: "",
   sealFirstMemoryCta: "Write your first memory",
-  goToMemoriesCta: "Open memories",
-  plusTrialNote: "Plus trial active — cloud backup keeps your Pair in sync across devices.",
+  goToMemoriesCta: "Open shared memories",
+  plusTrialNote: "Plus trial active.",
 } as const;
 
 export const CLOUD_STORAGE_EN = {

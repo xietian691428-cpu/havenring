@@ -36,6 +36,7 @@ import { havenCopy } from "../content/havenCopy";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { canUseFeature } from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
+import { markOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
 
 /**
  * Settings Page
@@ -510,10 +511,21 @@ export function SettingsPage({
         {onOpenRings ? (
           <section style={styles.card}>
             <h2 style={styles.sectionTitle}>{localeCopy.ringsSectionTitle}</h2>
-            <p style={styles.copy}>{localeCopy.ringsBody}</p>
-            <button type="button" onClick={() => onOpenRings()} style={styles.primaryButton}>
-              {localeCopy.ringsManageCta}
-            </button>
+            <div style={styles.actions}>
+              <button
+                type="button"
+                onClick={() => {
+                  markOpenPartnerInviteOnRings();
+                  onOpenRings();
+                }}
+                style={styles.primaryButton}
+              >
+                {localeCopy.ringsAddPartnerCta}
+              </button>
+              <button type="button" onClick={() => onOpenRings()} style={styles.secondaryButton}>
+                {localeCopy.ringsManageCta}
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -672,16 +684,20 @@ export function SettingsPage({
               onChange={(e) => handleKeepSignedInChange(e.target.checked)}
             />
           </label>
-          <h3 style={styles.subheading}>{localeCopy.revokeAllNfcTitle}</h3>
-          <p style={styles.copy}>{localeCopy.revokeAllNfcBody}</p>
-          <button
-            type="button"
-            onClick={() => void handleRevokeAllNfc()}
-            disabled={busy}
-            style={styles.dangerButton}
-          >
-            {buttonLabelWithBadge(localeCopy.revokeAllNfcButton)}
-          </button>
+          <details style={styles.advancedDetails}>
+            <summary style={styles.advancedSummary}>
+              {localeCopy.revokeAllNfcAdvancedSummary}
+            </summary>
+            <p style={styles.copy}>{localeCopy.revokeAllNfcBody}</p>
+            <button
+              type="button"
+              onClick={() => void handleRevokeAllNfc()}
+              disabled={busy}
+              style={styles.dangerButton}
+            >
+              {buttonLabelWithBadge(localeCopy.revokeAllNfcButton)}
+            </button>
+          </details>
         </section>
 
         <section style={styles.card}>
@@ -1132,5 +1148,14 @@ const styles = {
     alignItems: "flex-start",
     gap: 10,
     cursor: "pointer",
+  },
+  advancedDetails: {
+    marginTop: 12,
+  },
+  advancedSummary: {
+    cursor: "pointer",
+    color: "rgba(248, 239, 231, 0.55)",
+    fontSize: 13,
+    marginBottom: 8,
   },
 };

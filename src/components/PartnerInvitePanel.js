@@ -28,8 +28,6 @@ export function PartnerInvitePanel({
   const [revokeBusy, setRevokeBusy] = useState(false);
   const prepareStartedRef = useRef(false);
 
-  const checklist = t.inviteChecklist || [];
-
   const runPrepare = useCallback(async () => {
     setPhase("preparing");
     setError("");
@@ -166,19 +164,15 @@ export function PartnerInvitePanel({
           </header>
 
           <div style={styles.hero}>
-            <p style={styles.kicker}>{t.invitePanelKicker}</p>
             <h1 id="partner-invite-title" style={styles.title}>
               {t.invitePanelTitle}
             </h1>
-            <p style={styles.subtitle}>{t.invitePanelSubtitle}</p>
-            {t.legacyInviteBanner ? (
-              <p style={styles.legacyBanner}>{t.legacyInviteBanner}</p>
+            {t.invitePanelSubtitle ? (
+              <p style={styles.subtitle}>{t.invitePanelSubtitle}</p>
             ) : null}
           </div>
 
-          {phase === "preparing" ? (
-            <p style={styles.note}>{t.inviteCreating}</p>
-          ) : null}
+          {phase === "preparing" ? <p style={styles.note}>{t.inviteCreating}</p> : null}
 
           {phase === "error" ? (
             <div style={styles.errorBox}>
@@ -191,17 +185,6 @@ export function PartnerInvitePanel({
 
           {phase === "ready" && inviteUrl ? (
             <>
-              <ol style={styles.checklist}>
-                {checklist.map((item, index) => (
-                  <li key={item} style={styles.checklistItem}>
-                    <span style={styles.checklistNum}>{index + 1}</span>
-                    <span style={styles.checklistText}>{item}</span>
-                  </li>
-                ))}
-              </ol>
-
-              <p style={styles.selfWarning}>{t.inviteSelfWarning}</p>
-
               <InviteQrCode value={inviteUrl} size={220} style={styles.qrWrap} />
 
               <div style={styles.actions}>
@@ -226,16 +209,14 @@ export function PartnerInvitePanel({
               </div>
 
               {waiting && !partnerJoined ? (
-                <div style={styles.waitingBox} role="status">
-                  <p style={styles.waitingTitle}>{t.inviteWaitingTitle}</p>
-                  <p style={styles.waitingBody}>{t.inviteWaitingBody}</p>
-                </div>
+                <p style={styles.waitingLine} role="status">
+                  {t.inviteWaitingTitle}
+                </p>
               ) : null}
 
               {partnerJoined ? (
                 <div style={styles.successBox} role="status">
                   <p style={styles.successTitle}>{t.invitePartnerJoinedTitle}</p>
-                  <p style={styles.successBody}>{t.invitePartnerJoinedBody}</p>
                   <button type="button" onClick={() => onClose?.()} style={styles.primaryBtn}>
                     {t.inviteDoneCta}
                   </button>
@@ -302,14 +283,6 @@ const styles = {
     display: "grid",
     gap: 8,
   },
-  kicker: {
-    margin: 0,
-    fontSize: 11,
-    letterSpacing: "0.2em",
-    textTransform: "uppercase",
-    color: sanctuaryTheme.accentSoft,
-    fontWeight: 700,
-  },
   title: {
     margin: 0,
     fontSize: 28,
@@ -321,52 +294,6 @@ const styles = {
     fontSize: 15,
     lineHeight: 1.55,
     color: "rgba(248, 239, 231, 0.72)",
-  },
-  legacyBanner: {
-    margin: "12px 0 0",
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: "rgba(200, 175, 155, 0.85)",
-  },
-  checklist: {
-    margin: 0,
-    padding: 0,
-    listStyle: "none",
-    display: "grid",
-    gap: 10,
-  },
-  checklistItem: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: "14px 14px",
-    borderRadius: 14,
-    border: "1px solid rgba(232, 220, 208, 0.14)",
-    background: "rgba(26, 21, 18, 0.5)",
-  },
-  checklistNum: {
-    flexShrink: 0,
-    width: 28,
-    height: 28,
-    borderRadius: "50%",
-    display: "grid",
-    placeItems: "center",
-    fontSize: 13,
-    fontWeight: 700,
-    color: sanctuaryTheme.ink,
-    background: `linear-gradient(180deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
-  },
-  checklistText: {
-    fontSize: 15,
-    lineHeight: 1.45,
-    color: sanctuaryTheme.cream,
-    paddingTop: 3,
-  },
-  selfWarning: {
-    margin: 0,
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: "rgba(232, 220, 208, 0.62)",
   },
   qrWrap: {
     justifySelf: "center",
@@ -402,32 +329,18 @@ const styles = {
   ghostBtn: {
     border: "none",
     background: "transparent",
-    color: "rgba(232, 220, 208, 0.55)",
-    fontSize: 14,
+    color: "rgba(232, 220, 208, 0.45)",
+    fontSize: 13,
     cursor: "pointer",
     textDecoration: "underline",
     justifySelf: "center",
     padding: 8,
   },
-  waitingBox: {
-    padding: "14px 16px",
-    borderRadius: 14,
-    border: "1px solid rgba(217, 166, 122, 0.35)",
-    background: "rgba(48, 36, 24, 0.45)",
-    display: "grid",
-    gap: 6,
-  },
-  waitingTitle: {
+  waitingLine: {
     margin: 0,
-    fontSize: 15,
-    fontWeight: 650,
+    fontSize: 14,
+    textAlign: "center",
     color: sanctuaryTheme.accentSoft,
-  },
-  waitingBody: {
-    margin: 0,
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: sanctuaryTheme.inkSoft,
   },
   successBox: {
     padding: "16px",
@@ -442,12 +355,7 @@ const styles = {
     fontSize: 16,
     fontWeight: 650,
     color: "#b7f7c8",
-  },
-  successBody: {
-    margin: 0,
-    fontSize: 14,
-    lineHeight: 1.5,
-    color: sanctuaryTheme.inkSoft,
+    textAlign: "center",
   },
   note: {
     margin: 0,

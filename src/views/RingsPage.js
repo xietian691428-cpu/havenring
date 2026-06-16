@@ -1,74 +1,73 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
-import { havenCopy } from "../content/havenCopy";
-import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import {
   getBoundRings,
+  pruneStaleLocalRingsFromCloud,
   RING_COLOR_OPTIONS,
-  removeBoundRingByCloudId,
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import {
-  fetchSecondaryVerificationToken,
-  verifyAndTrustCurrentDevice,
-} from "../services/deviceTrustService";
-import {
   canUseFeature,
-  getPlanBadgeLabel,
-  getRingSlotLimitUpsellNotice,
-  getSubscriptionSummary,
 } from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
-import { RingReadyBadge } from "../components/RingReadyBadge";
 import { PartnerInvitePanel } from "../components/PartnerInvitePanel";
-import {
-  isPairSharingEnabled,
-  setPairSharingEnabled,
-} from "../services/pairSharingService";
+import { setPairSharingEnabled } from "../services/pairSharingService";
+import { consumeOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
 
 export function RingsPage({
   locale = "en",
   userEntitlements = getFreeEntitlements(),
   onOpenRingSetup,
-  onOpenSettings,
   onOpenHelp,
 }) {
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
-  const platform = useMemo(() => resolvePlatformTarget(), []);
-  const securityRevokeNote = useMemo(() => {
-    const notes = havenCopy.common.securityDeleteNote;
-    if (platform === "ios") return notes.ios;
-    if (platform === "android") return notes.android;
-    return notes.general;
-  }, [platform]);
   const [localRings, setLocalRings] = useState(() => getBoundRings());
   const [cloudRings, setCloudRings] = useState([]);
-  const [memoryCountByRingId, setMemoryCountByRingId] = useState({});
   const [loading, setLoading] = useState(true);
-  const [busyCloudRingId, setBusyCloudRingId] = useState("");
-  const [verifyOpen, setVerifyOpen] = useState(false);
-  const [verifyPassword, setVerifyPassword] = useState("");
-  const [verifyRecovery, setVerifyRecovery] = useState("");
-  const [verifyError, setVerifyError] = useState("");
-  const [pendingRevoke, setPendingRevoke] = useState(null);
-  const [revokePrepOpen, setRevokePrepOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [havens, setHavens] = useState([]);
   const [serverPairActive, setServerPairActive] = useState(false);
+  const [syncError, setSyncError] = useState("");
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
-  /** When user has rings: `null` = collapsed by default; `true` = expanded. Ignored when `rings.length === 0`. */
-  const [howExplicit, setHowExplicit] = useState(null);
-  const [pairShareEnabled, setPairShareEnabledState] = useState(() =>
-    isPairSharingEnabled()
-  );
 
   const rings = useMemo(() => {
     const local = localRings || [];
     const cloud = cloudRings || [];
     const partnerLabel = t.partnerRingLabel || "Partner's ring";
     const yourLabel = t.yourRingLabel || "Your ring";
+
+    // Logged-in: server list is authoritative once loaded (even when empty).
+    if (!loading && !syncError) {
+      if (cloud.length === 0) {
+        return [];
+      }
+      const rows = cloud.map((c) => {
+        const localMatch = local.find((ring) => ring.cloudRingId === c.id);
+        const ownedByYou = Boolean(c.ownedByYou);
+        const defaultLabel = ownedByYou ? yourLabel : partnerLabel;
+        return {
+          uidKey: localMatch?.uidKey || c.nfc_uid_hash || c.id,
+          cloudRingId: c.id,
+          havenId: c.haven_id || null,
+          cloudBoundAt: c.bound_at || null,
+          cloudLastUsedAt: c.last_used_at || null,
+          nickname: c.nickname || localMatch?.label || defaultLabel,
+          label: c.nickname || localMatch?.label || defaultLabel,
+          colorKey: ownedByYou ? localMatch?.colorKey || "gold" : "rose",
+          icon: localMatch?.icon || "ring",
+          ownedByYou,
+          createdAt: localMatch?.createdAt || null,
+        };
+      });
+      return rows.sort((a, b) => {
+        const da = Date.parse(a.cloudBoundAt || "") || a.createdAt || 0;
+        const db = Date.parse(b.cloudBoundAt || "") || b.createdAt || 0;
+        return db - da;
+      });
+    }
 
     if (cloud.length > 0) {
       const rows = cloud.map((c) => {
@@ -101,25 +100,20 @@ export function RingsPage({
       ownedByYou: ring.ownedByYou !== false,
       nickname: ring.nickname || ring.label,
     }));
-  }, [localRings, cloudRings, t.partnerRingLabel, t.yourRingLabel]);
+  }, [localRings, cloudRings, loading, syncError, t.partnerRingLabel, t.yourRingLabel]);
 
   function colorHex(key) {
     return RING_COLOR_OPTIONS.find((c) => c.key === key)?.hex ?? sanctuaryTheme.accent;
   }
 
-  function fmtDate(ts) {
-    if (!ts) return t.unknownDate;
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return t.unknownDate;
-    return d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
-  async function loadCloudRings() {
-    setLoading(true);
+  async function loadCloudRings(options = {}) {
+    const silent = Boolean(options.silent);
+    if (!silent) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    setSyncError("");
     try {
       const sb = getSupabaseBrowserClient();
       const {
@@ -127,7 +121,6 @@ export function RingsPage({
       } = await sb.auth.getSession();
       if (!session?.access_token) {
         setCloudRings([]);
-        setMemoryCountByRingId({});
         setHavens([]);
         setServerPairActive(false);
         return;
@@ -144,6 +137,7 @@ export function RingsPage({
         throw new Error(listPayload.error || "list_failed");
       }
       const cloudRows = Array.isArray(listPayload.rings) ? listPayload.rings : [];
+      pruneStaleLocalRingsFromCloud(cloudRows);
       setCloudRings(cloudRows);
       setHavens(Array.isArray(listPayload.havens) ? listPayload.havens : []);
       setServerPairActive(Boolean(listPayload.pairActive));
@@ -155,38 +149,29 @@ export function RingsPage({
         if (!match) continue;
         updateRingCloudMetadata(ring.uidKey, {
           cloudRingId: match.id,
+          havenId: match.haven_id || null,
           cloudBoundAt: match.bound_at || null,
           cloudLastUsedAt: match.last_used_at || null,
         });
       }
       setLocalRings(getBoundRings());
-
-      const cloudRingIds = cloudRows.map((row) => row.id).filter(Boolean);
-      if (!cloudRingIds.length) {
-        setMemoryCountByRingId({});
-        return;
-      }
-      const { data: mRows, error: mErr } = await sb
-        .from("moments")
-        .select("id, ring_id")
-        .in("ring_id", cloudRingIds);
-      if (mErr) {
-        setMemoryCountByRingId({});
-        return;
-      }
-      const countMap = {};
-      for (const row of mRows || []) {
-        const key = row.ring_id;
-        if (!key) continue;
-        countMap[key] = (countMap[key] || 0) + 1;
-      }
-      setMemoryCountByRingId(countMap);
-    } catch {
+    } catch (error) {
       setCloudRings([]);
+      const msg = error instanceof Error ? error.message : "";
+      setSyncError(msg || "list_failed");
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
+      setRefreshing(false);
     }
   }
+
+  useEffect(() => {
+    if (consumeOpenPartnerInviteOnRings()) {
+      setInvitePanelOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -195,77 +180,11 @@ export function RingsPage({
     return () => window.clearTimeout(timer);
   }, []);
 
-  function askRevoke(ring) {
-    if (!ring?.cloudRingId) return;
-    setPendingRevoke(ring);
-    setVerifyPassword("");
-    setVerifyRecovery("");
-    setVerifyError("");
-    setRevokePrepOpen(true);
-  }
-
-  function handleCancelRevokePrep() {
-    setRevokePrepOpen(false);
-    setPendingRevoke(null);
-  }
-
-  function handleContinueRevokePrep() {
-    if (!pendingRevoke?.cloudRingId) return;
-    setRevokePrepOpen(false);
-    setVerifyOpen(true);
-  }
-
-  async function handleConfirmRevoke() {
-    if (!pendingRevoke?.cloudRingId) return;
-    setVerifyError("");
-    try {
-      await verifyAndTrustCurrentDevice({
-        password: verifyPassword,
-        recoveryCode: verifyRecovery,
-      });
-
-      const sb = getSupabaseBrowserClient();
-      const {
-        data: { session },
-      } = await sb.auth.getSession();
-      if (!session?.access_token) {
-        setVerifyError(t.cloudSignInRequired);
-        return;
-      }
-
-      const secondaryToken = await fetchSecondaryVerificationToken(
-        session.access_token
-      );
-      setBusyCloudRingId(pendingRevoke.cloudRingId);
-      const res = await fetch("/api/nfc/revoke", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-          "X-Haven-Secondary-Token": secondaryToken,
-        },
-        body: JSON.stringify({
-          ring_id: pendingRevoke.cloudRingId,
-          privacy_acknowledged: true,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setVerifyError(payload.error || t.revokeFailed);
-        return;
-      }
-
-      removeBoundRingByCloudId(pendingRevoke.cloudRingId);
-      setLocalRings(getBoundRings());
-      setVerifyOpen(false);
-      setPendingRevoke(null);
-      await loadCloudRings();
-    } catch {
-      setVerifyError(t.verifyError);
-    } finally {
-      setBusyCloudRingId("");
+  useEffect(() => {
+    if (serverPairActive) {
+      setPairSharingEnabled(true);
     }
-  }
+  }, [serverPairActive]);
 
   function handleRenameRing(ring) {
     const current = String(ring?.nickname || ring?.label || "").trim();
@@ -290,20 +209,21 @@ export function RingsPage({
     rings.find((ring) => ring.havenId)?.havenId || havens[0]?.haven_id || "";
 
   const ringLimitReached = !canUseFeature(userEntitlements, "expand_ring_slots", {
-    currentRingCount: rings.length,
+    currentRingCount: cloudRings.length > 0 ? cloudRings.length : rings.length,
   });
   const ownedCloudRingCount = rings.filter((ring) => ring.cloudRingId && ring.ownedByYou).length;
-  const canInvitePartner = ownedCloudRingCount === 1 && !serverPairActive && !ringLimitReached;
+  const canLinkPartner = ownedCloudRingCount === 1 && !serverPairActive && !ringLimitReached;
   const pairActive = serverPairActive;
+  const needsAutoRefresh =
+    !loading && !pairActive && (cloudRings.length >= 2 || (syncError && localRings.length >= 2));
 
-  const showHowDetail = rings.length === 0 || (!loading && howExplicit === true);
-
-  function toggleHowGuide() {
-    setHowExplicit((was) => {
-      const showing = rings.length === 0 || (!loading && was === true);
-      return !showing;
-    });
-  }
+  useEffect(() => {
+    if (!needsAutoRefresh) return undefined;
+    const id = window.setInterval(() => {
+      void loadCloudRings({ silent: true });
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [needsAutoRefresh]);
 
   return (
     <main style={styles.page}>
@@ -311,83 +231,46 @@ export function RingsPage({
         <header style={styles.header}>
           <div style={styles.headerTitleBlock}>
             <h1 style={styles.title}>{t.title}</h1>
-            {t.subtitle ? <p style={styles.subtitle}>{t.subtitle}</p> : null}
           </div>
-          <button
-            type="button"
-            onClick={onOpenRingSetup}
-            style={ringLimitReached ? styles.secondaryBtn : styles.headerAddBtn}
-            disabled={ringLimitReached}
-          >
-            {t.addRingHeaderCta || t.openSetup}
-          </button>
-        </header>
-
-        <RingReadyBadge ready={!loading && rings.length > 0} />
-
-        <section style={styles.guideCard}>
-          <p style={styles.guideTitle}>{getPlanBadgeLabel(userEntitlements)}</p>
-          <p style={styles.guideBody}>{getSubscriptionSummary(userEntitlements)}</p>
-          <p style={styles.guideOneLine}>
-            Ring limit: {rings.length} / {userEntitlements?.maxRings ?? 2}
-          </p>
-        </section>
-
-        {!loading && rings.length > 0 ? (
-          <div style={styles.howToggleRow}>
-            <button type="button" style={styles.ghostBtn} onClick={() => toggleHowGuide()}>
-              {showHowDetail ? t.howHavenToggleHide : t.howHavenToggleShow}
-            </button>
-          </div>
-        ) : null}
-
-        {!loading && rings.length > 0 && !showHowDetail ? (
-          <p style={styles.coreLineStandalone}>{havenCopy.rings.ringVsFaceIdSummary}</p>
-        ) : null}
-
-        {showHowDetail ? (
-          <section style={styles.guideCard}>
-            <p style={styles.guideTitle}>{t.quickGuideTitle}</p>
-            <p style={styles.guideBody}>{t.quickGuideIntro}</p>
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>{t.actionLabel}</th>
-                    <th style={styles.th}>{t.ringRequiredLabel}</th>
-                    <th style={styles.th}>{t.recommendedLabel}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(t.quickGuideRows || []).map((row) => (
-                    <tr key={row.action}>
-                      <td style={styles.td}>{row.action}</td>
-                      <td style={styles.td}>{row.required}</td>
-                      <td style={styles.td}>{row.way}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p style={styles.guideOneLine}>{t.quickGuideOneLine}</p>
-          </section>
-        ) : null}
-
-        {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
-
-        {rings.length === 0 ? (
-          <article style={styles.emptyCard}>
-            <p style={styles.emptyTitle}>{t.emptyTitle}</p>
-            <p style={styles.emptyBody}>{t.emptyBody}</p>
-            {t.emptyTrialHint ? <p style={styles.emptyTrial}>{t.emptyTrialHint}</p> : null}
+          {rings.length === 0 && !loading ? (
             <button
               type="button"
               onClick={onOpenRingSetup}
-              style={ringLimitReached ? styles.secondaryBtn : styles.primaryBtn}
+              style={styles.headerAddBtn}
               disabled={ringLimitReached}
             >
               {t.bindFirstRingCta}
             </button>
+          ) : null}
+        </header>
+
+        {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
+        {refreshing ? <p style={styles.note}>{t.syncingRings}</p> : null}
+
+        {!loading && pairActive ? (
+          <div style={styles.partnerStatusLinked} role="status">
+            {t.linkedWithPartnerStatus}
+          </div>
+        ) : null}
+
+        {!loading && canLinkPartner ? (
+          <button type="button" style={styles.linkPartnerBtn} onClick={openInvitePanel}>
+            {t.linkWithPartnerCta}
+          </button>
+        ) : null}
+
+        {syncError ? (
+          <p style={styles.note}>
+            {t.syncFailed}{" "}
+            <button type="button" style={styles.inlineLink} onClick={() => void loadCloudRings()}>
+              {t.retrySync}
+            </button>
+          </p>
+        ) : null}
+
+        {rings.length === 0 && !loading ? (
+          <article style={styles.emptyCard}>
+            <p style={styles.emptyBody}>{t.emptyBody}</p>
           </article>
         ) : (
           <ul style={styles.grid}>
@@ -410,173 +293,28 @@ export function RingsPage({
                 </div>
                 <div style={styles.ringText}>
                   <p style={styles.ringName}>{ring.nickname || ring.label}</p>
-                  {ring.cloudRingId ? (
-                    <p style={styles.ringStatusLine}>
-                      <span style={styles.ringStatusPill}>{t.ringStatusActive}</span>
-                    </p>
-                  ) : null}
                   <p style={styles.ringMeta}>
-                    {t.boundAt}: {fmtDate(ring.cloudBoundAt || ring.createdAt)}
-                  </p>
-                  <p style={styles.ringMeta}>
-                    {t.lastUsedAt}:{" "}
-                    {ring.cloudLastUsedAt ? fmtDate(ring.cloudLastUsedAt) : t.neverUsed}
-                  </p>
-                  <p style={styles.ringMeta}>
-                    {t.linkedMemories}: {memoryCountByRingId[ring.cloudRingId] || 0}
-                  </p>
-                  <p style={styles.ringMeta}>
-                    {ring.ownedByYou ? t.yourRingLabel || "Your ring" : t.partnerRingLabel || "Legacy pair ring"}
+                    {ring.ownedByYou ? t.yourRingLabel : t.partnerRingLabel}
                   </p>
                 </div>
-                {ring.cloudRingId ? (
-                  <div style={styles.ringActions}>
-                    {ring.ownedByYou ? (
-                      <>
-                        <button
-                          type="button"
-                          style={styles.secondaryBtn}
-                          onClick={() => handleRenameRing(ring)}
-                        >
-                          {t.rename || "Rename"}
-                        </button>
-                        <button
-                          type="button"
-                          style={styles.revokeBtn}
-                          onClick={() => askRevoke(ring)}
-                          disabled={busyCloudRingId === ring.cloudRingId}
-                        >
-                          {busyCloudRingId === ring.cloudRingId ? t.revoking : t.retire || t.revoke}
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
+                {ring.cloudRingId && ring.ownedByYou ? (
+                  <button
+                    type="button"
+                    style={styles.renameBtn}
+                    onClick={() => handleRenameRing(ring)}
+                  >
+                    {t.rename}
+                  </button>
                 ) : null}
               </li>
             ))}
           </ul>
         )}
 
-        {pairActive ? (
-          <section style={styles.legacyCard}>
-            <p style={styles.legacyBody}>{t.pairActiveBanner}</p>
-            <label style={styles.pairToggleRow}>
-              <input
-                type="checkbox"
-                checked={pairShareEnabled}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setPairSharingEnabled(next);
-                  setPairShareEnabledState(next);
-                }}
-              />
-              <span>{t.pairShareToggleLabel}</span>
-            </label>
-          </section>
-        ) : null}
-
-        {canInvitePartner ? (
-          <section style={styles.legacyCard}>
-            <p style={styles.legacyTitle}>{t.legacySecondRingTitle}</p>
-            <p style={styles.legacyBody}>{t.legacySecondRingBody}</p>
-            <button type="button" style={styles.ghostBtn} onClick={openInvitePanel}>
-              {t.legacySecondRingCta}
-            </button>
-          </section>
-        ) : null}
-
-        {rings.length > 0 && !canInvitePartner ? (
-          <div style={styles.actions}>
-            <button
-              type="button"
-              onClick={onOpenRingSetup}
-              style={styles.secondaryBtn}
-              disabled={ringLimitReached}
-            >
-              {t.addAnotherRingSecondary || t.openSetup}
-            </button>
-            {ringLimitReached ? (
-              <p style={styles.note}>{getRingSlotLimitUpsellNotice(userEntitlements)}</p>
-            ) : null}
-            {ringLimitReached && onOpenSettings ? (
-              <button type="button" onClick={() => onOpenSettings()} style={styles.ghostBtn}>
-                {t.settingsLink}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <section style={styles.footerEdu}>
-          <p style={styles.footerEduTitle}>{t.ringsFooterTitle}</p>
-          <p style={styles.footerEduBody}>{t.ringsFooterBody}</p>
-          <div style={styles.footerLinkRow}>
-            {onOpenHelp ? (
-              <button type="button" onClick={() => onOpenHelp?.()} style={styles.ghostBtn}>
-                {t.ringsFooterHelpCta}
-              </button>
-            ) : null}
-          </div>
-        </section>
-
-        {revokePrepOpen && pendingRevoke ? (
-          <section style={styles.verifyBox}>
-            <p style={styles.verifyTitle}>{t.revokePrepTitle}</p>
-            <p style={styles.verifyHint}>{t.revokePrepBody}</p>
-            <p style={styles.verifyWarn}>{securityRevokeNote}</p>
-            <div style={styles.actions}>
-              <button type="button" onClick={() => handleContinueRevokePrep()} style={styles.primaryBtn}>
-                {t.revokePrepContinue}
-              </button>
-              <button type="button" onClick={() => handleCancelRevokePrep()} style={styles.secondaryBtn}>
-                {t.revokePrepCancel}
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {verifyOpen ? (
-          <section style={styles.verifyBox}>
-            <p style={styles.verifyTitle}>{t.verifyTitle}</p>
-            <p style={styles.verifyHint}>{t.verifyHint}</p>
-            <p style={styles.verifyWarn}>{t.revokeWarning}</p>
-            <input
-              type="password"
-              value={verifyPassword}
-              onChange={(e) => setVerifyPassword(e.target.value)}
-              placeholder={t.verifyPassword}
-              style={styles.input}
-              autoComplete="current-password"
-            />
-            <input
-              type="text"
-              value={verifyRecovery}
-              onChange={(e) => setVerifyRecovery(e.target.value)}
-              placeholder={t.verifyRecovery}
-              style={styles.input}
-            />
-            {verifyError ? <p style={styles.error}>{verifyError}</p> : null}
-            <div style={styles.actions}>
-              <button
-                type="button"
-                onClick={() => void handleConfirmRevoke()}
-                style={styles.revokeBtn}
-                disabled={Boolean(busyCloudRingId)}
-              >
-                {t.verifyConfirm}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setVerifyOpen(false);
-                  setPendingRevoke(null);
-                }}
-                style={styles.secondaryBtn}
-                disabled={Boolean(busyCloudRingId)}
-              >
-                {t.verifyCancel}
-              </button>
-            </div>
-          </section>
+        {onOpenHelp ? (
+          <button type="button" onClick={() => onOpenHelp?.()} style={styles.ghostBtn}>
+            {t.ringsFooterHelpCta}
+          </button>
         ) : null}
       </section>
 
@@ -627,6 +365,47 @@ const styles = {
     fontSize: 14,
     flexShrink: 0,
     WebkitTapHighlightColor: "transparent",
+  },
+  linkPartnerBtn: {
+    border: `1px solid ${sanctuaryTheme.accent}`,
+    background: `linear-gradient(180deg, ${sanctuaryTheme.accentSoft}, ${sanctuaryTheme.accent})`,
+    color: sanctuaryTheme.ink,
+    borderRadius: sanctuaryTheme.radiusPill,
+    padding: "16px 20px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 17,
+    minHeight: 52,
+    width: "100%",
+    WebkitTapHighlightColor: "transparent",
+  },
+  partnerStatusLinked: {
+    padding: "14px 18px",
+    borderRadius: 14,
+    border: "1px solid rgba(120, 200, 160, 0.45)",
+    background: "rgba(28, 48, 36, 0.45)",
+    color: "#b7f7c8",
+    fontSize: 16,
+    fontWeight: 650,
+    textAlign: "center",
+  },
+  renameBtn: {
+    border: "none",
+    background: "transparent",
+    color: sanctuaryTheme.accentSoft,
+    fontSize: 13,
+    cursor: "pointer",
+    textDecoration: "underline",
+    padding: 4,
+  },
+  inlineLink: {
+    border: "none",
+    background: "transparent",
+    color: sanctuaryTheme.accentSoft,
+    fontSize: 12,
+    cursor: "pointer",
+    textDecoration: "underline",
+    padding: 0,
   },
   brand: {
     margin: 0,

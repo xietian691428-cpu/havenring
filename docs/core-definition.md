@@ -43,6 +43,32 @@ Not a shared-login device and not a “tap ring to open the app” product.
 - **Plus cloud backup** keeps Pair sealed content in sync across devices (primary paid sync path).
 - No multi-person groups, no complex permissions, no shared login.
 
+### Pair join — foolproof UX (shipping target)
+
+Users never choose Join vs Bind, Retire, or invite types. The app picks the path.
+
+**Sender (has a ring, not yet paired):**
+
+1. **Rings** or **Settings → Add Partner** → share link (QR / Copy / Share).
+2. Wait on **Waiting for partner to join…** (Cancel anytime).
+
+**Receiver (opens partner link):**
+
+1. One screen: **Join [Name]'s Haven to share sealed memories with them?**
+2. Sign in if needed (same screen, no steps).
+3. **Join** + device password (security only). **Cancel** exits.
+4. **Has a ring already:** server migrates into partner Haven — **no re-tap**.
+5. **No ring yet:** brief **Hold your ring once** → returns to same Join screen → **Join**.
+6. Success → **You're all set.** → **Open shared memories.**
+
+**Automatic (no user action):**
+
+- Stale local ring cache → **Syncing…** on Rings.
+- Pair complete → **Linked with Partner** status; sharing on by default.
+- Retire / lost ring → **Settings → Session → Advanced** only.
+
+**APIs (unchanged):** `POST /api/haven/invite`, `GET /api/haven/invite/preview`, `POST /api/nfc/bind` + `joinExistingRingToInviteHaven`.
+
 ### Copy and UX
 
 - **Minimal in-flow copy:** ≤1 short sentence per screen for the action at hand.

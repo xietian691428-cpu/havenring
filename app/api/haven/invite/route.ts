@@ -89,6 +89,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { error: cancelStaleErr } = await admin
+      .from("ring_invites")
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq("haven_id", havenId)
+      .is("consumed_at", null)
+      .is("cancelled_at", null);
+    if (cancelStaleErr) {
+      return NextResponse.json({ error: cancelStaleErr.message }, { status: 500 });
+    }
+
     const inviteCode = randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { error: insertErr } = await admin.from("ring_invites").insert({

@@ -1,62 +1,56 @@
 export const BIND_RING_PAGE_EN = {
-  kicker: "Link ring",
+  kicker: "",
   title: "Link your ring",
-  body: "Your ring is for sealing memories.",
-  titleInvite: "Join with your ring",
-  bodyInvite: "Use your own account.",
+  body: "Hold your ring near your phone.",
+  joinPromptTemplate:
+    "Join {name}'s Haven to share sealed memories with them?",
+  joinTapRingHint: "Hold your ring near your phone once.",
+  syncing: "Syncing…",
+  joinCta: "Join",
+  joinCtaSetup: "Create password & join",
+  cancelCta: "Cancel",
+  openSharedMemoriesCta: "Open shared memories",
+  openHavenCta: "Open Haven",
+  inviteExpired: "This link expired — ask for a new one.",
+  inviteComplete: "You're already linked.",
   statusOtherAccount: "This ring belongs to another account.",
-  statusRetired: "This ring cannot be transferred.",
-  statusYours: "This ring is already linked to you.",
-  statusYoursInvite:
-    "This ring is on your account. Finish joining the Pair below — no need to tap again.",
-  joinHavenTitle: "Link second ring",
-  bindRingTitle: "Link ring",
-  bindRingBody: "Sign in, then finish linking.",
-  joinHavenBody: "Use your own account and ring.",
-  joinKicker: "Legacy invite",
-  signInFailed: "Sign-in could not start. Please try again.",
+  statusRetired: "This ring cannot be used again.",
+  statusYours: "This ring is already on your account.",
+  signInFailed: "Sign-in could not start.",
   signInRequired: "Sign in to continue.",
-  verifyDeviceFirst: "Verify this device first.",
-  bindFailed: "Could not bind this ring. Please try again.",
-  alreadyBound: "This ring is already bound.",
-  statusUnlinked: "Ready to bind",
+  bindFailed: "Could not join. Try again.",
+  inviteKeyMissing: "Ask your partner for a fresh link.",
+  alreadyBound: "This ring is already linked.",
+  statusUnlinked: "Ready to link",
   statusCheckFailed: "Could not check ring status",
-  signInRequiredShort: "Sign in required",
   openingSignIn: "Opening…",
   signInApple: "Sign in with Apple",
   signInGoogle: "Sign in with Google",
-  nicknameLabel: "Ring nickname",
-  devicePasswordLabel: "Haven device password",
-  devicePasswordCreateLabel: "Create a Haven device password",
+  nicknameLabel: "Ring name",
+  devicePasswordLabel: "Device password",
+  devicePasswordCreateLabel: "Create a device password",
   devicePasswordConfirmLabel: "Confirm password",
-  devicePasswordCreateHint:
-    "This is separate from your Apple ID. You will use it to protect sealed memories and other sensitive actions on this phone.",
-  devicePasswordEnterHint:
-    "Enter the Haven device password you created on this phone.",
   recoveryCodeLabel: "Recovery code",
-  recoveryOptional: "Only if you forgot your device password",
+  recoveryOptional: "If you forgot your password",
   passwordTooShort: "Password must be at least 6 characters.",
   passwordMismatch: "Passwords do not match.",
   passwordVerifyFailed: "Wrong password. Try again or use your recovery code.",
-  securitySetupFailed: "Could not create your device password. Please try again.",
+  securitySetupFailed: "Could not create your device password.",
   recoveryTitle: "Save your recovery code",
-  recoveryHint:
-    "Store this somewhere safe (Notes, password manager). You need it if you forget your Haven device password.",
-  binding: "Binding…",
-  joinStep1Title: "Step 1 — Sign in",
-  joinStep1Body: "Use your own Apple or Google account — never share logins.",
-  joinStep2Title: "Step 2 — Tap your ring once",
-  joinStep2Body:
-    "After you sign in, hold your ring near the top of your iPhone once. You won't need to tap it again on the next screen.",
-  joinStep2BodySignedIn:
-    "Hold your ring near the top of your iPhone once. When the next screen opens, finish joining — no need to tap again.",
-  joinExistingRingBody:
-    "Your ring is already linked on this account. Join the Pair below — no need to retire or tap again.",
-  joinExistingRingCta: "Join Pair",
-  joinExistingRingCtaSetup: "Create password & join Pair",
-  joinNoRetap: "Ring detected. Finish joining below — no need to tap your ring again.",
-  joinBindCta: "Link my ring",
-  joinBindCtaSetup: "Create password & link ring",
-  createHavenCta: "Link ring",
-  createHavenCtaSetup: "Create password & link ring",
+  recoveryHint: "Store this somewhere safe.",
+  binding: "Joining…",
+  linkRingCta: "Link ring",
+  linkRingCtaSetup: "Create password & link ring",
+  joinErrorSeparateAccount: "Use your own Apple or Google account.",
+  joinErrorGeneric: "Could not join — try again or ask for a new link.",
 } as const;
+
+export function formatJoinPrompt(inviterName: string): string {
+  const name = String(inviterName || "").trim() || "your partner";
+  return BIND_RING_PAGE_EN.joinPromptTemplate.replace("{name}", name);
+}
+
+/** @deprecated use formatJoinPrompt */
+export function formatJoinTitle(inviterName: string): string {
+  return formatJoinPrompt(inviterName);
+}

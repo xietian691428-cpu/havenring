@@ -52,20 +52,36 @@ export async function resolveHavenPairScope(
     return { havenIds: [], ringIds: [], memberCount: maxMembers, pairActive: false };
   }
 
-  const { data: rings, error: ringsErr } = await admin
-    .from("user_nfc_rings")
-    .select("id")
-    .in("haven_id", activeHavenIds)
-    .eq("is_active", true);
+  const ringRowsByHaven = await Promise.all(
+    activeHavenIds.map(async (havenId) => {
+      const { data: rings, error: ringsErr } = await admin
+        .from("user_nfc_rings")
+        .select("id")
+        .eq("haven_id", havenId)
+        .eq("is_active", true);
+      if (ringsErr) throw ringsErr;
+      const memberRow = memberCounts.find((row) => row.havenId === havenId);
+      const memberCount = memberRow?.count ?? 0;
+      const ringIds = (rings ?? []).map((row) => row.id).filter(Boolean) as string[];
+      return { havenId, memberCount, ringIds };
+    })
+  );
 
-  if (ringsErr) throw ringsErr;
-
-  const ringIds = (rings ?? []).map((row) => row.id).filter(Boolean) as string[];
+  const pairedHaven = ringRowsByHaven.find(
+    (row) => row.memberCount >= 2 && row.ringIds.length >= 2
+  );
+  const pairActive = Boolean(pairedHaven);
+  const scopeHavenIds = pairActive
+    ? [pairedHaven!.havenId]
+    : activeHavenIds;
+  const ringIds = (
+    pairActive ? pairedHaven!.ringIds : ringRowsByHaven.flatMap((row) => row.ringIds)
+  ) as string[];
 
   return {
-    havenIds: activeHavenIds,
+    havenIds: scopeHavenIds,
     ringIds,
-    memberCount: maxMembers,
-    pairActive: maxMembers >= 2 && ringIds.length >= 2,
+    memberCount: pairActive ? pairedHaven!.memberCount : maxMembers,
+    pairActive,
   };
 }

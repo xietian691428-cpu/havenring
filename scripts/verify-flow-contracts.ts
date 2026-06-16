@@ -136,7 +136,7 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(inviteStatus, /partnerJoined/);
   assert.match(ringsPage, /PartnerInvitePanel/);
   assert.match(invitePanel, /inviteShareCta/);
-  assert.match(readRepoFile("src/content/ringsPageContent.js"), /Share Invite Link/);
+  assert.match(readRepoFile("src/content/ringsPageContent.js"), /Add Partner/);
   assert.match(bindClient, /\/api\/haven\/invite\/key/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /resolvedUid/);
   assert.match(readRepoFile("lib/partner-invite-pending.ts"), /buildBindRingUrl/);
@@ -150,7 +150,7 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(readRepoFile("lib/nfc-flow-timing.ts"), /withTimeout/);
   assert.match(bindClient, /initializeSecurity/);
   assert.match(bindClient, /joinWithExistingRing/);
-  assert.match(bindClient, /joinBindCtaSetup/);
+  assert.match(readRepoFile("src/content/bindRingPageContent.ts"), /joinCta/);
   assert.match(bindClient, /importHavenKeyFromInvitePackage/);
   assert.match(bindClient, /uploadWrappedHavenKey/);
   assert.match(keyService, /RSA-OAEP/);
@@ -207,7 +207,7 @@ check("ring bind is optional not gated", () => {
   assert.match(router, /\/bind-ring/);
   assert.doesNotMatch(router, /RingSetupWizard/);
   assert.match(wizard, /\/bind-ring/);
-  assert.match(readRepoFile("src/content/havenCopy.ts"), /Your ring is for sealing/);
+  assert.match(readRepoFile("src/content/havenCopy.ts"), /You're all set/);
 });
 
 check("pair model: haven-scoped sync and owner-only seal", () => {
@@ -220,6 +220,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   const ringTap = readRepoFile("app/api/seal/ring-tap/route.ts");
   const ringsPage = readRepoFile("src/views/RingsPage.js");
   const ringsContent = readRepoFile("src/content/ringsPageContent.js");
+  const bindClient = readRepoFile("app/bind-ring/bind-ring-client.tsx");
   const coreDef = readRepoFile("docs/core-definition.md");
   assert.match(access, /userCanSealWithRing/);
   assert.match(access, /userCanReadPairMoments/);
@@ -232,10 +233,20 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
   assert.match(ringsPage, /serverPairActive/);
   assert.match(ringsPage, /listPayload\.pairActive/);
+  assert.match(ringsPage, /linkWithPartnerCta/);
+  assert.match(ringsPage, /canLinkPartner/);
+  assert.match(ringsPage, /pruneStaleLocalRingsFromCloud/);
   assert.match(ringsContent, /pairActiveBanner/);
+  assert.match(ringsContent, /linkedWithPartnerStatus/);
+  assert.match(ringsContent, /syncingRings/);
+  assert.match(readRepoFile("app/api/nfc/list/route.ts"), /ringListHavenIds/);
+  assert.match(readRepoFile("app/api/haven/invite/preview/route.ts"), /inviterName/);
+  assert.match(bindClient, /formatJoinPrompt/);
+  assert.match(bindClient, /resolveInvitePhase/);
   assert.match(readRepoFile("lib/join-pair-haven.ts"), /joinExistingRingToInviteHaven/);
+  assert.match(readRepoFile("src/services/ringRegistryService.js"), /pruneStaleLocalRingsFromCloud/);
   assert.match(readRepoFile("app/api/nfc/bind/route.ts"), /joinExistingRingToInviteHaven/);
-  assert.match(coreDef, /Pair mode/);
+  assert.match(readRepoFile("docs/core-definition.md"), /Pair join — foolproof UX/);
 });
 
 check("cloud backup 50GB quota compress and chunk upload", () => {

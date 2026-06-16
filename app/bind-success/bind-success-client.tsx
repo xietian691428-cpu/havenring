@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { CSSProperties } from "react";
 import { APP_ENTRY_PATH } from "@/lib/site";
 import { BIND_SUCCESS_EN } from "@/src/content/havenCopy";
@@ -19,69 +19,40 @@ export function BindSuccessClient({
   plusTrialActivated,
   showPairPrompt = true,
 }: BindSuccessClientProps) {
-  const [pairChoice, setPairChoice] = useState<"pending" | "yes" | "no">(
-    showPairPrompt ? "pending" : "yes"
-  );
   const sealFirstHref = `${APP_ENTRY_PATH}?open=new&autoSeal=true`;
 
   useEffect(() => {
     if (!showPairPrompt) return;
     setPairSharingEnabled(true);
-  }, [showPairPrompt]);
-
-  function confirmPairShare(enabled: boolean) {
-    setPairSharingEnabled(enabled);
     markPairSharePromptDone();
-    setPairChoice(enabled ? "yes" : "no");
-  }
+  }, [showPairPrompt]);
 
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <p style={styles.kicker}>{BIND_SUCCESS_EN.title}</p>
         <div style={styles.check} aria-hidden>
           ✓
         </div>
         <h1 style={styles.title}>{BIND_SUCCESS_EN.subtitle}</h1>
-        {plusTrialActivated ? (
+        {plusTrialActivated && !showPairPrompt ? (
           <p style={styles.trial}>{BIND_SUCCESS_EN.plusTrialNote}</p>
         ) : null}
-        {pairChoice === "pending" ? (
-          <div style={styles.pairBlock}>
-            <h2 style={styles.pairTitle}>{BIND_SUCCESS_EN.pairPromptTitle}</h2>
-            <p style={styles.pairBody}>{BIND_SUCCESS_EN.pairPromptBody}</p>
-            <div style={styles.pairActions}>
-              <button
-                type="button"
-                style={styles.primaryButton}
-                onClick={() => confirmPairShare(true)}
-              >
-                {BIND_SUCCESS_EN.pairPromptYes}
-              </button>
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={() => confirmPairShare(false)}
-              >
-                {BIND_SUCCESS_EN.pairPromptNo}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {pairChoice === "yes" ? (
-              <p style={styles.pairNote}>{BIND_SUCCESS_EN.pairActiveNote}</p>
-            ) : null}
-            <div style={styles.actions}>
+        <div style={styles.actions}>
+          {showPairPrompt ? (
+            <Link href={APP_ENTRY_PATH} style={styles.primaryButton}>
+              {BIND_SUCCESS_EN.goToMemoriesCta}
+            </Link>
+          ) : (
+            <>
               <Link href={sealFirstHref} style={styles.primaryButton}>
                 {BIND_SUCCESS_EN.sealFirstMemoryCta}
               </Link>
               <Link href={APP_ENTRY_PATH} style={styles.secondaryButton}>
                 {BIND_SUCCESS_EN.goToMemoriesCta}
               </Link>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </section>
     </main>
   );
@@ -106,13 +77,6 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(212, 175, 55, 0.25)",
     background: "linear-gradient(180deg, #141210 0%, #0f0e0c 100%)",
   },
-  kicker: {
-    margin: "0 0 16px",
-    fontSize: 12,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    color: "#d4af37",
-  },
   check: {
     width: 56,
     height: 56,
@@ -125,7 +89,7 @@ const styles: Record<string, CSSProperties> = {
     background: "#d4af37",
   },
   title: {
-    margin: "0 0 12px",
+    margin: "0 0 24px",
     fontSize: 30,
     fontWeight: 600,
     lineHeight: 1.2,
@@ -135,34 +99,6 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.5,
     color: "#b7f7c8",
-  },
-  pairBlock: {
-    marginTop: 8,
-    textAlign: "left",
-  },
-  pairTitle: {
-    margin: "0 0 8px",
-    fontSize: 18,
-    fontWeight: 600,
-    textAlign: "center",
-  },
-  pairBody: {
-    margin: "0 0 16px",
-    fontSize: 14,
-    lineHeight: 1.5,
-    color: "#e8dcd4",
-    textAlign: "center",
-  },
-  pairNote: {
-    margin: "0 0 20px",
-    fontSize: 13,
-    lineHeight: 1.45,
-    color: "#c8b8a8",
-  },
-  pairActions: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
   },
   actions: {
     display: "flex",

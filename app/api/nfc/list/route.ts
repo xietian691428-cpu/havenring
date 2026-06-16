@@ -48,12 +48,33 @@ export async function GET(req: NextRequest) {
 
     const scope = await resolveHavenPairScope(admin, user.id);
 
+    const { data: ownedRings, error: ownedErr } = await admin
+      .from("user_nfc_rings")
+      .select("haven_id, bound_at")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("bound_at", { ascending: false });
+
+    if (ownedErr) {
+      return NextResponse.json({ error: ownedErr.message }, { status: 500 });
+    }
+
+    const ownedRows = ownedRings ?? [];
+    const primaryOwnedHavenId = ownedRows[0]?.haven_id ?? null;
+
+    // One account → one Haven for ring listing. Prefer the haven that holds the user's ring.
+    const ringListHavenIds = primaryOwnedHavenId
+      ? [primaryOwnedHavenId]
+      : scope.pairActive && scope.havenIds[0]
+        ? [scope.havenIds[0]]
+        : havenIds;
+
     const { data, error } = await admin
       .from("user_nfc_rings")
       .select(
         "id, user_id, haven_id, nfc_uid_hash, nickname, bound_at, last_used_at, is_active, created_at, retired_at, retired_reason"
       )
-      .in("haven_id", havenIds)
+      .in("haven_id", ringListHavenIds)
       .eq("is_active", true)
       .order("bound_at", { ascending: false });
 

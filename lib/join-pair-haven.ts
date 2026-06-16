@@ -77,6 +77,7 @@ export async function joinExistingRingToInviteHaven(
       403
     );
   }
+  const inviteHavenId = invite.haven_id;
   if (invite.created_by === userId) {
     throw new JoinPairError(
       "Invite must be accepted on a separate account.",
@@ -152,19 +153,20 @@ export async function joinExistingRingToInviteHaven(
       throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
     }
 
-    const resolved = await resolvePlusForHaven(admin, invite.haven_id);
+    const resolved = await resolvePlusForHaven(admin, invite.haven_id).catch(() => null);
     return {
       havenId: invite.haven_id,
       role: "member",
       ring: activeRing,
       joinedExistingRing: true,
       plusTrialActivated: false,
-      plusTrialEnd: resolved.status.plusTrialEnd,
-      subscription: resolved.status,
+      plusTrialEnd: resolved?.status.plusTrialEnd ?? null,
+      subscription: resolved?.status ?? null,
     };
   }
 
   const soloHavenId = activeRing.haven_id;
+  const ringId = activeRing.id;
 
   const { count: soloMemberCount, error: soloMemberErr } = await admin
     .from("haven_members")
@@ -226,16 +228,31 @@ export async function joinExistingRingToInviteHaven(
     throw new JoinPairError(memberErr.message, "MEMBER_UPSERT_FAILED", 500);
   }
 
+  async function rollbackPartialJoin() {
+    await admin
+      .from("user_nfc_rings")
+      .update({ haven_id: soloHavenId })
+      .eq("id", ringId)
+      .eq("user_id", userId);
+    await admin.from("rings").update({ haven_id: soloHavenId }).eq("id", ringId);
+    await admin
+      .from("haven_members")
+      .delete()
+      .eq("haven_id", inviteHavenId)
+      .eq("user_id", userId);
+  }
+
   const { data: movedRing, error: moveErr } = await admin
     .from("user_nfc_rings")
-    .update({ haven_id: invite.haven_id })
-    .eq("id", activeRing.id)
+    .update({ haven_id: inviteHavenId })
+    .eq("id", ringId)
     .eq("user_id", userId)
     .select(
       "id, user_id, haven_id, nfc_uid_hash, nickname, bound_at, last_used_at, is_active"
     )
     .single();
   if (moveErr || !movedRing) {
+    await rollbackPartialJoin().catch(() => null);
     throw new JoinPairError(
       moveErr?.message || "Could not move ring into partner Haven.",
       "RING_MOVE_FAILED",
@@ -245,9 +262,10 @@ export async function joinExistingRingToInviteHaven(
 
   const { error: mirrorErr } = await admin
     .from("rings")
-    .update({ haven_id: invite.haven_id })
-    .eq("id", activeRing.id);
+    .update({ haven_id: inviteHavenId })
+    .eq("id", ringId);
   if (mirrorErr) {
+    await rollbackPartialJoin().catch(() => null);
     throw new JoinPairError(mirrorErr.message, "RING_MIRROR_FAILED", 500);
   }
 
@@ -257,6 +275,7 @@ export async function joinExistingRingToInviteHaven(
     .eq("haven_id", soloHavenId)
     .eq("user_id", userId);
   if (leaveErr) {
+    await rollbackPartialJoin().catch(() => null);
     throw new JoinPairError(leaveErr.message, "MEMBER_LEAVE_FAILED", 500);
   }
 
@@ -270,7 +289,7 @@ export async function joinExistingRingToInviteHaven(
     throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
   }
 
-  const resolved = await resolvePlusForHaven(admin, invite.haven_id);
+  const resolved = await resolvePlusForHaven(admin, invite.haven_id).catch(() => null);
 
   return {
     havenId: invite.haven_id,
@@ -278,7 +297,7 @@ export async function joinExistingRingToInviteHaven(
     ring: movedRing as ActiveRingRow,
     joinedExistingRing: true,
     plusTrialActivated: false,
-    plusTrialEnd: resolved.status.plusTrialEnd,
-    subscription: resolved.status,
+    plusTrialEnd: resolved?.status.plusTrialEnd ?? null,
+    subscription: resolved?.status ?? null,
   };
 }
