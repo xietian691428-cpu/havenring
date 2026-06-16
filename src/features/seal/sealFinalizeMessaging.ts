@@ -1,11 +1,12 @@
+import { USER_FACING } from "@/lib/user-facing-errors";
+import { SEAL_STAGING_OFFLINE } from "./sealUserMessages";
+
 /** JSON body from POST `/api/seal/finalize` (precheck/commit). */
 export type SealFinalizeResponseBody = {
   ok?: unknown;
   error?: unknown;
   error_code?: unknown;
 };
-
-import { SEAL_STAGING_OFFLINE } from "./sealUserMessages";
 
 const MSG_OFFLINE_PREP = SEAL_STAGING_OFFLINE;
 
@@ -26,26 +27,32 @@ export function userMessageFromFinalizeResponse(
 
   switch (code) {
     case "TICKET_EXPIRED":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "TICKET_ALREADY_USED":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "INVALID_TICKET":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "MISSING_SEAL_DATA":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "DRAFT_SET_MISMATCH":
     case "DRAFT_PAYLOAD_MISMATCH":
     case "SEAL_COMMIT_REJECTED":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
     case "MISSING_DRAFT_PAYLOADS":
-      return "Tap Seal with Ring again, then hold your ring until it finishes.";
+      return USER_FACING.tapRingAgain;
     case "UNAUTHORIZED":
-      return "Sign in, then tap Seal with Ring again.";
+      return USER_FACING.signInContinue;
     default:
-      return apiMsg || fallback;
+      return apiMsg ? userFacingSealApiMessage(apiMsg) : fallback;
   }
 }
 
+function userFacingSealApiMessage(raw: string): string {
+  const text = String(raw || "").trim();
+  if (/offline|network|fetch failed|timed out/i.test(text)) {
+    return USER_FACING.sealSavedLocal;
+  }
+  if (/ticket|draft|tap|ring/i.test(text)) {
+    return USER_FACING.tapRingAgain;
+  }
+  return text.length > 90 ? USER_FACING.tapRingAgain : text;
+}
+
 export function sealFinalizeFetchFailedMessage(): string {
-  return "You're offline — connect, then tap your ring again.";
+  return USER_FACING.sealSavedLocal;
 }

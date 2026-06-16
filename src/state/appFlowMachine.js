@@ -11,9 +11,8 @@ const MAIN_STATES = {
 
 function resolveMainState(ctx) {
   if (!ctx.bootstrapped) return MAIN_STATES.BOOTSTRAP;
-  if (ctx.recoveryErrorType) return MAIN_STATES.RECOVERY;
+  if (ctx.recoveryErrorType === "auth_expired") return MAIN_STATES.RECOVERY;
   if (!ctx.hasSession) return MAIN_STATES.AUTH_GATE;
-  if (ctx.syncing) return MAIN_STATES.SYNC_GATE;
   const needsPwaInstall =
     (ctx.platform === "ios" || ctx.platform === "android") &&
     !ctx.ftuxPwaDone &&
@@ -88,16 +87,17 @@ export function appFlowReducer(state, event) {
     return { ...next, mainState: resolveMainState(next) };
   }
   if (type === "SYNC_HARD_FAILED") {
+    const errorType = String(event.errorType || "");
     const next = {
       ...state,
-      recoveryErrorType: event.errorType || "network",
+      recoveryErrorType: errorType === "auth_expired" ? "auth_expired" : "",
     };
     return { ...next, mainState: resolveMainState(next) };
   }
   if (type === "BIND_FAILED") {
     const next = {
       ...state,
-      recoveryErrorType: "bind_failed",
+      recoveryErrorType: "",
     };
     return { ...next, mainState: resolveMainState(next) };
   }

@@ -17,7 +17,7 @@ export function classifySyncHealth({
     String(syncMeta?.lastFailureCode || "") === "network";
 
   if (hasHashIssue) {
-    return { severity: "hard", reason: "hash_mismatch" };
+    return { severity: "soft", reason: "hash_mismatch" };
   }
   if (hasAuthIssue) {
     return { severity: "hard", reason: "auth_expired" };

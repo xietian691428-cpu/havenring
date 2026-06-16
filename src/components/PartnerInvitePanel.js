@@ -28,6 +28,7 @@ export function PartnerInvitePanel({
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const prepareStartedRef = useRef(false);
+  const inviteErrorRetriesRef = useRef(0);
   const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
@@ -62,6 +63,16 @@ export function PartnerInvitePanel({
     prepareStartedRef.current = true;
     void runPrepare();
   }, [runPrepare]);
+
+  useEffect(() => {
+    if (phase !== "error") return undefined;
+    if (inviteErrorRetriesRef.current >= 2) return undefined;
+    const timer = window.setTimeout(() => {
+      inviteErrorRetriesRef.current += 1;
+      void runPrepare();
+    }, 2000 * (inviteErrorRetriesRef.current + 1));
+    return () => window.clearTimeout(timer);
+  }, [phase, runPrepare]);
 
   const checkStatus = useCallback(async () => {
     if (!inviteCode || !accessToken) return false;
@@ -184,9 +195,6 @@ export function PartnerInvitePanel({
               {phase === "error" ? (
                 <div style={styles.errorBox}>
                   <p style={styles.error}>{error || t.invitePrepareFailed}</p>
-                  <button type="button" onClick={() => void runPrepare()} style={styles.secondaryBtn}>
-                    {t.inviteRetryCta}
-                  </button>
                 </div>
               ) : null}
 

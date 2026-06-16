@@ -8,6 +8,33 @@ export function getRecoveryActionIntent(errorType = "") {
   return "retry_sync";
 }
 
+/** App lifecycle hook: reconcile cloud Pair state with local ring registry. */
+export async function reconcilePairStateOnAppLifecycle() {
+  if (typeof window === "undefined") return null;
+  const { resolvePairState } = await import("@/lib/pair-state-resolver");
+  const { setPairSharingEnabled } = await import("@/src/services/pairSharingService");
+  const { flushOfflineSyncQueue } = await import("@/src/services/offlineSyncQueue");
+  const { getSupabaseBrowserClient } = await import("@/lib/supabase/client");
+
+  const snapshot = await resolvePairState();
+  if (snapshot?.pairActive) {
+    setPairSharingEnabled(true);
+  }
+
+  try {
+    const sb = getSupabaseBrowserClient();
+    const { data } = await sb.auth.getSession();
+    const token = data.session?.access_token || "";
+    if (token) {
+      await flushOfflineSyncQueue(token);
+    }
+  } catch {
+    /* background flush — non-blocking */
+  }
+
+  return snapshot;
+}
+
 export function getFlowPrimaryUi(flowState) {
   if (flowState.mainState === APP_FLOW_MAIN_STATES.AUTH_GATE) {
     return {
@@ -19,10 +46,10 @@ export function getFlowPrimaryUi(flowState) {
   }
   if (flowState.mainState === APP_FLOW_MAIN_STATES.SYNC_GATE) {
     return {
-      title: "Syncing data",
-      body: "Please wait while account and ring data sync completes.",
-      actionLabel: "Retry sync",
-      enforceSingle: true,
+      title: "Syncing…",
+      body: "",
+      actionLabel: "",
+      enforceSingle: false,
     };
   }
   if (flowState.mainState === APP_FLOW_MAIN_STATES.PWA_INSTALL_GATE) {
@@ -45,29 +72,10 @@ export function getFlowPrimaryUi(flowState) {
     };
   }
   if (flowState.mainState === APP_FLOW_MAIN_STATES.RECOVERY) {
-    const errorType = String(flowState.recoveryErrorType || "");
-    const isAuthExpired = errorType === "auth_expired";
-    const isHashMismatch = errorType === "hash_mismatch";
-    const isBindFailed = errorType === "bind_failed";
-    const body = isAuthExpired
-      ? "Session expired. Re-authenticate before continuing."
-      : isHashMismatch
-        ? "Integrity mismatch detected. Rebuild and resync first."
-        : isBindFailed
-          ? "Ring binding failed. Retry binding with secondary verification."
-          : "Network or sync issue detected. Run recovery and retry.";
-    const actionIntent = getRecoveryActionIntent(errorType);
-    const actionLabel = actionIntent === "reauth"
-      ? "Re-authenticate"
-      : actionIntent === "open_ring_setup"
-        ? "Retry ring binding"
-        : actionIntent === "rebuild_and_sync"
-          ? "Rebuild local cache"
-          : "Recover now";
     return {
-      title: "Recovery required",
-      body,
-      actionLabel,
+      title: "Sign in to continue",
+      body: "",
+      actionLabel: "Sign in",
       enforceSingle: true,
     };
   }

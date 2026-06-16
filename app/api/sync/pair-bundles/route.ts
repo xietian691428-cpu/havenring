@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
     if (since) {
       const parsed = Date.parse(since);
       if (Number.isFinite(parsed)) {
-        query = query.gte("created_at", new Date(parsed).toISOString());
+        // Strictly after cursor so failed imports can retry the same bundle.
+        query = query.gt("created_at", new Date(parsed).toISOString());
       }
     }
 

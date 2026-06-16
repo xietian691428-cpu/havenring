@@ -4,6 +4,7 @@ import type { Database } from "@/lib/supabase/types";
 import { hashNfcUidAliases, normalizeNfcUidInput } from "@/lib/nfc-uid";
 import { resolvePlusForHaven } from "@/lib/haven-plus";
 import { getUserSubscriptionStatus } from "@/lib/subscription";
+import { USER_FACING } from "@/lib/user-facing-errors";
 
 type AdminClient = SupabaseClient<Database>;
 
@@ -43,7 +44,166 @@ export type JoinPairSuccess = {
   plusTrialActivated: boolean;
   plusTrialEnd: string | null;
   subscription: Awaited<ReturnType<typeof resolvePlusForHaven>>["status"] | null;
+  alreadyPaired?: boolean;
 };
+
+type InviteRow = {
+  id: string;
+  haven_id: string;
+  created_by: string;
+  expires_at: string;
+  consumed_at: string | null;
+  cancelled_at: string | null;
+};
+
+async function buildJoinSuccess(
+  admin: AdminClient,
+  havenId: string,
+  ring: ActiveRingRow,
+  alreadyPaired = false
+): Promise<JoinPairSuccess> {
+  const resolved = await resolvePlusForHaven(admin, havenId).catch(() => null);
+  return {
+    havenId,
+    role: "member",
+    ring,
+    joinedExistingRing: true,
+    plusTrialActivated: false,
+    plusTrialEnd: resolved?.status.plusTrialEnd ?? null,
+    subscription: resolved?.status ?? null,
+    alreadyPaired,
+  };
+}
+
+async function ensureMemberAndConsumeInvite(
+  admin: AdminClient,
+  invite: InviteRow,
+  userId: string
+) {
+  const { error: memberErr } = await admin.from("haven_members").upsert(
+    {
+      haven_id: invite.haven_id,
+      user_id: userId,
+      role: "member",
+    },
+    { onConflict: "haven_id,user_id" }
+  );
+  if (memberErr) {
+    throw new JoinPairError(memberErr.message, "MEMBER_UPSERT_FAILED", 500);
+  }
+
+  if (invite.consumed_at) {
+    return;
+  }
+
+  const { error: consumeErr } = await admin
+    .from("ring_invites")
+    .update({ consumed_by: userId, consumed_at: new Date().toISOString() })
+    .eq("id", invite.id)
+    .is("consumed_at", null)
+    .is("cancelled_at", null);
+  if (consumeErr) {
+    throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
+  }
+}
+
+async function lookupInviteForJoin(
+  admin: AdminClient,
+  inviteCode: string,
+  userId: string
+): Promise<InviteRow | null> {
+  const inviteHash = sha256(inviteCode);
+  const now = new Date().toISOString();
+
+  const { data: activeInvite, error: activeErr } = await admin
+    .from("ring_invites")
+    .select("id, haven_id, created_by, expires_at, consumed_at, cancelled_at")
+    .eq("invite_hash", inviteHash)
+    .is("consumed_at", null)
+    .is("cancelled_at", null)
+    .gt("expires_at", now)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (activeErr) {
+    throw new JoinPairError(activeErr.message, "INVITE_LOOKUP_FAILED", 500);
+  }
+  if (activeInvite?.haven_id) {
+    return activeInvite as InviteRow;
+  }
+
+  const { data: consumedInvite, error: consumedErr } = await admin
+    .from("ring_invites")
+    .select("id, haven_id, created_by, expires_at, consumed_at, cancelled_at")
+    .eq("invite_hash", inviteHash)
+    .eq("consumed_by", userId)
+    .is("cancelled_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (consumedErr) {
+    throw new JoinPairError(consumedErr.message, "INVITE_LOOKUP_FAILED", 500);
+  }
+  return (consumedInvite as InviteRow | null) ?? null;
+}
+
+async function tryIdempotentPairJoin(
+  admin: AdminClient,
+  userId: string,
+  activeRing: ActiveRingRow,
+  invite: InviteRow | null
+): Promise<JoinPairSuccess | null> {
+  const targetHavenId = invite?.haven_id || activeRing.haven_id;
+  if (!targetHavenId) return null;
+
+  const { data: membership, error: memberErr } = await admin
+    .from("haven_members")
+    .select("id")
+    .eq("haven_id", targetHavenId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (memberErr) {
+    throw new JoinPairError(memberErr.message, "MEMBER_LOOKUP_FAILED", 500);
+  }
+  if (!membership?.id) return null;
+
+  if (activeRing.haven_id !== targetHavenId) {
+    return null;
+  }
+
+  const { count: memberCount, error: memberCountErr } = await admin
+    .from("haven_members")
+    .select("id", { count: "exact", head: true })
+    .eq("haven_id", targetHavenId);
+  if (memberCountErr) {
+    throw new JoinPairError(memberCountErr.message, "PAIR_MEMBER_COUNT_FAILED", 500);
+  }
+
+  const { count: ringCount, error: ringCountErr } = await admin
+    .from("user_nfc_rings")
+    .select("id", { count: "exact", head: true })
+    .eq("haven_id", targetHavenId)
+    .eq("is_active", true);
+  if (ringCountErr) {
+    throw new JoinPairError(ringCountErr.message, "PAIR_RING_COUNT_FAILED", 500);
+  }
+
+  const pairComplete = (memberCount ?? 0) >= 2 && (ringCount ?? 0) >= 2;
+  const inviteConsumedByUser =
+    Boolean(invite?.consumed_at) && invite?.haven_id === targetHavenId;
+
+  if (!pairComplete && !inviteConsumedByUser) {
+    return null;
+  }
+
+  if (invite) {
+    await ensureMemberAndConsumeInvite(admin, invite, userId);
+  }
+
+  return buildJoinSuccess(admin, targetHavenId, activeRing, true);
+}
 
 /**
  * Move the user's solo Haven ring into a partner's Haven via invite.
@@ -55,35 +215,7 @@ export async function joinExistingRingToInviteHaven(
   inviteCode: string,
   rawUid?: string
 ): Promise<JoinPairSuccess> {
-  const inviteHash = sha256(inviteCode);
-  const { data: invite, error: inviteErr } = await admin
-    .from("ring_invites")
-    .select("id, haven_id, created_by, expires_at, consumed_at, cancelled_at")
-    .eq("invite_hash", inviteHash)
-    .is("consumed_at", null)
-    .is("cancelled_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (inviteErr) {
-    throw new JoinPairError(inviteErr.message, "INVITE_LOOKUP_FAILED", 500);
-  }
-  if (!invite?.haven_id) {
-    throw new JoinPairError(
-      "Invite is invalid or expired.",
-      "INVALID_INVITE",
-      403
-    );
-  }
-  if (invite.created_by === userId) {
-    throw new JoinPairError(
-      "Invite must be accepted on a separate account.",
-      "INVITE_REQUIRES_SEPARATE_ACCOUNT",
-      409
-    );
-  }
+  const invite = await lookupInviteForJoin(admin, inviteCode, userId);
 
   const subscription = await getUserSubscriptionStatus(admin, userId).catch(() => null);
   const ringLimit = subscription?.ringLimit ?? 2;
@@ -117,6 +249,26 @@ export async function joinExistingRingToInviteHaven(
     );
   }
 
+  const idempotent = await tryIdempotentPairJoin(admin, userId, activeRing, invite);
+  if (idempotent) {
+    return idempotent;
+  }
+
+  if (!invite?.haven_id) {
+    throw new JoinPairError(
+      "Invite is invalid or expired.",
+      "INVALID_INVITE",
+      403
+    );
+  }
+  if (invite.created_by === userId) {
+    throw new JoinPairError(
+      "Invite must be accepted on a separate account.",
+      "INVITE_REQUIRES_SEPARATE_ACCOUNT",
+      409
+    );
+  }
+
   const normalizedUid = rawUid ? normalizeNfcUidInput(rawUid) : "";
   if (normalizedUid) {
     const uidHashCandidates = hashNfcUidAliases(rawUid!);
@@ -130,38 +282,8 @@ export async function joinExistingRingToInviteHaven(
   }
 
   if (activeRing.haven_id === invite.haven_id) {
-    const { error: memberErr } = await admin.from("haven_members").upsert(
-      {
-        haven_id: invite.haven_id,
-        user_id: userId,
-        role: "member",
-      },
-      { onConflict: "haven_id,user_id" }
-    );
-    if (memberErr) {
-      throw new JoinPairError(memberErr.message, "MEMBER_UPSERT_FAILED", 500);
-    }
-
-    const { error: consumeErr } = await admin
-      .from("ring_invites")
-      .update({ consumed_by: userId, consumed_at: new Date().toISOString() })
-      .eq("id", invite.id)
-      .is("consumed_at", null)
-      .is("cancelled_at", null);
-    if (consumeErr) {
-      throw new JoinPairError(consumeErr.message, "INVITE_CONSUME_FAILED", 500);
-    }
-
-    const resolved = await resolvePlusForHaven(admin, invite.haven_id).catch(() => null);
-    return {
-      havenId: invite.haven_id,
-      role: "member",
-      ring: activeRing,
-      joinedExistingRing: true,
-      plusTrialActivated: false,
-      plusTrialEnd: resolved?.status.plusTrialEnd ?? null,
-      subscription: resolved?.status ?? null,
-    };
+    await ensureMemberAndConsumeInvite(admin, invite, userId);
+    return buildJoinSuccess(admin, invite.haven_id, activeRing);
   }
 
   const soloHavenId = activeRing.haven_id;
@@ -253,10 +375,16 @@ export async function joinExistingRingToInviteHaven(
     .single();
   if (moveErr || !movedRing) {
     await rollbackPartialJoin().catch(() => null);
+    const raw = String(moveErr?.message || "");
+    const code = /ring_binding_is_non_transferable|non_transferable/i.test(raw)
+      ? "RING_NON_TRANSFERABLE"
+      : "RING_MOVE_FAILED";
     throw new JoinPairError(
-      moveErr?.message || "Could not move ring into partner Haven.",
-      "RING_MOVE_FAILED",
-      500
+      code === "RING_NON_TRANSFERABLE"
+        ? USER_FACING.ringCannotUse
+        : "Could not move ring into partner Haven.",
+      code,
+      409
     );
   }
 

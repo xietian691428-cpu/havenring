@@ -137,7 +137,7 @@ check("invite revoke and shared key flows are wired", () => {
   assert.match(ringsPage, /PartnerInvitePanel/);
   assert.match(invitePanel, /inviteShareCta/);
   assert.match(readRepoFile("src/content/ringsPageContent.js"), /Add Partner/);
-  assert.match(bindClient, /\/api\/haven\/invite\/key/);
+  assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /\/api\/haven\/invite\/key/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /resolvedUid/);
   assert.match(readRepoFile("lib/partner-invite-pending.ts"), /buildBindRingUrl/);
   const sealNavigate = readRepoFile("src/features/seal/sealNavigate.ts");
@@ -180,7 +180,10 @@ check("start page: seal + bind only; daily_access is ack not unlock", () => {
   assert.doesNotMatch(readRepoFile("app/bind-ring/bind-ring-client.tsx"), /ActionStepCountdown/);
   assert.match(readRepoFile("src/components/IndeterminateStepStatus.tsx"), /IndeterminateStepStatus/);
   assert.match(startClient, /readingCountdownPrefix/);
-  assert.match(startClient, /retryCountdownPrefix/);
+  assert.match(startClient, /tapRingAgainCta/);
+  assert.match(startClient, /postSdmResolveWithRetry/);
+  assert.doesNotMatch(startClient, /failedRetryReady/);
+  assert.doesNotMatch(startClient, /retryCountdownPrefix/);
   assert.match(timing, /minFailedBeforeRetryMs/);
   assert.doesNotMatch(startClient, /window\.location\.reload\(\)/);
 });
@@ -228,14 +231,22 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(syncMoments, /resolveHavenPairScope/);
   assert.match(syncMoments, /pair_shared_sealed/);
   assert.match(pairBundles, /pair-bundles/);
+  assert.match(pairBundles, /\.from\("moments"\)/);
+  assert.doesNotMatch(pairBundles, /pair_bundles/);
+  assert.match(readRepoFile("supabase/migrations/0025_pair_sync_moments_hardening.sql"), /moments_haven_sealed_created_idx/);
   assert.match(pairSync, /syncPairMemoriesFromServer/);
   assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
   assert.match(ringsPage, /serverPairActive/);
-  assert.match(ringsPage, /listPayload\.pairActive/);
+  assert.match(ringsPage, /resolvePairState/);
+  assert.match(ringsPage, /syncPending/);
   assert.match(ringsPage, /linkWithPartnerCta/);
   assert.match(ringsPage, /canLinkPartner/);
-  assert.match(ringsPage, /pruneStaleLocalRingsFromCloud/);
+  assert.match(readRepoFile("lib/pair-state-resolver.ts"), /pruneStaleLocalRingsFromCloud/);
+  assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /runNfcEntryOrchestrator/);
+  assert.match(readRepoFile("lib/join-pair-haven.ts"), /tryIdempotentPairJoin/);
+  assert.match(readRepoFile("src/services/ringSyncService.js"), /pruneStaleLocalRingsFromCloud/);
+  assert.match(readRepoFile("src/state/appFlowSelectors.js"), /reconcilePairStateOnAppLifecycle/);
   assert.match(ringsContent, /pairActiveBanner/);
   assert.match(ringsContent, /linkedWithPartnerStatus/);
   assert.match(ringsContent, /syncingRings/);
@@ -247,6 +258,18 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/services/ringRegistryService.js"), /pruneStaleLocalRingsFromCloud/);
   assert.match(readRepoFile("app/api/nfc/bind/route.ts"), /joinExistingRingToInviteHaven/);
   assert.match(readRepoFile("docs/core-definition.md"), /Pair join — foolproof UX/);
+  assert.match(readRepoFile("lib/user-facing-errors.ts"), /userFacingBindError/);
+  assert.match(readRepoFile("lib/nfc-sdm-resolve-client.ts"), /postSdmResolveWithRetry/);
+  assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /ensureInviteKeyPackageAuto/);
+  assert.match(bindClient, /ensureInviteKeyPackageAuto/);
+  assert.match(bindClient, /buildStartBindInviteHref/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /postSdmResolveWithRetry/);
+  assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);
+  assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /enqueueSealFinalize/);
+  assert.match(readRepoFile("src/features/seal/sealFinalizeSafe.ts"), /enqueueSealFinalize/);
+  assert.match(readRepoFile("docs/core-definition.md"), /Background fault tolerance/);
+  assert.match(readRepoFile("src/state/recoveryPolicy.js"), /severity: "soft", reason: "hash_mismatch"/);
+  assert.doesNotMatch(readRepoFile("src/views/TimelinePage.js"), /onClick=\{\(\) => void onResyncNow/);
 });
 
 check("cloud backup 50GB quota compress and chunk upload", () => {

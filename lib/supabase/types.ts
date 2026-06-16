@@ -37,6 +37,25 @@ export type MomentRow = {
   release_at: string | null;
 };
 
+/**
+ * Row shape returned by GET /api/sync/pair-bundles.
+ * Backed by `moments` (sealed + haven_id). `pair_bundles` is an optional
+ * read-only SQL VIEW for ops — not a separate storage table.
+ */
+export type PairBundleRow = {
+  id: string;
+  ring_id: string;
+  haven_id: string | null;
+  created_by_user_id: string | null;
+  encrypted_vault: string;
+  iv: string;
+  is_sealed: boolean;
+  created_at: string;
+  release_at: string | null;
+  content_sha256: string | null;
+  owned_by_you?: boolean;
+};
+
 export type UserNfcRingRow = {
   id: string;
   user_id: string;

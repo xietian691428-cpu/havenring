@@ -192,13 +192,8 @@ export function TimelinePage({
         ) : null}
 
         {integrityWarning ? (
-          <section style={styles.syncBanner} role="alert">
-            <p style={styles.syncBannerText}>{t.integrityBanner}</p>
-            {onResyncNow ? (
-              <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
-                {t.resyncNow}
-              </button>
-            ) : null}
+          <section style={styles.syncBanner} role="status" aria-live="polite">
+            <p style={styles.syncBannerText}>{t.syncingBackground}</p>
           </section>
         ) : null}
 
@@ -232,23 +227,8 @@ export function TimelinePage({
                 ? t.syncIssueOffline
                 : syncIssues.includes("auth")
                   ? t.syncIssueAuth
-                  : syncIssues.includes("hash")
-                    ? t.syncIssueHash
-                    : t.syncIssueSync}
+                  : t.syncingBackground}
             </p>
-            {onResyncNow && networkOnline && !syncIssues.includes("auth") ? (
-              <>
-                <p style={styles.syncBannerHint}>{t.syncIssueAutoRetryHint}</p>
-                <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
-                  {t.resyncNow}
-                </button>
-              </>
-            ) : null}
-            {onResyncNow && syncIssues.includes("auth") ? (
-              <button type="button" onClick={() => void onResyncNow()} style={styles.syncRetryBtn}>
-                {t.resyncNow}
-              </button>
-            ) : null}
           </section>
         ) : null}
         {error ? (

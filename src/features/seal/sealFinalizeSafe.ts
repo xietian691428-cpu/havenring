@@ -1,13 +1,20 @@
 import { clearSealPrepState, finalizeSealChainFromSdmResponse } from "./sealFlowClient";
 import type { FinalizeSealWithTicketOptions } from "./sealTypes";
 import { SEAL_SUCCESS_PATH } from "./sealTypes";
+import {
+  USER_FACING,
+  shouldQueueSealFailure,
+  userFacingSealError,
+} from "@/lib/user-facing-errors";
+import { enqueueSealFinalize } from "@/src/services/offlineSyncQueue";
 
 export type FinalizeSealResult =
   | { ok: true; kind: "success" }
-  | { ok: false; kind: "error"; message: string };
+  | { ok: false; kind: "error"; message: string; queued?: boolean };
 
 /**
  * Finalize after ring tap without crashing the whole app on unhandled throws.
+ * Network failures enqueue for background retry with calm local-save copy.
  */
 export async function finalizeSealChainFromSdmResponseSafe(
   opts: FinalizeSealWithTicketOptions
@@ -16,11 +23,23 @@ export async function finalizeSealChainFromSdmResponseSafe(
     await finalizeSealChainFromSdmResponse(opts);
     return { ok: true, kind: "success" };
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Seal could not finish. Your draft is still saved locally.";
-    return { ok: false, kind: "error", message };
+    if (shouldQueueSealFailure(error)) {
+      await enqueueSealFinalize({
+        sealTicket: opts.sealTicket,
+        draftIds: opts.draftIds,
+      });
+      return {
+        ok: false,
+        kind: "error",
+        message: USER_FACING.sealSavedLocal,
+        queued: true,
+      };
+    }
+    return {
+      ok: false,
+      kind: "error",
+      message: userFacingSealError(error),
+    };
   }
 }
 

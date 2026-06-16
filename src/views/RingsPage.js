@@ -3,7 +3,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { RINGS_PAGE_CONTENT } from "../content/ringsPageContent";
 import {
   getBoundRings,
-  pruneStaleLocalRingsFromCloud,
   RING_COLOR_OPTIONS,
   updateRingCloudMetadata,
 } from "../services/ringRegistryService";
@@ -16,6 +15,7 @@ import { getFreeEntitlements } from "../services/subscriptionService";
 import { PartnerInvitePanel } from "../components/PartnerInvitePanel";
 import { setPairSharingEnabled } from "../services/pairSharingService";
 import { consumeOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
+import { resolvePairState } from "@/lib/pair-state-resolver";
 
 export function RingsPage({
   locale = "en",
@@ -30,7 +30,7 @@ export function RingsPage({
   const [refreshing, setRefreshing] = useState(false);
   const [havens, setHavens] = useState([]);
   const [serverPairActive, setServerPairActive] = useState(false);
-  const [syncError, setSyncError] = useState("");
+  const [syncPending, setSyncPending] = useState(false);
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
 
   const rings = useMemo(() => {
@@ -40,7 +40,7 @@ export function RingsPage({
     const yourLabel = t.yourRingLabel || "Your ring";
 
     // Logged-in: server list is authoritative once loaded (even when empty).
-    if (!loading && !syncError) {
+    if (!loading && !syncPending) {
       if (cloud.length === 0) {
         return [];
       }
@@ -100,7 +100,7 @@ export function RingsPage({
       ownedByYou: ring.ownedByYou !== false,
       nickname: ring.nickname || ring.label,
     }));
-  }, [localRings, cloudRings, loading, syncError, t.partnerRingLabel, t.yourRingLabel]);
+  }, [localRings, cloudRings, loading, syncPending, t.partnerRingLabel, t.yourRingLabel]);
 
   function colorHex(key) {
     return RING_COLOR_OPTIONS.find((c) => c.key === key)?.hex ?? sanctuaryTheme.accent;
@@ -113,7 +113,7 @@ export function RingsPage({
     } else {
       setRefreshing(true);
     }
-    setSyncError("");
+    setSyncPending(false);
     try {
       const sb = getSupabaseBrowserClient();
       const {
@@ -126,39 +126,25 @@ export function RingsPage({
         return;
       }
 
-      const listRes = await fetch("/api/nfc/list", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+      const snapshot = await resolvePairState({
+        accessToken: session.access_token,
+        force: true,
       });
-      const listPayload = await listRes.json().catch(() => ({}));
-      if (!listRes.ok) {
-        throw new Error(listPayload.error || "list_failed");
-      }
-      const cloudRows = Array.isArray(listPayload.rings) ? listPayload.rings : [];
-      pruneStaleLocalRingsFromCloud(cloudRows);
-      setCloudRings(cloudRows);
-      setHavens(Array.isArray(listPayload.havens) ? listPayload.havens : []);
-      setServerPairActive(Boolean(listPayload.pairActive));
 
-      const localNow = getBoundRings();
-      for (const ring of localNow) {
-        if (!ring?.cloudRingId) continue;
-        const match = cloudRows.find((row) => row.id === ring.cloudRingId);
-        if (!match) continue;
-        updateRingCloudMetadata(ring.uidKey, {
-          cloudRingId: match.id,
-          havenId: match.haven_id || null,
-          cloudBoundAt: match.bound_at || null,
-          cloudLastUsedAt: match.last_used_at || null,
-        });
+      if (!snapshot.ok) {
+        setSyncPending(true);
+        return;
+      }
+
+      setCloudRings(snapshot.cloudRings);
+      setHavens(snapshot.havens);
+      setServerPairActive(snapshot.pairActive);
+      if (snapshot.pairActive) {
+        setPairSharingEnabled(true);
       }
       setLocalRings(getBoundRings());
-    } catch (error) {
-      setCloudRings([]);
-      const msg = error instanceof Error ? error.message : "";
-      setSyncError(msg || "list_failed");
+    } catch {
+      setSyncPending(true);
     } finally {
       if (!silent) {
         setLoading(false);
@@ -215,7 +201,15 @@ export function RingsPage({
   const canLinkPartner = ownedCloudRingCount === 1 && !serverPairActive && !ringLimitReached;
   const pairActive = serverPairActive;
   const needsAutoRefresh =
-    !loading && !pairActive && (cloudRings.length >= 2 || (syncError && localRings.length >= 2));
+    !loading && !pairActive && cloudRings.length >= 2;
+
+  useEffect(() => {
+    if (!syncPending) return undefined;
+    const id = window.setInterval(() => {
+      void loadCloudRings({ silent: true });
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [syncPending]);
 
   useEffect(() => {
     if (!needsAutoRefresh) return undefined;
@@ -244,8 +238,11 @@ export function RingsPage({
           ) : null}
         </header>
 
-        {loading ? <p style={styles.note}>{t.syncLoading}</p> : null}
-        {refreshing ? <p style={styles.note}>{t.syncingRings}</p> : null}
+        {(loading || refreshing || syncPending) ? (
+          <p style={styles.note} role="status">
+            {t.syncingRings}
+          </p>
+        ) : null}
 
         {!loading && pairActive ? (
           <div style={styles.partnerStatusLinked} role="status">
@@ -257,15 +254,6 @@ export function RingsPage({
           <button type="button" style={styles.linkPartnerBtn} onClick={openInvitePanel}>
             {t.linkWithPartnerCta}
           </button>
-        ) : null}
-
-        {syncError ? (
-          <p style={styles.note}>
-            {t.syncFailed}{" "}
-            <button type="button" style={styles.inlineLink} onClick={() => void loadCloudRings()}>
-              {t.retrySync}
-            </button>
-          </p>
         ) : null}
 
         {rings.length === 0 && !loading ? (

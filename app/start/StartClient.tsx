@@ -11,6 +11,13 @@ import {
   withTimeout,
 } from "@/lib/nfc-flow-timing";
 import { hasSdmSearch } from "@/lib/nfc-intent";
+import { runNfcEntryOrchestrator } from "@/lib/nfc-entry-orchestrator";
+import {
+  listenForRingTapWithRetry,
+  postSdmResolveWithRetry,
+} from "@/lib/nfc-sdm-resolve-client";
+import { USER_FACING, userFacingMessageFromUnknown } from "@/lib/user-facing-errors";
+import { readPendingPartnerInviteCode } from "@/lib/partner-invite-pending";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isPermanentSupabaseSession } from "@/lib/appAuthGate";
 import { usePlatform } from "@/src/hooks/usePlatform";
@@ -40,7 +47,6 @@ import {
   isRingTapSealLandingPage,
   isSealFlowArmed,
   isSealWaitSearch,
-  listenForSealRingTapOnce,
   markSealWaitTabActive,
   readFreshSealNfcTapHref,
   recordSealNfcTapHref,
@@ -140,10 +146,9 @@ export default function StartClient() {
   const [sealRemoteFinishing, setSealRemoteFinishing] = useState(false);
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
   const [ringTapError, setRingTapError] = useState("");
-  const [failedRetryReady, setFailedRetryReady] = useState(false);
   const resolveStartedAtRef = useRef(0);
   const nfcResolveInFlightRef = useRef(false);
-  const failedStartedAtRef = useRef(0);
+  const entryOrchestratorDoneRef = useRef(false);
   const [nfcUiTick, setNfcUiTick] = useState(0);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
@@ -169,6 +174,51 @@ export default function StartClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (entryOrchestratorDoneRef.current) return;
+    entryOrchestratorDoneRef.current = true;
+
+    let active = true;
+    void (async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      const search = window.location.search || "";
+      const params = new URLSearchParams(search);
+      const plan = await runNfcEntryOrchestrator({
+        surface: "start",
+        search,
+        uid: params.get("uid") || "",
+        inviteCode: params.get("invite") || readPendingPartnerInviteCode(),
+        accessToken: data.session?.access_token || "",
+      });
+      if (!active) return;
+
+      if (plan.shouldEnablePairSharing) {
+        const { setPairSharingEnabled } = await import(
+          "@/src/services/pairSharingService"
+        );
+        setPairSharingEnabled(true);
+      }
+
+      if (
+        plan.bindRingHref &&
+        isPermanentSupabaseSession(data.session ?? null) &&
+        plan.pendingInvite &&
+        plan.hasOwnedCloudRing
+      ) {
+        const uid = params.get("uid") || "";
+        if (uid || plan.bindRingHref.includes("uid=")) {
+          window.location.assign(plan.bindRingHref);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const search = window.location.search || "";
     if (isSealNfcLaunchSearch(search)) return;
     if (isSealWaitSearch(search)) return;
@@ -178,20 +228,6 @@ export default function StartClient() {
     if (claim) return;
     window.location.replace("/app");
   }, []);
-
-  useEffect(() => {
-    if (sdmState.kind !== "failed") {
-      setFailedRetryReady(false);
-      failedStartedAtRef.current = 0;
-      return;
-    }
-    failedStartedAtRef.current = Date.now();
-    const timer = window.setTimeout(
-      () => setFailedRetryReady(true),
-      NFC_FLOW_TIMING.minFailedBeforeRetryMs
-    );
-    return () => window.clearTimeout(timer);
-  }, [sdmState]);
 
   const needsSealLeaveDouble =
     sealLeaveGuard &&
@@ -203,7 +239,6 @@ export default function StartClient() {
     sealLeaveGuard &&
     isSealFlowArmed() &&
     (sdmState.kind === "resolving" ||
-      sdmState.kind === "failed" ||
       (sdmState.kind === "ready" && sdmState.scene === "seal_confirmation"));
 
   const sealArmed = isSealFlowArmed();
@@ -227,7 +262,6 @@ export default function StartClient() {
   }, [sealClockTick, showSealCountdown, sealWaitMode]);
 
   const showResolveCountdown =
-    sdmState.kind === "failed" ||
     sdmState.kind === "resolving" ||
     nfcSealBootstrapping ||
     (sealWaitMode && sealRemainingMs > 0);
@@ -241,15 +275,6 @@ export default function StartClient() {
   function renderResolveCountdown() {
     void nfcUiTick;
     const now = Date.now();
-
-    if (sdmState.kind === "failed" && failedStartedAtRef.current > 0 && !failedRetryReady) {
-      const endsAt = failedStartedAtRef.current + NFC_FLOW_TIMING.minFailedBeforeRetryMs;
-      if (visibleSecondsRemaining(endsAt, now) > 0) {
-        return (
-          <NfcSyncedCountdown label={nfcHoldCopy.retryCountdownPrefix} endsAt={endsAt} />
-        );
-      }
-    }
 
     if (sealWaitMode && sealRemainingMs > 0) {
       return (
@@ -294,16 +319,14 @@ export default function StartClient() {
     setRingTapError("");
     setNfcSealScanBusy(true);
     try {
-      const result = await listenForSealRingTapOnce(window.location.origin);
+      const result = await listenForRingTapWithRetry(window.location.origin);
       if (!result.ok) {
         setRingTapError(result.message);
         return;
       }
       window.location.replace(sealRelayNavigateHref(result.target));
     } catch (error) {
-      setRingTapError(
-        error instanceof Error ? error.message : "Could not read the ring."
-      );
+      setRingTapError(userFacingMessageFromUnknown(error, USER_FACING.tapRingAgain));
     } finally {
       setNfcSealScanBusy(false);
     }
@@ -407,11 +430,11 @@ export default function StartClient() {
     if (sdmState.kind === "failed") {
       return {
         title: nfcHoldCopy.failedTitle,
-        subtitle: sdmState.message || nfcHoldCopy.failedSubtitle,
+        subtitle: sdmState.message || USER_FACING.tapRingAgain,
         showGuide: true,
         stepLine: nfcHoldCopy.waitStep,
-        button: failedRetryReady ? nfcHoldCopy.tapRingAgainCta : undefined,
-        onAction: failedRetryReady ? retrySdmTouch : null,
+        button: nfcHoldCopy.tapRingAgainCta,
+        onAction: retrySdmTouch,
       };
     }
     if (sdmState.kind === "resolving" || showSealConnecting || nfcSealBootstrapping) {
@@ -610,10 +633,9 @@ export default function StartClient() {
         setNfcSealBootstrapping(false);
         setSdmState({
           kind: "failed",
-          message:
-            "This is taking too long. Return to your memory, tap Seal with Ring once, then hold your ring here until it finishes.",
+          message: USER_FACING.tapRingAgain,
         });
-        setNotice(START_PAGE_EN.ringVerifyFailedNotice);
+        setNotice(USER_FACING.tapRingAgain);
       }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
       try {
         syncHydrateSealPrepFromStorage();
@@ -645,9 +667,7 @@ export default function StartClient() {
             await sleepMs(400);
           }
           if (!sealLockId) {
-            throw new Error(
-              "Another tab is still finishing a seal. Close extra Haven tabs, then tap Seal with Ring and try once more."
-            );
+            throw new Error(USER_FACING.tapRingAgain);
           }
         }
 
@@ -685,13 +705,11 @@ export default function StartClient() {
           () => controller.abort(),
           NFC_FLOW_TIMING.sdmResolveFetchTimeoutMs
         );
-        let res: Response;
+        let resolveResult: Awaited<ReturnType<typeof postSdmResolveWithRetry>>;
         try {
-          res = await fetch("/api/rings/sdm/resolve", {
-            method: "POST",
+          resolveResult = await postSdmResolveWithRetry({
             headers,
-            signal: controller.signal,
-            body: JSON.stringify({
+            body: {
               uid,
               ctr,
               cmac,
@@ -699,48 +717,34 @@ export default function StartClient() {
               context,
               draft_ids: pendingSealDraftIds,
               ...(pendingSealStagingId ? { staging_id: pendingSealStagingId } : {}),
-            }),
+            },
+            signal: controller.signal,
           });
-        } catch (error) {
-          const aborted = controller.signal.aborted;
-          throw new Error(
-            aborted
-              ? "Ring verification timed out. Check your network, then tap Seal with Ring and try once more."
-              : error instanceof Error
-                ? error.message
-                : "We could not finish that tap."
-          );
         } finally {
           window.clearTimeout(fetchTimeoutId);
         }
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
-        const data = await res.json().catch(() => ({}));
-        if (myGen !== nfcSdmResolveGenerationRef.current) return;
-        if (!res.ok || data?.valid !== true) {
-          const apiCode = typeof data?.code === "string" ? data.code : "";
-          const apiError = typeof data?.error === "string" ? data.error : "";
+
+        if (!resolveResult.ok) {
           await sleepMs(
             Math.max(0, NFC_FLOW_TIMING.minResolvingMs - (Date.now() - resolveStartedAtRef.current))
           );
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
-          if (
-            apiCode === "SDM_REPLAY_DETECTED" ||
-            /already used/i.test(apiError)
-          ) {
+          if (resolveResult.apiCode === "SDM_REPLAY_DETECTED") {
             setSdmState({
               kind: "failed",
-              message: nfcHoldCopy.replaySubtitle,
+              message: USER_FACING.tapRingAgain,
             });
-            setNotice(nfcHoldCopy.replaySubtitle);
+            setNotice(USER_FACING.tapRingAgain);
             return;
           }
-          throw new Error(apiError || "We could not finish that tap.");
+          throw new Error(resolveResult.message);
         }
+
+        const data = resolveResult.data;
         const scene: StartSdmScene = isSdmScene(data.scene) ? data.scene : "daily_access";
         if (scene === "daily_access" && pendingSealTapRef.current) {
-          throw new Error(
-            "Seal did not start. Return to your memory, tap Seal with Ring, then hold your ring on this screen until it finishes."
-          );
+          throw new Error(USER_FACING.tapRingAgain);
         }
         const viewerUserId = sessionData.session?.user?.id ?? null;
         await sleepMs(
@@ -761,8 +765,8 @@ export default function StartClient() {
         setSdmState({
           kind: "ready",
           scene,
-          ringId: data.ringId || null,
-          ownerId: data.ownerId || null,
+          ringId: typeof data.ringId === "string" ? data.ringId : null,
+          ownerId: typeof data.ownerId === "string" ? data.ownerId : null,
           viewerUserId,
           currentUserIsHavenMember: Boolean(data.currentUserIsHavenMember),
           resolvedUid: resolvedUid || null,
@@ -790,7 +794,7 @@ export default function StartClient() {
               accessToken,
             }),
             NFC_FLOW_TIMING.sdmResolveFetchTimeoutMs,
-            "Sealing timed out. Your draft is still saved — tap Seal with Ring and try once more."
+            USER_FACING.sealSavedLocal
           );
           if (!finalizeResult.ok) {
             throw new Error(finalizeResult.message);
@@ -802,13 +806,12 @@ export default function StartClient() {
           Math.max(0, NFC_FLOW_TIMING.minResolvingMs - (Date.now() - resolveStartedAtRef.current))
         );
         if (myGen !== nfcSdmResolveGenerationRef.current) return;
-        const baseMsg =
-          error instanceof Error ? error.message : "We could not finish that tap.";
+        const baseMsg = userFacingMessageFromUnknown(error, USER_FACING.tapRingAgain);
         setSdmState({
           kind: "failed",
           message: baseMsg,
         });
-        setNotice(START_PAGE_EN.ringVerifyFailedNotice);
+        setNotice(USER_FACING.tapRingAgain);
       } finally {
         window.clearTimeout(watchdogId);
         if (myGen === nfcSdmResolveGenerationRef.current) {

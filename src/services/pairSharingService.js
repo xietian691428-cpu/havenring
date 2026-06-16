@@ -94,6 +94,17 @@ export async function importPairBundle(bundle, currentUserId) {
 
   const existing = await getMemoryById(payload.id);
   if (existing) {
+    if (payload.fromPartner) {
+      const localEmpty =
+        !String(existing.story || "").trim() &&
+        !(Array.isArray(existing.photo) && existing.photo.length) &&
+        !(Array.isArray(existing.attachments) && existing.attachments.length);
+      if (!existing.coreLocked || localEmpty || existing.fromPartner) {
+        await saveMemory(payload, { allowCoreEdit: true });
+        return { imported: true, reason: "updated_partner" };
+      }
+      return { imported: false, reason: "exists" };
+    }
     if (existing.coreLocked) {
       return { imported: false, reason: "exists" };
     }
@@ -143,10 +154,12 @@ export async function syncPairMemoriesFromServer(accessToken) {
   for (const bundle of bundles) {
     if (!bundle?.encrypted_vault) continue;
     const result = await importPairBundle(bundle, currentUserId);
-    if (result.imported) imported += 1;
-    const created = bundle.created_at || "";
-    if (created && (!newestAt || Date.parse(created) > Date.parse(newestAt))) {
-      newestAt = created;
+    if (result.imported) {
+      imported += 1;
+      const created = bundle.created_at || "";
+      if (created && (!newestAt || Date.parse(created) > Date.parse(newestAt))) {
+        newestAt = created;
+      }
     }
   }
 
@@ -159,6 +172,7 @@ export async function syncPairMemoriesFromServer(accessToken) {
     imported,
     pairActive: Boolean(json.pairActive),
     total: bundles.length,
+    bundlesSeen: bundles.length,
   };
 }
 

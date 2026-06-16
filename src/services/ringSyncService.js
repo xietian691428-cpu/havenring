@@ -16,6 +16,7 @@ import {
 import {
   getActiveRingOrFirst,
   getBoundRings,
+  pruneStaleLocalRingsFromCloud,
   upsertBoundRingByUidKey,
   updateRingCloudMetadata,
 } from "./ringRegistryService";
@@ -155,6 +156,9 @@ export async function syncRingScopedCaches(options = {}) {
     console.warn("[haven-ring] ring list sync skipped:", cloudRingResult.reason);
   }
   const cloudRings = cloudRingResult.rows || [];
+  if (cloudRingResult.ok) {
+    pruneStaleLocalRingsFromCloud(cloudRings);
+  }
   const recoveredLocalRings = reconcileLocalRingsFromCloud(cloudRings);
   const localRingsAll = getBoundRings();
   const active = getActiveRingOrFirst();
@@ -268,12 +272,20 @@ export async function syncRingScopedCaches(options = {}) {
 
   let pairImported = 0;
   let pairActive = false;
+  let pairBundlesSeen = 0;
   try {
     const pairOutcome = await syncPairMemoriesFromServer(accessToken);
     pairImported = Number(pairOutcome?.imported || 0);
     pairActive = Boolean(pairOutcome?.pairActive);
+    pairBundlesSeen = Number(pairOutcome?.bundlesSeen ?? pairOutcome?.total ?? 0);
   } catch (error) {
     console.warn("[haven-ring] pair memory import skipped:", error);
+    try {
+      const { enqueuePairSyncRetry } = await import("./offlineSyncQueue");
+      await enqueuePairSyncRetry();
+    } catch {
+      /* ignore */
+    }
   }
 
   return {
@@ -286,5 +298,6 @@ export async function syncRingScopedCaches(options = {}) {
     recoveredLocalRings,
     pairImported,
     pairActive,
+    pairBundlesSeen,
   };
 }

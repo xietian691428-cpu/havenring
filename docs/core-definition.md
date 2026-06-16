@@ -69,6 +69,30 @@ Users never choose Join vs Bind, Retire, or invite types. The app picks the path
 
 **APIs (unchanged):** `POST /api/haven/invite`, `GET /api/haven/invite/preview`, `POST /api/nfc/bind` + `joinExistingRingToInviteHaven`.
 
+### Background fault tolerance (shipping target)
+
+Users never see technical errors, manual Retry buttons, or blocking recovery gates for normal network/cache issues.
+
+**Automatic (background only):**
+
+- **Pair / ring sync** — `resolvePairState()` on app open and foreground; stale local rings pruned; auto-retry with backoff.
+- **Seal offline queue** — finalize failures enqueue in `offlineSyncQueue`; flushed on reconnect and lifecycle hooks.
+- **Pair import queue** — failed pair bundle import re-queued and retried silently.
+- **Hash / integrity drift** — reconciled in background; Timeline shows **Syncing in the background.** at most.
+- **Multi-tab Seal** — other tab finishing shows **Finishing…**; cross-tab lock handled internally.
+
+**User-visible copy (≤1 sentence):**
+
+| Situation | Copy |
+|-----------|------|
+| Seal saved locally, network down | Saved on this device — we'll sync when you're back online. |
+| NFC / tap retry | Hold your ring near your phone once more. |
+| Cross-tab Seal in progress | Finishing… |
+| Background sync | Syncing in the background. |
+| Session truly expired | Sign in to continue. |
+
+**Only blocks main flow:** missing OAuth session (sign-in gate). Everything else is background + calm status lines.
+
 ### Copy and UX
 
 - **Minimal in-flow copy:** ≤1 short sentence per screen for the action at hand.

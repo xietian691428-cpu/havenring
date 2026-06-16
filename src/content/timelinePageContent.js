@@ -56,8 +56,7 @@ const EN = {
     "Try once more with a steady ring touch. If it still fails, check network and ring binding status.",
   cloudSourceNote:
     "Local-first on this device. Cloud backup and sharing are Plus and explicit.",
-  integrityMismatch:
-    "Detected data inconsistency. Cloud is the source of truth, please resync now.",
+  integrityMismatch: "Syncing in the background.",
   resyncNow: "Resync",
   resyncing: "Resyncing…",
   cloudSectionTitle: "Cloud entries pending local reconciliation",
@@ -73,12 +72,12 @@ const EN = {
   syncIssueAuth: "Authentication expired. Sign in again to continue syncing.",
   syncIssueOffline:
     "You're offline. Your memories stay on this device and sync when you're back online.",
-  syncIssueSync: "Couldn't sync right now. We'll retry automatically.",
+  syncIssueSync: "Syncing in the background.",
+  syncingBackground: "Syncing in the background.",
   flowCardCta: "Continue",
-  integrityBanner: "Data consistency issue detected. Cloud is the source of truth — tap Resync.",
-  syncIssueAutoRetryHint: "Tap Resync to try now.",
-  syncIssueHash:
-    "Some entries failed integrity checks (hash mismatch). Keep cloud as source and resync.",
+  integrityBanner: "Syncing in the background.",
+  syncIssueAutoRetryHint: "",
+  syncIssueHash: "Syncing in the background.",
   syncStatusLabel: "Sync status",
   syncStatusRunning: "Running…",
   syncStatusIdle: "Idle",

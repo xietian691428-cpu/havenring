@@ -15,6 +15,9 @@ import {
 import { getActiveRingUidKey } from "../services/ringRegistryService";
 import { classifySyncFailure } from "@/lib/sync-failure";
 import { classifySyncHealth } from "../state/recoveryPolicy";
+import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
+import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -215,18 +218,25 @@ export function useMemories() {
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
     setSyncing(true);
     try {
-      const outcome = await syncRingScopedCaches();
-      if (outcome?.mismatch) {
-        setIntegrityWarning("detected_hash_mismatch");
-      } else {
-        setIntegrityWarning("");
+      try {
+        const sb = getSupabaseBrowserClient();
+        const { data: sessionData } = await sb.auth.getSession();
+        const accessToken = sessionData.session?.access_token || "";
+        if (accessToken) {
+          await flushOfflineSyncQueue(accessToken);
+        }
+      } catch {
+        /* background flush */
       }
+
+      const outcome = await syncRingScopedCaches();
+      setIntegrityWarning("");
       setCloudPlaceholders(
         Array.isArray(outcome?.cloudPlaceholders) ? outcome.cloudPlaceholders : []
       );
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      if (outcome?.pairImported > 0) {
+      if (outcome?.pairImported > 0 || outcome?.pairBundlesSeen > 0) {
         await refresh();
       }
       if (outcome?.ok && !issues.length) {
@@ -293,12 +303,19 @@ export function useMemories() {
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
     setSyncing(true);
     try {
-      const outcome = await syncRingScopedCaches({ targetUidKey });
-      if (outcome?.mismatch) {
-        setIntegrityWarning("detected_hash_mismatch");
-      } else {
-        setIntegrityWarning("");
+      try {
+        const sb = getSupabaseBrowserClient();
+        const { data: sessionData } = await sb.auth.getSession();
+        const accessToken = sessionData.session?.access_token || "";
+        if (accessToken) {
+          await flushOfflineSyncQueue(accessToken);
+        }
+      } catch {
+        /* background flush */
       }
+
+      const outcome = await syncRingScopedCaches({ targetUidKey });
+      setIntegrityWarning("");
       setCloudPlaceholders((prev) => {
         const keep = prev.filter((row) => row.uidKey !== targetUidKey);
         const next = Array.isArray(outcome?.cloudPlaceholders)
@@ -308,7 +325,7 @@ export function useMemories() {
       });
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      if (outcome?.pairImported > 0) {
+      if (outcome?.pairImported > 0 || outcome?.pairBundlesSeen > 0) {
         await refresh();
       }
       if (outcome?.ok && !issues.length) {
@@ -404,8 +421,22 @@ export function useMemories() {
   }, [refresh]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void reconcilePairStateOnAppLifecycle().then(() => {
+        void runSync();
+      });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [runSync]);
+
+  useEffect(() => {
     const runSoon = () => {
-      void runSync();
+      void reconcilePairStateOnAppLifecycle().finally(() => {
+        void runSync();
+      });
     };
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
       window.requestIdleCallback(runSoon, { timeout: 2000 });

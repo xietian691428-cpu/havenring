@@ -31,6 +31,18 @@ import {
   uploadWrappedHavenKey,
 } from "@/src/services/havenKeyService";
 import { readPendingPartnerInviteCode } from "@/lib/partner-invite-pending";
+import {
+  buildStartBindInviteHref,
+  ensureInviteKeyPackageAuto,
+  repairPairStateAfterFailure,
+} from "@/lib/nfc-entry-orchestrator";
+import { listenForRingTapWithRetry } from "@/lib/nfc-sdm-resolve-client";
+import { resolvePairState } from "@/lib/pair-state-resolver";
+import {
+  USER_FACING,
+  userFacingBindError,
+  userFacingMessageFromUnknown,
+} from "@/lib/user-facing-errors";
 import { NfcHoldGuide } from "@/src/components/NfcHoldGuide";
 import { IndeterminateStepStatus } from "@/src/components/IndeterminateStepStatus";
 import { ACTION_STEP_TIMING } from "@/lib/nfc-flow-timing";
@@ -140,6 +152,11 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   const [existingRingCheckDone, setExistingRingCheckDone] = useState(false);
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [invitePreviewDone, setInvitePreviewDone] = useState(false);
+  const [needRingListening, setNeedRingListening] = useState(false);
+  const [showRecoveryField, setShowRecoveryField] = useState(false);
+
+  const webNfcAvailable =
+    typeof window !== "undefined" && "NDEFReader" in window;
 
   useEffect(() => {
     if (!inviteCode || typeof window === "undefined") return;
@@ -177,28 +194,15 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const keyTokenFromUrl = readInviteKeyTokenFromLocation();
       if (!keyTokenFromUrl) return;
 
-      try {
-        const res = await fetch(
-          `/api/haven/invite/key?invite=${encodeURIComponent(inviteCode)}&kt=${encodeURIComponent(keyTokenFromUrl)}`
-        );
-        const payload = (await res.json().catch(() => ({}))) as {
-          keyPackage?: string;
-          error?: string;
-        };
-        if (!active) return;
-        if (!res.ok || !payload.keyPackage) {
-          setMessage(
-            payload.error || copy.inviteKeyMissing
-          );
-          return;
-        }
-        savePendingPartnerInvite(inviteCode, payload.keyPackage, keyTokenFromUrl);
-        setInviteKeyPackage(payload.keyPackage);
-      } catch {
-        if (active) {
-          setMessage(copy.inviteKeyMissing);
-        }
-      }
+      const keyPackage = await ensureInviteKeyPackageAuto({
+        inviteCode,
+        keyToken: keyTokenFromUrl,
+        cachedPackage: fromStorage,
+      });
+      if (!active) return;
+      if (!keyPackage) return;
+      savePendingPartnerInvite(inviteCode, keyPackage, keyTokenFromUrl);
+      setInviteKeyPackage(keyPackage);
     })();
 
     return () => {
@@ -289,14 +293,12 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     queueMicrotask(() => setExistingRingCheckDone(false));
     void (async () => {
       try {
-        const res = await fetch("/api/nfc/list", {
-          headers: { Authorization: `Bearer ${session!.access_token}` },
+        const snapshot = await resolvePairState({
+          accessToken: session!.access_token,
+          force: true,
         });
-        const payload = (await res.json().catch(() => ({}))) as {
-          rings?: Array<{ ownedByYou?: boolean }>;
-        };
         if (!active) return;
-        const owned = (payload.rings ?? []).filter((ring) => ring.ownedByYou);
+        const owned = snapshot.cloudRings.filter((ring) => ring.ownedByYou);
         setHasExistingRing(owned.length >= 1);
       } catch {
         if (active) setHasExistingRing(false);
@@ -308,6 +310,44 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       active = false;
     };
   }, [inviteCode, session]);
+
+  useEffect(() => {
+    if (!inviteCode || !invitePreviewDone) return undefined;
+    if (authState === "checking" || authState === "signed_out") return undefined;
+    if (!existingRingCheckDone || hasExistingRing || uid) return undefined;
+
+    let active = true;
+    const origin = canonicalAuthOriginFromLocation();
+
+    void (async () => {
+      setNeedRingListening(true);
+      if (webNfcAvailable) {
+        const result = await listenForRingTapWithRetry(origin);
+        if (!active) return;
+        if (result.ok) {
+          window.location.replace(result.target);
+          return;
+        }
+      }
+      const startHref = buildStartBindInviteHref(origin, inviteCode);
+      if (active) {
+        window.location.replace(startHref);
+      }
+    })();
+
+    return () => {
+      active = false;
+      setNeedRingListening(false);
+    };
+  }, [
+    inviteCode,
+    invitePreviewDone,
+    authState,
+    existingRingCheckDone,
+    hasExistingRing,
+    uid,
+    webNfcAvailable,
+  ]);
 
   useEffect(() => {
     if (!uid) {
@@ -458,13 +498,13 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     const joinWithExistingRing = Boolean(inviteCode && (hasExistingRing || uidLink === "yours"));
     if (!uid && !joinWithExistingRing) {
       setBindState("error");
-      setMessage("Missing ring ID. Tap the ring again and retry.");
+      setMessage(USER_FACING.tapRingAgain);
       return;
     }
     const activeSession = session;
     if (!isPermanentSupabaseSession(activeSession)) {
       setAuthState("signed_out");
-      setMessage(copy.signInRequired);
+      setMessage(USER_FACING.signInRequired);
       return;
     }
 
@@ -482,15 +522,31 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
       const secondaryToken = await fetchSecondaryVerificationToken(
         activeSession.access_token
       );
-      const pendingKeyPackage = inviteCode
+      let pendingKeyPackage = inviteCode
         ? inviteKeyPackage || readPendingInviteKeyPackage()
         : "";
-      const joinWithExistingRing = Boolean(
+      const joinWithExistingRingNow = Boolean(
         inviteCode && (hasExistingRing || uidLink === "yours")
       );
-      if (inviteCode && !pendingKeyPackage && !joinWithExistingRing) {
+      if (inviteCode && !pendingKeyPackage && !joinWithExistingRingNow) {
+        pendingKeyPackage =
+          (await ensureInviteKeyPackageAuto({
+            inviteCode,
+            keyToken: readInviteKeyTokenFromLocation(),
+            cachedPackage: pendingKeyPackage,
+          })) || "";
+        if (pendingKeyPackage) {
+          savePendingPartnerInvite(
+            inviteCode,
+            pendingKeyPackage,
+            readInviteKeyTokenFromLocation()
+          );
+          setInviteKeyPackage(pendingKeyPackage);
+        }
+      }
+      if (inviteCode && !pendingKeyPackage && !joinWithExistingRingNow) {
         setBindState("error");
-        setMessage(copy.inviteKeyMissing);
+        setMessage(USER_FACING.inviteInvalid);
         return;
       }
 
@@ -511,8 +567,13 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
 
       const payload = (await response.json().catch(() => ({}))) as BindResponse;
       if (!response.ok) {
+        await repairPairStateAfterFailure(activeSession.access_token);
         setBindState("error");
-        setMessage(mapJoinErrorMessage(payload, response.status));
+        setMessage(
+          userFacingBindError(payload, response.status, {
+            inviteFlow: Boolean(inviteCode),
+          })
+        );
         return;
       }
 
@@ -546,10 +607,15 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
         window.location.href = `/bind-success?trial=${trial}&role=${role}&pair=1`;
       }, ACTION_STEP_TIMING.bindSuccessRedirectMs);
     } catch (error) {
+      await repairPairStateAfterFailure(
+        isPermanentSupabaseSession(session) ? session!.access_token : undefined
+      );
       setBindState("error");
-      const msg = error instanceof Error ? error.message : "";
       setMessage(
-        msg === "Verification failed." ? copy.passwordVerifyFailed : copy.bindFailed
+        userFacingMessageFromUnknown(
+          error,
+          inviteCode ? USER_FACING.joinFailed : USER_FACING.bindFailed
+        )
       );
     }
   }
@@ -569,12 +635,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
   }
 
   function mapJoinErrorMessage(payload: BindResponse, status: number): string {
-    if (payload.code === "INVITE_REQUIRES_SEPARATE_ACCOUNT") {
-      return copy.joinErrorSeparateAccount;
-    }
-    if (payload.error) return payload.error;
-    if (status === 409) return copy.alreadyBound;
-    return inviteCode ? copy.joinErrorGeneric : copy.bindFailed;
+    return userFacingBindError(payload, status, { inviteFlow: Boolean(inviteCode) });
   }
 
   function resolveInvitePhase():
@@ -629,16 +690,33 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
             />
           </label>
         ) : (
-          <label style={styles.label}>
-            {copy.recoveryCodeLabel}
-            <input
-              type="text"
-              value={recoveryCode}
-              onChange={(event) => setRecoveryCode(event.target.value)}
-              style={styles.input}
-              placeholder={copy.recoveryOptional}
-            />
-          </label>
+          <>
+            {!showRecoveryField ? (
+              <button
+                type="button"
+                onClick={() => setShowRecoveryField(true)}
+                style={styles.forgotLink}
+              >
+                {copy.forgotPasswordLink}
+              </button>
+            ) : (
+              <label style={styles.label}>
+                {copy.recoveryCodeLabel}
+                <input
+                  type="text"
+                  value={recoveryCode}
+                  onChange={(event) => setRecoveryCode(event.target.value)}
+                  style={styles.input}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  inputMode="text"
+                  placeholder={copy.recoveryOptional}
+                />
+              </label>
+            )}
+          </>
         )}
       </>
     );
@@ -648,10 +726,10 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     const phase = resolveInvitePhase();
     const blockedMessage =
       uidLink === "other"
-        ? copy.statusOtherAccount
+        ? USER_FACING.ringOtherAccount
         : uidLink === "retired"
-          ? copy.statusRetired
-          : copy.joinErrorGeneric;
+          ? USER_FACING.ringCannotUse
+          : USER_FACING.joinFailed;
 
     return (
       <main style={styles.page}>
@@ -700,7 +778,9 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
           ) : null}
           {phase === "need_ring" ? (
             <div style={styles.stack}>
-              <p style={styles.body}>{copy.joinTapRingHint}</p>
+              <p style={styles.body}>
+                {needRingListening ? USER_FACING.listeningRing : copy.joinTapRingHint}
+              </p>
               <NfcHoldGuide platform={platform} />
               <button type="button" onClick={goToApp} style={styles.secondaryButton}>
                 {copy.cancelCta}
@@ -998,6 +1078,16 @@ const styles: Record<string, CSSProperties> = {
     gap: 7,
     color: "#d9c3b3",
     fontSize: 13,
+  },
+  forgotLink: {
+    alignSelf: "start",
+    border: "none",
+    background: "transparent",
+    color: "#c4956a",
+    fontSize: 13,
+    padding: 0,
+    cursor: "pointer",
+    textDecoration: "underline",
   },
   input: {
     borderRadius: 12,

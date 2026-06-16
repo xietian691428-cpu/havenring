@@ -474,18 +474,14 @@ export function AppRouter() {
 
   useEffect(() => {
     dispatchFlow({ type: "SYNC_STATUS", syncing: Boolean(syncing) });
-    if (syncHealth?.severity === "hard") {
-      if (
-        syncHealth.reason === "auth_expired" &&
-        supabaseSession &&
-        !sessionLoading
-      ) {
+    if (syncHealth?.severity === "hard" && syncHealth.reason === "auth_expired") {
+      if (supabaseSession && !sessionLoading) {
         dispatchFlow({ type: "SYNC_RECOVERED" });
         return;
       }
       dispatchFlow({
         type: "SYNC_HARD_FAILED",
-        errorType: syncHealth.reason ?? "auth_expired",
+        errorType: "auth_expired",
       });
       return;
     }

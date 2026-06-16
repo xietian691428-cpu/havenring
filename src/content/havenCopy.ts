@@ -650,7 +650,7 @@ export const START_PAGE_EN = {
   openAppCta: "Open App",
   sealWaitTitle: "Tap your ring",
   sealWaitBody: "",
-  sealWaitFinishingTitle: "Sealing your memory...",
+  sealWaitFinishingTitle: "Finishing…",
   sealWaitFinishingBody: "",
   sealWaitBackToEdit: "Back to memory",
   sealWaitSignedInNote: "",
