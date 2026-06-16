@@ -77,7 +77,6 @@ export async function joinExistingRingToInviteHaven(
       403
     );
   }
-  const inviteHavenId = invite.haven_id;
   if (invite.created_by === userId) {
     throw new JoinPairError(
       "Invite must be accepted on a separate account.",
@@ -166,7 +165,6 @@ export async function joinExistingRingToInviteHaven(
   }
 
   const soloHavenId = activeRing.haven_id;
-  const ringId = activeRing.id;
 
   const { count: soloMemberCount, error: soloMemberErr } = await admin
     .from("haven_members")
@@ -232,20 +230,20 @@ export async function joinExistingRingToInviteHaven(
     await admin
       .from("user_nfc_rings")
       .update({ haven_id: soloHavenId })
-      .eq("id", ringId)
+      .eq("id", activeRing.id)
       .eq("user_id", userId);
-    await admin.from("rings").update({ haven_id: soloHavenId }).eq("id", ringId);
+    await admin.from("rings").update({ haven_id: soloHavenId }).eq("id", activeRing.id);
     await admin
       .from("haven_members")
       .delete()
-      .eq("haven_id", inviteHavenId)
+      .eq("haven_id", invite.haven_id)
       .eq("user_id", userId);
   }
 
   const { data: movedRing, error: moveErr } = await admin
     .from("user_nfc_rings")
-    .update({ haven_id: inviteHavenId })
-    .eq("id", ringId)
+    .update({ haven_id: invite.haven_id })
+    .eq("id", activeRing.id)
     .eq("user_id", userId)
     .select(
       "id, user_id, haven_id, nfc_uid_hash, nickname, bound_at, last_used_at, is_active"
@@ -262,8 +260,8 @@ export async function joinExistingRingToInviteHaven(
 
   const { error: mirrorErr } = await admin
     .from("rings")
-    .update({ haven_id: inviteHavenId })
-    .eq("id", ringId);
+    .update({ haven_id: invite.haven_id })
+    .eq("id", activeRing.id);
   if (mirrorErr) {
     await rollbackPartialJoin().catch(() => null);
     throw new JoinPairError(mirrorErr.message, "RING_MIRROR_FAILED", 500);

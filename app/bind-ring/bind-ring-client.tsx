@@ -391,10 +391,7 @@ export function BindRingClient({ initialUid, initialInviteCode = "" }: BindRingC
     };
 
     if (!uid && cloudMeta.cloudRingId) {
-      const match = getBoundRings().find(
-        (ring: { cloudRingId?: string; uidKey?: string }) =>
-          ring.cloudRingId === cloudMeta.cloudRingId
-      );
+      const match = getBoundRings().find((ring) => ring.cloudRingId === cloudMeta.cloudRingId);
       if (match?.uidKey) {
         updateRingCloudMetadata(match.uidKey, cloudMeta);
         return;
