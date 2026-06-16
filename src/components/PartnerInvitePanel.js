@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { InviteQrCode } from "@/src/components/InviteQrCode";
 import { sanctuaryBackgroundStyle, sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { shareInviteLink, canNativeShare } from "@/lib/shareInviteLink";
@@ -27,6 +28,11 @@ export function PartnerInvitePanel({
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
   const prepareStartedRef = useRef(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const runPrepare = useCallback(async () => {
     setPhase("preparing");
@@ -153,108 +159,116 @@ export function PartnerInvitePanel({
         ? t.inviteCopyLinkCta
         : t.inviteShareCta;
 
-  return (
-    <div style={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="partner-invite-title">
-      <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
-        <section style={styles.shell}>
-          <header style={styles.header}>
-            <button type="button" onClick={() => onClose?.()} style={styles.backBtn}>
-              {t.inviteBackCta}
-            </button>
-          </header>
-
-          <div style={styles.hero}>
-            <h1 id="partner-invite-title" style={styles.title}>
-              {t.invitePanelTitle}
-            </h1>
-            {t.invitePanelSubtitle ? (
-              <p style={styles.subtitle}>{t.invitePanelSubtitle}</p>
-            ) : null}
-          </div>
-
-          {phase === "preparing" ? <p style={styles.note}>{t.inviteCreating}</p> : null}
-
-          {phase === "error" ? (
-            <div style={styles.errorBox}>
-              <p style={styles.error}>{error || t.invitePrepareFailed}</p>
-              <button type="button" onClick={() => void runPrepare()} style={styles.secondaryBtn}>
-                {t.inviteRetryCta}
-              </button>
-            </div>
-          ) : null}
-
-          {phase === "ready" && inviteUrl ? (
-            <>
-              <InviteQrCode value={inviteUrl} size={220} style={styles.qrWrap} />
-
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  onClick={() => (showCopyPrimary ? void handleCopyFallback() : void handleShare())}
-                  disabled={shareState === "busy"}
-                  style={styles.primaryBtn}
-                >
-                  {shareLabel}
+  return portalReady
+    ? createPortal(
+        <div style={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="partner-invite-title">
+          <main style={{ ...styles.page, ...sanctuaryBackgroundStyle() }}>
+            <section style={styles.shell}>
+              <header style={styles.header}>
+                <button type="button" onClick={() => onClose?.()} style={styles.backBtn}>
+                  {t.inviteBackCta}
                 </button>
-                {!showCopyPrimary ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyFallback()}
-                    disabled={shareState === "busy"}
-                    style={styles.secondaryBtn}
-                  >
-                    {t.inviteCopyLinkCta}
-                  </button>
+              </header>
+
+              <div style={styles.hero}>
+                <h1 id="partner-invite-title" style={styles.title}>
+                  {t.invitePanelTitle}
+                </h1>
+                {t.invitePanelSubtitle ? (
+                  <p style={styles.subtitle}>{t.invitePanelSubtitle}</p>
                 ) : null}
               </div>
 
-              {waiting && !partnerJoined ? (
-                <p style={styles.waitingLine} role="status">
-                  {t.inviteWaitingTitle}
-                </p>
-              ) : null}
+              {phase === "preparing" ? <p style={styles.note}>{t.inviteCreating}</p> : null}
 
-              {partnerJoined ? (
-                <div style={styles.successBox} role="status">
-                  <p style={styles.successTitle}>{t.invitePartnerJoinedTitle}</p>
-                  <button type="button" onClick={() => onClose?.()} style={styles.primaryBtn}>
-                    {t.inviteDoneCta}
+              {phase === "error" ? (
+                <div style={styles.errorBox}>
+                  <p style={styles.error}>{error || t.invitePrepareFailed}</p>
+                  <button type="button" onClick={() => void runPrepare()} style={styles.secondaryBtn}>
+                    {t.inviteRetryCta}
                   </button>
                 </div>
               ) : null}
 
-              {shareState === "copied" && !waiting ? (
-                <p style={styles.note}>{t.inviteLinkCopied}</p>
+              {phase === "ready" && inviteUrl ? (
+                <>
+                  <div style={styles.qrWrap}>
+                    <InviteQrCode value={inviteUrl} size={220} />
+                  </div>
+
+                  <div style={styles.actions}>
+                    <button
+                      type="button"
+                      onClick={() => (showCopyPrimary ? void handleCopyFallback() : void handleShare())}
+                      disabled={shareState === "busy"}
+                      style={styles.primaryBtn}
+                    >
+                      {shareLabel}
+                    </button>
+                    {!showCopyPrimary ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyFallback()}
+                        disabled={shareState === "busy"}
+                        style={styles.secondaryBtn}
+                      >
+                        {t.inviteCopyLinkCta}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {waiting && !partnerJoined ? (
+                    <p style={styles.waitingLine} role="status">
+                      {t.inviteWaitingTitle}
+                    </p>
+                  ) : null}
+
+                  {partnerJoined ? (
+                    <div style={styles.successBox} role="status">
+                      <p style={styles.successTitle}>{t.invitePartnerJoinedTitle}</p>
+                      <button type="button" onClick={() => onClose?.()} style={styles.primaryBtn}>
+                        {t.inviteDoneCta}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {shareState === "copied" && !waiting ? (
+                    <p style={styles.note}>{t.inviteLinkCopied}</p>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => void handleRevoke()}
+                    disabled={revokeBusy || partnerJoined}
+                    style={styles.ghostBtn}
+                  >
+                    {revokeBusy ? t.inviteRevoking : t.revokeInvite}
+                  </button>
+                </>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => void handleRevoke()}
-                disabled={revokeBusy || partnerJoined}
-                style={styles.ghostBtn}
-              >
-                {revokeBusy ? t.inviteRevoking : t.revokeInvite}
-              </button>
-            </>
-          ) : null}
-
-          {error && phase === "ready" ? <p style={styles.error}>{error}</p> : null}
-        </section>
-      </main>
-    </div>
-  );
+              {error && phase === "ready" ? <p style={styles.error}>{error}</p> : null}
+            </section>
+          </main>
+        </div>,
+        document.body
+      )
+    : null;
 }
 
 const styles = {
   overlay: {
     position: "fixed",
     inset: 0,
-    zIndex: 1200,
-    overflow: "auto",
+    zIndex: 9999,
+    overflowY: "auto",
+    overflowX: "hidden",
     WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
   },
   page: {
-    minHeight: "100vh",
+    minHeight: "100dvh",
+    boxSizing: "border-box",
     padding:
       "max(16px, env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom))",
     color: sanctuaryTheme.cream,
@@ -299,6 +313,7 @@ const styles = {
     justifySelf: "center",
     width: "100%",
     maxWidth: 280,
+    overflow: "visible",
   },
   actions: {
     display: "grid",

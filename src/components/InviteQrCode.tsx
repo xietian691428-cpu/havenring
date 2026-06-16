@@ -35,15 +35,24 @@ export function InviteQrCode({ value, size = 220, style }: InviteQrCodeProps) {
 
   if (!value) return null;
 
+  const framePadding = 16;
+  const frameSize = size + framePadding * 2;
+
   return (
     <div
       style={{
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        minWidth: frameSize,
+        minHeight: frameSize,
+        padding: framePadding,
         borderRadius: 20,
         background: "#f8efe7",
         border: "1px solid rgba(217, 166, 122, 0.45)",
+        overflow: "visible",
         ...style,
       }}
       aria-hidden={!dataUrl}
@@ -52,15 +61,23 @@ export function InviteQrCode({ value, size = 220, style }: InviteQrCodeProps) {
         <img
           src={dataUrl}
           alt=""
-          width={size}
-          height={size}
-          style={{ display: "block", borderRadius: 8 }}
+          style={{
+            display: "block",
+            width: size,
+            height: size,
+            maxWidth: "100%",
+            flexShrink: 0,
+            borderRadius: 8,
+            objectFit: "contain",
+          }}
         />
       ) : (
         <div
           style={{
             width: size,
             height: size,
+            maxWidth: "100%",
+            flexShrink: 0,
             borderRadius: 8,
             background: "rgba(27, 20, 17, 0.06)",
           }}
