@@ -11,12 +11,18 @@ export type ServerMomentDraft = {
   releaseAt: number;
 };
 
-/** Decode seal_finalize_atomic vault (base64 JSON draft). */
+function decodeBase64Utf8(base64: string): string {
+  const binary = atob(String(base64 || "").trim());
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/** Decode seal_finalize_atomic vault (base64 UTF-8 JSON draft). */
 export function decodeServerMomentVault(encryptedVault: string): ServerMomentDraft | null {
   const raw = String(encryptedVault || "").trim();
   if (!raw) return null;
   try {
-    const json = atob(raw);
+    const json = decodeBase64Utf8(raw);
     const parsed = JSON.parse(json) as Record<string, unknown>;
     const id = String(parsed.id || "").trim();
     if (!id) return null;

@@ -237,6 +237,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(pairSync, /syncPairMemoriesFromServer/);
   assert.match(pairSync, /normalizePhotosForStorage/);
   assert.match(pairSync, /photosUpgraded/);
+  assert.match(readRepoFile("lib/pair-sharing.ts"), /TextDecoder/);
   assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
   assert.match(ringsPage, /serverPairActive/);
