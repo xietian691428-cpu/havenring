@@ -1,4 +1,6 @@
 import { getTimelineThumbCacheMax, getTimelineThumbMaxDim } from "@/lib/timeline-ios-guard";
+import { runTimelineDecodeTask } from "@/lib/timeline-decode-queue";
+import { dataUrlToTimelineThumbBlob } from "@/lib/timeline-media-decode";
 import {
   readPersistedTimelineThumb,
   writePersistedTimelineThumb,
@@ -47,47 +49,13 @@ function rememberBlobUrl(memoryId: string, blob: Blob): string {
   return url;
 }
 
-async function dataUrlToLowResBlob(dataUrl: string, maxDim: number): Promise<Blob | null> {
-  if (typeof document === "undefined") return null;
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("thumb-decode-failed"));
-    el.src = dataUrl;
-  });
-  const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
-  const width = Math.max(1, Math.round(img.width * ratio));
-  const height = Math.max(1, Math.round(img.height * ratio));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    canvas.width = 0;
-    canvas.height = 0;
-    return null;
-  }
-  ctx.drawImage(img, 0, 0, width, height);
-  return new Promise((resolve) => {
-    canvas.toBlob(
-      (blob) => {
-        canvas.width = 0;
-        canvas.height = 0;
-        resolve(blob);
-      },
-      "image/jpeg",
-      0.72
-    );
-  });
-}
-
 /**
  * Resolve a low-res timeline thumbnail object URL.
- * Order: in-memory → IndexedDB persisted JPEG → canvas decode from source.
+ * Order: in-memory → IndexedDB persisted JPEG → queued decode from source blob.
  */
 export async function acquireTimelineThumbUrl(
   memoryId: string,
-  loader: () => Promise<string | null>,
+  loader: () => Promise<Blob | null>,
   opts: TimelineThumbAcquireOpts = {}
 ): Promise<string | null> {
   const memoryUpdatedAt = Number(opts.memoryUpdatedAt || 0);
@@ -101,20 +69,18 @@ export async function acquireTimelineThumbUrl(
   const pending = inflight.get(memoryId);
   if (pending) return pending;
 
-  const task = (async () => {
+  const task = runTimelineDecodeTask(async () => {
     const persisted = await readPersistedTimelineThumb(memoryId, memoryUpdatedAt);
     if (persisted) {
       return rememberBlobUrl(memoryId, persisted);
     }
 
-    const dataUrl = await loader();
-    if (!dataUrl) return null;
-    const blob = await dataUrlToLowResBlob(dataUrl, getTimelineThumbMaxDim());
-    if (!blob) return null;
+    const sourceBlob = await loader();
+    if (!sourceBlob) return null;
 
-    void writePersistedTimelineThumb(memoryId, memoryUpdatedAt, blob);
-    return rememberBlobUrl(memoryId, blob);
-  })();
+    void writePersistedTimelineThumb(memoryId, memoryUpdatedAt, sourceBlob);
+    return rememberBlobUrl(memoryId, sourceBlob);
+  });
 
   inflight.set(memoryId, task);
   try {
@@ -122,6 +88,22 @@ export async function acquireTimelineThumbUrl(
   } finally {
     inflight.delete(memoryId);
   }
+}
+
+/** Persist a generated thumb after save/import so timeline never decodes full photos. */
+export async function warmTimelineThumbFromDataUrl(
+  memoryId: string,
+  memoryUpdatedAt: number,
+  dataUrl: string
+): Promise<void> {
+  if (!memoryId || !dataUrl) return;
+  await runTimelineDecodeTask(async () => {
+    const existing = await readPersistedTimelineThumb(memoryId, memoryUpdatedAt);
+    if (existing) return;
+    const blob = await dataUrlToTimelineThumbBlob(dataUrl, getTimelineThumbMaxDim());
+    if (!blob) return;
+    await writePersistedTimelineThumb(memoryId, memoryUpdatedAt, blob);
+  });
 }
 
 export function releaseTimelineThumbUrl(memoryId: string): void {
@@ -148,4 +130,5 @@ export function releaseAllTimelineThumbUrls(): void {
   for (const id of [...cache.keys()]) {
     releaseTimelineThumbUrl(id);
   }
+  inflight.clear();
 }

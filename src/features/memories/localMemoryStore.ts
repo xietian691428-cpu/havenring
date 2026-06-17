@@ -10,7 +10,16 @@
  */
 
 import { localCrypto } from "../../services/encryptionService";
-import { getTimelineStoryPreviewMaxChars } from "@/lib/timeline-ios-guard";
+import {
+  getTimelineStoryPreviewMaxChars,
+  isMobileMemorySensitive,
+} from "@/lib/timeline-ios-guard";
+import { runTimelineDecodeTask } from "@/lib/timeline-decode-queue";
+import {
+  dataUrlToTimelineThumbBlob,
+  firstPhotoDataUrl,
+} from "@/lib/timeline-media-decode";
+import { warmTimelineThumbFromDataUrl } from "@/lib/timeline-thumb-cache";
 import {
   clearAllPersistedTimelineThumbs,
   deletePersistedTimelineThumb,
@@ -234,7 +243,7 @@ async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMem
   return {
     id: record.id,
     title: record.title || "",
-    story,
+    story: "",
     storyPreview,
     photo: null,
     voice: null,
@@ -258,16 +267,36 @@ async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMem
   };
 }
 
-function firstPhotoDataUrl(photo: unknown): string | null {
-  const raw = Array.isArray(photo) ? photo : photo ? [photo] : [];
-  const first = raw[0];
-  if (!first) return null;
-  if (typeof first === "string") return first;
-  if (typeof first === "object" && first !== null) {
-    const row = first as { dataUrl?: string; previewUrl?: string; src?: string; url?: string };
-    return row.dataUrl || row.previewUrl || row.src || row.url || null;
+function firstPhotoDataUrlFromEncrypted(photo: unknown): string | null {
+  return firstPhotoDataUrl(photo);
+}
+
+async function decryptSummariesForTimeline(
+  records: MemoryDbRecord[]
+): Promise<TimelineMemorySummary[]> {
+  if (!records.length) return [];
+  if (isMobileMemorySensitive()) {
+    const items: TimelineMemorySummary[] = [];
+    for (const row of records) {
+      items.push(await decryptRecordSummary(row));
+    }
+    return items;
   }
-  return null;
+  return Promise.all(records.map((row) => decryptRecordSummary(row)));
+}
+
+async function scheduleTimelineThumbWarm(
+  memoryId: string,
+  memoryUpdatedAt: number,
+  photo: unknown
+): Promise<void> {
+  const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
+  if (!dataUrl) return;
+  try {
+    await warmTimelineThumbFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
+  } catch {
+    /* best-effort */
+  }
 }
 
 async function readRecordsByTimelineDesc(
@@ -308,7 +337,7 @@ export async function getTimelineMemorySummaries(opts: {
   const db = await openDb();
   try {
     const records = await readRecordsByTimelineDesc(db, limit, opts.beforeTimelineAt);
-    const items = await Promise.all(records.map((row) => decryptRecordSummary(row)));
+    const items = await decryptSummariesForTimeline(records);
     const last = records[records.length - 1];
     const hasMore = records.length === limit;
     return {
@@ -321,24 +350,35 @@ export async function getTimelineMemorySummaries(opts: {
   }
 }
 
-/** Lazy media — first photo data URL for one memory (viewport-driven). */
-export async function getTimelineMemoryThumbnail(memoryId: string): Promise<string | null> {
+/** Lazy media — low-res JPEG blob for one memory (viewport-driven, queued). */
+export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
-  const db = await openDb();
-  try {
-    const record = await new Promise<MemoryDbRecord | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_MEMORIES, "readonly");
-      const req = tx.objectStore(STORE_MEMORIES).get(memoryId);
-      req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
-      req.onerror = () =>
-        reject(req.error ?? new Error("Failed to read memory by id."));
-    });
-    if (!record) return null;
-    const photo = await localCrypto.decryptJson(record.photoEnc);
-    return firstPhotoDataUrl(photo);
-  } finally {
-    db.close();
-  }
+  return runTimelineDecodeTask(async () => {
+    const db = await openDb();
+    try {
+      const record = await new Promise<MemoryDbRecord | null>((resolve, reject) => {
+        const tx = db.transaction(STORE_MEMORIES, "readonly");
+        const req = tx.objectStore(STORE_MEMORIES).get(memoryId);
+        req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
+        req.onerror = () =>
+          reject(req.error ?? new Error("Failed to read memory by id."));
+      });
+      if (!record) return null;
+      const photo = await localCrypto.decryptJson(record.photoEnc);
+      const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
+      if (!dataUrl) return null;
+      return dataUrlToTimelineThumbBlob(dataUrl);
+    } finally {
+      db.close();
+    }
+  });
+}
+
+/** @deprecated Prefer getTimelineMemoryThumbBlob — avoids keeping data URLs in heap. */
+export async function getTimelineMemoryThumbnail(memoryId: string): Promise<string | null> {
+  const blob = await getTimelineMemoryThumbBlob(memoryId);
+  if (!blob || typeof URL === "undefined") return null;
+  return URL.createObjectURL(blob);
 }
 
 /** Search across all memories (text fields only — no photo decrypt). */
@@ -354,15 +394,16 @@ export async function searchTimelineMemorySummaries(query: string): Promise<Time
       req.onerror = () =>
         reject(req.error ?? new Error("Failed to read memories."));
     });
-    const summaries = await Promise.all(records.map((row) => decryptRecordSummary(row)));
-    return summaries
-      .filter((row) => {
-        const title = String(row.title || "").toLowerCase();
-        const story = String(row.story || "").toLowerCase();
-        const d = new Date(row.timelineAt).toLocaleString().toLowerCase();
-        return title.includes(q) || story.includes(q) || d.includes(q);
-      })
-      .sort((a, b) => b.timelineAt - a.timelineAt);
+    const matched: TimelineMemorySummary[] = [];
+    for (const row of records) {
+      const story = await localCrypto.decryptValue(row.storyEnc);
+      const title = String(row.title || "").toLowerCase();
+      const storyLower = String(story || "").toLowerCase();
+      const d = new Date(row.timelineAt).toLocaleString().toLowerCase();
+      if (!title.includes(q) && !storyLower.includes(q) && !d.includes(q)) continue;
+      matched.push(await decryptRecordSummary(row));
+    }
+    return matched.sort((a, b) => b.timelineAt - a.timelineAt);
   } finally {
     db.close();
   }
@@ -422,6 +463,7 @@ export async function createMemory(
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).add(record);
     await txDone(tx);
+    void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     return {
       id: memory.id,
       createdAt: memory.createdAt,
@@ -456,6 +498,7 @@ export async function saveMemory(
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).put(record);
     await txDone(tx);
+    void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     return { id: memory.id, updatedAt: memory.updatedAt };
   } finally {
     db.close();

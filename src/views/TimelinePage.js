@@ -177,29 +177,6 @@ export function TimelinePage({
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  const visibleMemories = useMemo(
-    () => virtualRows.map((row) => orderedFiltered[row.index]).filter(Boolean),
-    [virtualRows, orderedFiltered]
-  );
-  const thumbById = useTimelineThumbUrls(visibleMemories);
-
-  useEffect(() => {
-    const last = virtualRows[virtualRows.length - 1];
-    if (!last || !hasMoreMemories || loadingMore || searchQuery.trim()) return;
-    if (last.index >= orderedFiltered.length - 4) {
-      void onLoadMore?.();
-    }
-  }, [
-    virtualRows,
-    hasMoreMemories,
-    loadingMore,
-    orderedFiltered.length,
-    onLoadMore,
-    searchQuery,
-  ]);
-
-  const showHeroWhenEmpty =
-    !loading && !searchQuery && !ordered.length && !showPostFtuxBanner;
 
   const [pullSyncActive, setPullSyncActive] = useState(false);
 
@@ -221,7 +198,7 @@ export function TimelinePage({
     pullDistance,
   } = usePullToRefresh({
     onRefresh: handlePullRefresh,
-    disabled: loading,
+    disabled: loading || syncing,
   });
 
   useEffect(() => {
@@ -229,6 +206,38 @@ export function TimelinePage({
       setPullSyncActive(false);
     }
   }, [syncing, pullRefreshing]);
+
+  const visibleMemories = useMemo(
+    () => virtualRows.map((row) => orderedFiltered[row.index]).filter(Boolean),
+    [virtualRows, orderedFiltered]
+  );
+  const visibleThumbKey = useMemo(
+    () =>
+      visibleMemories
+        .map((row) => `${row?.id}:${row?.hasPhotos === false ? 0 : 1}:${Number(row?.updatedAt || 0)}`)
+        .join("|"),
+    [visibleMemories]
+  );
+  const thumbPaused = loading || syncing || pullSyncActive || pullRefreshing;
+  const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused);
+
+  useEffect(() => {
+    const last = virtualRows[virtualRows.length - 1];
+    if (!last || !hasMoreMemories || loadingMore || searchQuery.trim()) return;
+    if (last.index >= orderedFiltered.length - 4) {
+      void onLoadMore?.();
+    }
+  }, [
+    virtualRows,
+    hasMoreMemories,
+    loadingMore,
+    orderedFiltered.length,
+    onLoadMore,
+    searchQuery,
+  ]);
+
+  const showHeroWhenEmpty =
+    !loading && !searchQuery && !ordered.length && !showPostFtuxBanner;
 
   const showPullBar = pullActive || pullRefreshing || pullSyncActive;
   const pullLabel = pullRefreshing || pullSyncActive

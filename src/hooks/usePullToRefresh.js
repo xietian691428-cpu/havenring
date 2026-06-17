@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getTimelinePullRefreshCooldownMs } from "@/lib/timeline-ios-guard";
 
 const PULL_THRESHOLD_PX = 72;
 const MAX_PULL_PX = 112;
@@ -16,6 +17,7 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
   const trackingRef = useRef(false);
   const verticalIntentRef = useRef(false);
   const busyRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
   const pullDistanceRef = useRef(0);
   const onRefreshRef = useRef(onRefresh);
 
@@ -92,7 +94,12 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
       reset();
       if (!shouldRefresh || !onRefreshRef.current) return;
 
+      const cooldownMs = getTimelinePullRefreshCooldownMs();
+      const sinceLast = Date.now() - lastRefreshAtRef.current;
+      if (sinceLast < cooldownMs) return;
+
       busyRef.current = true;
+      lastRefreshAtRef.current = Date.now();
       setRefreshing(true);
       try {
         await onRefreshRef.current();

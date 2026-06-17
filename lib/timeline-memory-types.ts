@@ -3,8 +3,10 @@ import type { LocalMemory, MemorySupplement } from "@/src/features/memories/loca
 /** Timeline row — metadata + story preview; media decrypted on demand. */
 export type TimelineMemorySummary = Omit<
   LocalMemory,
-  "photo" | "voice" | "attachments"
+  "photo" | "voice" | "attachments" | "story"
 > & {
+  /** Full story is not loaded on the timeline list (memory). Use storyPreview. */
+  story: "";
   photo: null;
   voice: null;
   attachments: [];

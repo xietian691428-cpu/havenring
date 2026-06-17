@@ -280,6 +280,13 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /revokeObjectURL/);
   assert.match(readRepoFile("lib/timeline-thumb-store.ts"), /writePersistedTimelineThumb/);
   assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /readPersistedTimelineThumb/);
+  assert.match(readRepoFile("lib/timeline-decode-queue.ts"), /runTimelineDecodeTask/);
+  assert.match(readRepoFile("lib/timeline-media-decode.ts"), /dataUrlToTimelineThumbBlob/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemoryThumbBlob/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /story: ""/);
+  assert.match(readRepoFile("src/hooks/useTimelineThumbUrls.js"), /paused/);
+  assert.match(readRepoFile("src/hooks/usePullToRefresh.js"), /getTimelinePullRefreshCooldownMs/);
+  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelinePageSize\(\): number \{\n  return isMobileMemorySensitive\(\) \? 12 : 30;/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /estimateComposerSealSizeLight/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);

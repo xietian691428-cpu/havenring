@@ -20,6 +20,7 @@ import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
+import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -61,6 +62,7 @@ export function useMemories() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    releaseAllTimelineThumbUrls();
     try {
       const page = await getTimelineMemorySummaries({ limit: getTimelinePageSize() });
       timelineCursorRef.current = page.nextBeforeTimelineAt;
