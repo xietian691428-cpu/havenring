@@ -1,3 +1,4 @@
+import { resolveComposerMediaRowForSeal } from "@/lib/composer-photo-utils";
 import {
   SEAL_LOCAL_MAX_BYTES,
   SEAL_STAGING_MAX_BYTES,
@@ -90,9 +91,11 @@ export async function fitMediaItemsToBudget(
   budgetBytes: number
 ): Promise<unknown[]> {
   if (!Array.isArray(items) || budgetBytes <= 0) return [];
-  let working = items
-    .filter((row) => row && typeof row === "object")
-    .map((row) => ({ ...(row as MediaRow) }));
+  let working = await Promise.all(
+    items
+      .filter((row) => row && typeof row === "object")
+      .map((row) => resolveComposerMediaRowForSeal(row))
+  );
 
   for (let pass = 0; pass < 3; pass += 1) {
     const next: MediaRow[] = [];
@@ -209,11 +212,10 @@ function hasInlineMediaData(row: unknown): boolean {
   if (!row || typeof row !== "object") return false;
   const dataUrl = (row as MediaRow).dataUrl;
   if (typeof dataUrl === "string" && dataUrl.length > 0) return true;
-  const size = Number((row as MediaRow).size || 0);
-  if (size <= 0) return false;
   const previewUrl = (row as { previewUrl?: string }).previewUrl;
   const blob = (row as { blob?: unknown }).blob;
-  return Boolean(previewUrl || blob);
+  if (previewUrl || blob) return true;
+  return Number((row as MediaRow).size || 0) > 0;
 }
 
 function countMediaWithInlineData(items: unknown[]): number {

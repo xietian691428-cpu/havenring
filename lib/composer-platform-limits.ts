@@ -38,7 +38,7 @@ export function getComposerPlatformLimits(): ComposerPlatformLimits {
     jpegQuality: 0.78,
     compressSequentially: false,
     useWorkerCompression: true,
-    lightSealSizeEstimate: false,
+    lightSealSizeEstimate: true,
     sealSizeDebounceMs: 350,
   };
 }

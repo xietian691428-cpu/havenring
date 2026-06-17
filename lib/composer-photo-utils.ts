@@ -43,6 +43,54 @@ export function createComposerPhotoFromBlob(
   };
 }
 
+export async function blobToDataUrlFromBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read media."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Resolve composer blob previews to inline data URLs for seal size fitting. */
+export async function resolveComposerMediaRowForSeal(
+  row: unknown
+): Promise<{
+  id?: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  dataUrl?: string;
+}> {
+  if (!row || typeof row !== "object") return {};
+  const typed = row as ComposerPhotoRow;
+  if (typeof typed.dataUrl === "string" && typed.dataUrl) {
+    return {
+      id: typed.id,
+      name: typed.name,
+      mimeType: typed.mimeType,
+      size: typed.size,
+      dataUrl: typed.dataUrl,
+    };
+  }
+  if (typed.blob instanceof Blob) {
+    const dataUrl = await blobToDataUrlFromBlob(typed.blob);
+    return {
+      id: typed.id,
+      name: typed.name,
+      mimeType: typed.mimeType || typed.blob.type || "image/jpeg",
+      size: typed.blob.size || typed.size,
+      dataUrl,
+    };
+  }
+  return {
+    id: typed.id,
+    name: typed.name,
+    mimeType: typed.mimeType,
+    size: typed.size,
+  };
+}
+
 export async function prepareComposerPhotosForSave(
   photos: ComposerPhotoRow[] = [],
   blobToDataUrl: (blob: Blob) => Promise<string>
