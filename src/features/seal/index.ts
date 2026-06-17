@@ -138,5 +138,6 @@ export {
 export {
   assertDraftFitsSealBudget,
   evaluateComposerSealSize,
+  estimateComposerSealSizeLight,
 } from "./sealMediaPrep";
 export type { ComposerSealSizeStatus } from "./sealMediaPrep";

@@ -3,8 +3,9 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   createMemory,
   deleteMemory,
-  getAllMemories,
   getMemoryById,
+  getTimelineMemorySummaries,
+  searchTimelineMemorySummaries,
   saveMemory,
 } from "../services/localStorageService";
 import { computeMemoryBundleHash } from "../utils/memoryIntegrity";
@@ -18,6 +19,7 @@ import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -52,19 +54,66 @@ export function useMemories() {
     lastRecoveryCount: 0,
   });
   const syncInFlightRef = useRef(null);
+  const timelineCursorRef = useRef(null);
+  const [timelineHasMore, setTimelineHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const rows = await getAllMemories();
-      setMemories(rows);
+      const page = await getTimelineMemorySummaries({ limit: getTimelinePageSize() });
+      timelineCursorRef.current = page.nextBeforeTimelineAt;
+      setTimelineHasMore(page.hasMore);
+      setMemories(page.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load memories.");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadMoreMemories = useCallback(async () => {
+    if (!timelineHasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await getTimelineMemorySummaries({
+        limit: getTimelinePageSize(),
+        beforeTimelineAt: timelineCursorRef.current,
+      });
+      timelineCursorRef.current = page.nextBeforeTimelineAt;
+      setTimelineHasMore(page.hasMore);
+      setMemories((prev) => {
+        const seen = new Set(prev.map((row) => row.id));
+        const next = page.items.filter((row) => !seen.has(row.id));
+        return [...prev, ...next];
+      });
+    } catch {
+      /* keep existing rows */
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [timelineHasMore, loadingMore]);
+
+  const searchMemories = useCallback(async (query) => {
+    const q = String(query || "").trim();
+    if (!q) {
+      await refresh();
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await searchTimelineMemorySummaries(q);
+      setTimelineHasMore(false);
+      timelineCursorRef.current = null;
+      setMemories(rows);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to search memories.");
+    } finally {
+      setLoading(false);
+    }
+  }, [refresh]);
 
   const create = useCallback(
     async (payload) => {
@@ -236,9 +285,7 @@ export function useMemories() {
       );
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      if (outcome?.pairImported > 0 || outcome?.pairBundlesSeen > 0) {
-        await refresh();
-      }
+      await refresh();
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,
@@ -288,7 +335,7 @@ export function useMemories() {
     })();
     syncInFlightRef.current = runner;
     return runner;
-  }, []);
+  }, [refresh]);
 
   const runSyncForActiveRing = useCallback(async () => {
     if (syncInFlightRef.current) {
@@ -325,9 +372,7 @@ export function useMemories() {
       });
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      if (outcome?.pairImported > 0 || outcome?.pairBundlesSeen > 0) {
-        await refresh();
-      }
+      await refresh();
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,
@@ -377,7 +422,7 @@ export function useMemories() {
     })();
     syncInFlightRef.current = runner;
     return runner;
-  }, [runSync]);
+  }, [runSync, refresh]);
 
   const remove = useCallback(async (id) => {
     setError(null);
@@ -481,6 +526,10 @@ export function useMemories() {
         syncMeta,
       }),
       refresh,
+      loadMoreMemories,
+      timelineHasMore,
+      loadingMore,
+      searchMemories,
       syncNow: runSync,
       syncActiveRingNow: runSyncForActiveRing,
       createMemory: create,
@@ -498,6 +547,10 @@ export function useMemories() {
       syncIssues,
       syncMeta,
       refresh,
+      loadMoreMemories,
+      timelineHasMore,
+      loadingMore,
+      searchMemories,
       runSync,
       runSyncForActiveRing,
       create,

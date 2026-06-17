@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   isFirstMemoryCompleted,
   ONBOARDING_DONE_KEY,
@@ -10,6 +11,13 @@ import { listDraftItems } from "../services/draftBoxService";
 import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { APP_PAGE_PADDING } from "../theme/pageLayout";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
+import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
+import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
+import {
+  getTimelineVirtualOverscan,
+} from "@/lib/timeline-ios-guard";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -23,6 +31,11 @@ export function TimelinePage({
   syncIssues = [],
   integrityWarning = "",
   onResyncNow,
+  onPullRefresh,
+  onLoadMore,
+  hasMoreMemories = false,
+  loadingMore = false,
+  onSearchMemories,
   onOpenMemory,
   onOpenMemoryFromRing,
   onCreateMemory,
@@ -125,23 +138,114 @@ export function TimelinePage({
   }, [onOpenMemoryFromRing, onOpenMemory]);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const searchDebounceRef = useRef(null);
+  const hadSearchRef = useRef(false);
 
-  const orderedFiltered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return ordered;
-    return ordered.filter((m) => {
-      const title = String(m.title || "").toLowerCase();
-      const story = String(m.story || "").toLowerCase();
-      const d = new Date(m.timelineAt).toLocaleString().toLowerCase();
-      return title.includes(q) || story.includes(q) || d.includes(q);
-    });
-  }, [ordered, searchQuery]);
+  useEffect(() => {
+    if (typeof onSearchMemories !== "function") return undefined;
+    const q = searchQuery.trim();
+    if (q) hadSearchRef.current = true;
+    if (!q && !hadSearchRef.current) return undefined;
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      void onSearchMemories(searchQuery);
+    }, 320);
+    return () => {
+      if (searchDebounceRef.current) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchQuery, onSearchMemories]);
+
+  const orderedFiltered = useMemo(() => ordered, [ordered]);
+
+  const listRef = useRef(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    if (listRef.current) {
+      setScrollMargin(listRef.current.offsetTop);
+    }
+  }, [loading, orderedFiltered.length, showPostFtuxBanner]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: orderedFiltered.length,
+    estimateSize: () => 268,
+    overscan: getTimelineVirtualOverscan(),
+    scrollMargin,
+  });
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const visibleMemories = useMemo(
+    () => virtualRows.map((row) => orderedFiltered[row.index]).filter(Boolean),
+    [virtualRows, orderedFiltered]
+  );
+  const thumbById = useTimelineThumbUrls(visibleMemories);
+
+  useEffect(() => {
+    const last = virtualRows[virtualRows.length - 1];
+    if (!last || !hasMoreMemories || loadingMore || searchQuery.trim()) return;
+    if (last.index >= orderedFiltered.length - 4) {
+      void onLoadMore?.();
+    }
+  }, [
+    virtualRows,
+    hasMoreMemories,
+    loadingMore,
+    orderedFiltered.length,
+    onLoadMore,
+    searchQuery,
+  ]);
 
   const showHeroWhenEmpty =
     !loading && !searchQuery && !ordered.length && !showPostFtuxBanner;
 
+  const [pullSyncActive, setPullSyncActive] = useState(false);
+
+  const handlePullRefresh = useCallback(async () => {
+    setPullSyncActive(true);
+    if (typeof onPullRefresh === "function") {
+      await onPullRefresh();
+      return;
+    }
+    if (typeof onResyncNow === "function") {
+      await onResyncNow();
+    }
+  }, [onPullRefresh, onResyncNow]);
+
+  const {
+    active: pullActive,
+    progress: pullProgress,
+    refreshing: pullRefreshing,
+    pullDistance,
+  } = usePullToRefresh({
+    onRefresh: handlePullRefresh,
+    disabled: loading,
+  });
+
+  useEffect(() => {
+    if (!syncing && !pullRefreshing) {
+      setPullSyncActive(false);
+    }
+  }, [syncing, pullRefreshing]);
+
+  const showPullBar = pullActive || pullRefreshing || pullSyncActive;
+  const pullLabel = pullRefreshing || pullSyncActive
+    ? t.pullToRefreshSyncing
+    : pullProgress >= 1
+      ? t.pullToRefreshRelease
+      : t.pullToRefresh;
+
   return (
     <main style={styles.page}>
+      <TimelinePullRefreshBar
+        visible={showPullBar}
+        label={pullLabel}
+        progress={pullProgress}
+        pullDistance={pullDistance}
+        refreshing={pullRefreshing || pullSyncActive}
+      />
       <section style={styles.shell}>
         <header style={styles.header}>
           <div style={styles.headerLeft}>
@@ -215,7 +319,7 @@ export function TimelinePage({
         ) : null}
 
         {loading ? <p style={styles.feedback}>{t.loading}</p> : null}
-        {syncing ? (
+        {syncing && !showPullBar ? (
           <section style={styles.syncBanner} role="status" aria-live="polite">
             <p style={styles.syncBannerText}>{t.syncStatusRunning}</p>
           </section>
@@ -266,69 +370,54 @@ export function TimelinePage({
           </section>
         ) : null}
 
-        <ol style={styles.list}>
-          {orderedFiltered.map((memory) => {
-            const pinned = pinnedId === memory.id;
-            const locked = Number(memory?.releaseAt || 0) > viewerNow;
-            const sealed = isTimelineMemorySealed(memory);
-            const thumbs = getMemoryThumbnails(memory);
-            return (
-              <li key={memory.id} style={styles.card}>
-                <div style={styles.cardHeader}>
-                  <small style={styles.date}>
-                    {new Date(memory.timelineAt).toLocaleString()}
-                  </small>
-                  <button
-                    type="button"
-                    onClick={() => togglePin(memory.id)}
-                    style={styles.pinButton}
-                  >
-                    {pinned ? t.unpin : t.pin}
-                  </button>
-                </div>
-                <div style={styles.titleRow}>
-                  <h3 style={styles.cardTitle}>
-                    {pinned ? "📌 " : ""}
-                    {memory.title || t.untitled}
-                  </h3>
-                  {sealed ? (
-                    <span style={styles.sealBadge} title={t.sealedBadge}>
-                      🔒 {t.sealedBadge}
-                    </span>
-                  ) : null}
-                </div>
-                {thumbs.length ? (
-                  <div style={styles.thumbRow}>
-                    {thumbs.map((thumb) => (
-                      <img
-                        key={thumb.key}
-                        src={thumb.url}
-                        alt={t.thumbAlt}
-                        style={styles.thumb}
+        <div ref={listRef}>
+          {orderedFiltered.length ? (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              <ol style={styles.virtualList}>
+                {virtualRows.map((virtualRow) => {
+                  const memory = orderedFiltered[virtualRow.index];
+                  if (!memory) return null;
+                  const pinned = pinnedId === memory.id;
+                  const locked = Number(memory?.releaseAt || 0) > viewerNow;
+                  return (
+                    <li
+                      key={memory.id}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        ...styles.virtualItem,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <TimelineMemoryCard
+                        memory={memory}
+                        thumbUrl={thumbById[memory.id] || ""}
+                        pinned={pinned}
+                        locked={locked}
+                        viewerNow={viewerNow}
+                        t={t}
+                        onTogglePin={togglePin}
+                        onOpen={onOpenMemory}
                       />
-                    ))}
-                  </div>
-                ) : null}
-                <p style={styles.preview}>
-                  {locked
-                    ? t.capsuleLockedPreview.replace(
-                        "{time}",
-                        new Date(memory.releaseAt).toLocaleString()
-                      )
-                    : memory.story || t.noStory}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onOpenMemory?.(memory.id)}
-                  style={styles.primaryButton}
-                  disabled={loading || locked}
-                >
-                  {locked ? t.capsuleOpen : t.open}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ) : null}
+        </div>
+
+        {loadingMore ? (
+          <p style={styles.feedback} role="status">
+            {t.loadingMore}
+          </p>
+        ) : null}
 
         <p style={styles.feedback} role="status" aria-live="polite">
           {notice || "\u00a0"}
@@ -336,22 +425,6 @@ export function TimelinePage({
       </section>
     </main>
   );
-}
-
-function getMemoryThumbnails(memory) {
-  const raw = memory?.photos ?? memory?.photo;
-  const arr = Array.isArray(raw) ? raw : [];
-  return arr
-    .slice(0, 3)
-    .map((p, i) => {
-      const url = typeof p === "string" ? p : p?.dataUrl || p?.src || p?.url || "";
-      return { key: `${memory.id}-p-${i}`, url };
-    })
-    .filter((x) => x.url);
-}
-
-function isTimelineMemorySealed(memory) {
-  return Boolean(memory?.is_sealed || memory?.ring_id);
 }
 
 const styles = {
@@ -565,6 +638,22 @@ const styles = {
     listStyle: "none",
     display: "grid",
     gap: 12,
+  },
+  virtualList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+  },
+  virtualItem: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    paddingBottom: 14,
   },
   card: {
     border: "1px solid rgba(232, 220, 208, 0.1)",

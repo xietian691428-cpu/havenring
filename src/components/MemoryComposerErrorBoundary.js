@@ -1,5 +1,10 @@
 import { Component } from "react";
 import { clearSealFlowAndReturnToApp } from "../features/seal/sealFinalizeSafe";
+import {
+  isLikelyMemoryCrashError,
+  markComposerMemoryStress,
+} from "@/lib/composer-memory-guard";
+import { ComposerMemoryRecovery } from "./ComposerMemoryRecovery";
 
 /**
  * Catches render errors in New Memory / seal UI without taking down the whole PWA shell.
@@ -7,7 +12,7 @@ import { clearSealFlowAndReturnToApp } from "../features/seal/sealFinalizeSafe";
 export class MemoryComposerErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, memoryRecovery: false };
   }
 
   static getDerivedStateFromError(error) {
@@ -17,13 +22,18 @@ export class MemoryComposerErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error("[MemoryComposerErrorBoundary]", error, info);
+    if (isLikelyMemoryCrashError(error)) {
+      markComposerMemoryStress();
+      this.setState({ memoryRecovery: true });
+    }
   }
 
   render() {
-    const { error } = this.state;
+    const { error, memoryRecovery } = this.state;
+    if (memoryRecovery) {
+      return <ComposerMemoryRecovery open />;
+    }
     if (error) {
-      const message =
-        error instanceof Error ? error.message : "Something went wrong while sealing.";
       return (
         <main
           style={{
@@ -39,10 +49,9 @@ export class MemoryComposerErrorBoundary extends Component {
         >
           <div style={{ maxWidth: 420 }}>
             <h1 style={{ margin: "0 0 12px", fontSize: 22 }}>Seal paused</h1>
-            <p style={{ margin: "0 0 12px", color: "#d9c3b3", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 16px", color: "#d9c3b3", lineHeight: 1.5 }}>
               Your draft is still on this device. You can try again from Memories.
             </p>
-            <p style={{ margin: "0 0 16px", color: "#ffb4a8", fontSize: 14 }}>{message}</p>
             <div style={{ display: "grid", gap: 10 }}>
               <button
                 type="button"

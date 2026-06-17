@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",
+    "@tanstack/react-virtual": "^3.14.3",
     "framer-motion": "^12.38.0",
     "idb-keyval": "^6.2.2",
     "jose": "^6.2.3",

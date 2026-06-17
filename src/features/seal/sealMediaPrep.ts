@@ -167,27 +167,37 @@ export async function buildSealPayloadFromDraft(
   return payload;
 }
 
-/** Strip inline media for server commit — full blobs stay in local IDB. */
+/** Server commit payload — include portable inline media for Pair cross-device sync. */
 export function toServerSealCommitPayload(
   payload: SealDraftFinalizePayload
 ): SealDraftFinalizePayload {
-  const strip = (rows: unknown[]) =>
-    (Array.isArray(rows) ? rows : []).map((row) => {
-      const obj = row && typeof row === "object" ? (row as MediaRow) : {};
-      return {
-        id: obj.id,
-        name: obj.name,
-        mimeType: obj.mimeType,
-        size: obj.size,
-      };
-    });
+  const serialize = (rows: unknown[]) =>
+    (Array.isArray(rows) ? rows : [])
+      .map((row) => {
+        const obj = row && typeof row === "object" ? (row as MediaRow) : {};
+        const dataUrl = typeof obj.dataUrl === "string" ? obj.dataUrl.trim() : "";
+        const base = {
+          id: obj.id,
+          name: obj.name,
+          mimeType: obj.mimeType,
+          size:
+            Number(obj.size || 0) ||
+            (dataUrl ? Math.ceil((dataUrl.length * 3) / 4) : 0),
+        };
+        if (!dataUrl) return base;
+        return { ...base, dataUrl };
+      })
+      .filter((row) => {
+        const dataUrl = (row as MediaRow).dataUrl;
+        return typeof dataUrl === "string" && dataUrl.length > 0;
+      });
   return {
     id: payload.id,
     title: payload.title,
     story: payload.story,
     releaseAt: payload.releaseAt,
-    photo: strip(payload.photo),
-    attachments: strip(payload.attachments),
+    photo: serialize(payload.photo),
+    attachments: serialize(payload.attachments),
   };
 }
 
@@ -195,13 +205,20 @@ export function getSealPayloadByteBudget(forStaging: boolean): number {
   return forStaging ? SEAL_STAGING_MAX_BYTES : SEAL_LOCAL_MAX_BYTES;
 }
 
+function hasInlineMediaData(row: unknown): boolean {
+  if (!row || typeof row !== "object") return false;
+  const dataUrl = (row as MediaRow).dataUrl;
+  if (typeof dataUrl === "string" && dataUrl.length > 0) return true;
+  const size = Number((row as MediaRow).size || 0);
+  if (size <= 0) return false;
+  const previewUrl = (row as { previewUrl?: string }).previewUrl;
+  const blob = (row as { blob?: unknown }).blob;
+  return Boolean(previewUrl || blob);
+}
+
 function countMediaWithInlineData(items: unknown[]): number {
   if (!Array.isArray(items)) return 0;
-  return items.filter((row) => {
-    if (!row || typeof row !== "object") return false;
-    const dataUrl = (row as MediaRow).dataUrl;
-    return typeof dataUrl === "string" && dataUrl.length > 0;
-  }).length;
+  return items.filter((row) => hasInlineMediaData(row)).length;
 }
 
 /**
@@ -258,6 +275,64 @@ export async function evaluateComposerSealSize(
     limitMb,
     usedMb,
     wouldTrimMedia,
+  };
+}
+
+function estimateInlineMediaBytes(items: unknown[]): number {
+  if (!Array.isArray(items)) return 0;
+  let total = 0;
+  for (const row of items) {
+    if (!row || typeof row !== "object") continue;
+    const dataUrl = (row as MediaRow).dataUrl;
+    if (typeof dataUrl === "string" && dataUrl.length > 0) {
+      total += Math.ceil((dataUrl.length * 3) / 4);
+      continue;
+    }
+    const size = Number((row as MediaRow).size || 0);
+    if (size > 0) total += size;
+  }
+  return total;
+}
+
+/**
+ * Fast seal-size estimate without re-encoding images (iOS WebKit stability).
+ */
+export function estimateComposerSealSizeLight(
+  item: {
+    title?: string;
+    story?: string;
+    photo?: unknown[];
+    attachments?: unknown[];
+    releaseAt?: number;
+  },
+  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+): ComposerSealSizeStatus {
+  const isPlus = Boolean(opts.isPlus);
+  const forStaging = Boolean(opts.forStaging);
+  const maxBytes = forStaging
+    ? resolveSealStagingPlaintextMaxBytes(isPlus)
+    : SEAL_LOCAL_MAX_BYTES;
+  const limitMb = Math.floor(maxBytes / (1024 * 1024));
+
+  const baseBytes = estimateJsonBytes({
+    id: "composer-estimate",
+    title: String(item.title || ""),
+    story: String(item.story || ""),
+    releaseAt: Number(item.releaseAt || 0) || 0,
+    photo: [],
+    attachments: [],
+  });
+  const mediaBytes =
+    estimateInlineMediaBytes(item.photo ?? []) +
+    estimateInlineMediaBytes(item.attachments ?? []);
+  const usedBytes = baseBytes + mediaBytes;
+  const usedMb = Math.max(0.1, Math.round((usedBytes / (1024 * 1024)) * 10) / 10);
+
+  return {
+    withinLimit: usedBytes <= maxBytes,
+    limitMb,
+    usedMb,
+    wouldTrimMedia: false,
   };
 }
 

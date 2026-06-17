@@ -10,6 +10,9 @@ export {
   deleteMemory,
   getAllMemories,
   getMemoryById,
+  getTimelineMemorySummaries,
+  getTimelineMemoryThumbnail,
+  searchTimelineMemorySummaries,
   memoryRepository,
   saveMemory,
 } from "./localMemoryStore";

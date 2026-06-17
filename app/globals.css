@@ -281,6 +281,15 @@ body:not(.high-contrast) [style*="linear-gradient(180deg, #e6b48d, #d9a67a)"] {
   }
 }
 
+@keyframes haven-pull-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* PWA shell (/app): lock document scroll; chrome overlays and hides on scroll. */
 html.haven-app-route,
 body.haven-app-route {

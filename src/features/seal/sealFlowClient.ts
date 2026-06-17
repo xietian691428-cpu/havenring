@@ -10,6 +10,10 @@ import {
   getArmedSealStagingId,
   isSealFlowArmed,
 } from "../../../lib/seal-flow";
+import {
+  countDisplayablePhotos,
+  normalizePhotosForStorage,
+} from "@/lib/memory-photo-display";
 import { getDraftItem, removeDraftItem } from "../memories/draftBoxStore";
 import {
   createMemory,
@@ -286,16 +290,20 @@ async function persistSealedDraftsLocally(
         : null;
     const source = localItem ?? staged ?? relay;
     if (!source) continue;
+    const stagedPhotos = normalizePhotosForStorage(staged?.photo);
+    const localPhotos = normalizePhotosForStorage(localItem?.photo);
+    const sourcePhotos = normalizePhotosForStorage(source.photo);
+    const photo =
+      stagedPhotos && countDisplayablePhotos(stagedPhotos) > 0
+        ? stagedPhotos
+        : localPhotos && countDisplayablePhotos(localPhotos) > 0
+          ? localPhotos
+          : sourcePhotos;
     const payload = {
       id: source.id || id,
       title: String(source.title || "").trim() || "Untitled memory",
       story: String(source.story || ""),
-      photo:
-        Array.isArray(localItem?.photo) && localItem.photo.length
-          ? localItem.photo
-          : Array.isArray(source.photo) && source.photo.length
-            ? source.photo
-            : null,
+      photo,
       voice: null,
       attachments: Array.isArray(localItem?.attachments)
         ? localItem.attachments

@@ -18,6 +18,8 @@ export const STORAGE_KEYS = {
   sealArmed: "haven.seal.armed.v1",
   pendingSealDraftIds: "haven.pending_seal_draft_ids.v1",
   composerSnapshot: "haven.new_memory_draft",
+  /** Set before reload when composer hits memory pressure (session-scoped). */
+  composerMemoryStress: "haven.composer.memory_stress.v1",
   sealNfcTapRelay: "haven.seal.last_nfc_tap.v1",
   sealResolveLock: "haven.seal.resolve.lock.v1",
   sealCompleteRelay: "haven.seal.complete.v1",

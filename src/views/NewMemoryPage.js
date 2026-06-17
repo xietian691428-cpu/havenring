@@ -24,6 +24,7 @@ import {
   navigateToSealWaitPage,
   listenForSealRingTapOnce,
   evaluateComposerSealSize,
+  estimateComposerSealSizeLight,
   getSealStrategy,
   prepareSealForRingTap,
   readComposerSnapshotTextOnly,
@@ -42,8 +43,27 @@ import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { getBoundRingCount } from "../services/ringRegistryService";
 import { SealPwaHintCard } from "../components/SealPwaHintCard";
+import { getComposerPlatformLimits } from "@/lib/composer-platform-limits";
+import { compressImageFile } from "@/lib/image-compressor-client";
+import {
+  estimateComposerMediaBytes,
+  getCompressionProfileForPressure,
+  markComposerMemoryStress,
+  readMemoryPressure,
+  shouldPauseForMemoryPressure,
+  isLikelyMemoryCrashError,
+} from "@/lib/composer-memory-guard";
+import {
+  createComposerPhotoFromBlob,
+  getComposerPhotoDisplayUrl,
+  prepareComposerPhotosForSave,
+  revokeComposerPhoto,
+  revokeComposerPhotos,
+} from "@/lib/composer-photo-utils";
+import { ComposerMemoryRecovery } from "../components/ComposerMemoryRecovery";
 
-const MAX_PHOTOS = 6;
+const PLATFORM_LIMITS = getComposerPlatformLimits();
+const MAX_PHOTOS = PLATFORM_LIMITS.maxPhotos;
 const MAX_VIDEOS = 6;
 const MAX_FILE_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_MB = 50;
@@ -190,6 +210,7 @@ export function NewMemoryPage({
   const [story, setStory] = useState("");
   const [releaseAtInput, setReleaseAtInput] = useState("");
   const [photos, setPhotos] = useState([]);
+  const [photoCompressBusy, setPhotoCompressBusy] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const { videoItems, fileItems } = useMemo(() => {
     const videos = [];
@@ -232,6 +253,7 @@ export function NewMemoryPage({
     message: "",
   });
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
+  const [memoryRecoveryOpen, setMemoryRecoveryOpen] = useState(false);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
   const sealArmHadTimeRef = useRef(false);
@@ -243,12 +265,17 @@ export function NewMemoryPage({
   const attachmentInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const attachmentsRef = useRef(attachments);
+  const photosRef = useRef(photos);
   const handleSaveRef = useRef(null);
   const autoArmBusyRef = useRef(false);
 
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
+
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
 
   useEffect(() => {
     // Hydrate composer once per memory id.
@@ -291,11 +318,41 @@ export function NewMemoryPage({
 
   useEffect(() => {
     return () => {
+      revokeComposerPhotos(photosRef.current);
       attachmentsRef.current.forEach((item) => {
         if (item?.previewUrl) {
           URL.revokeObjectURL(item.previewUrl);
         }
       });
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!photos.length && !attachments.length) return undefined;
+    const tick = () => {
+      const estimated = estimateComposerMediaBytes(photos, attachments);
+      const pressure = readMemoryPressure(estimated);
+      if (shouldPauseForMemoryPressure(pressure)) {
+        markComposerMemoryStress();
+        setMemoryRecoveryOpen(true);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 2500);
+    return () => window.clearInterval(id);
+  }, [photos, attachments]);
+
+  useEffect(() => {
+    const onUnhandled = (event) => {
+      if (!isLikelyMemoryCrashError(event?.reason || event?.error || event?.message)) return;
+      markComposerMemoryStress();
+      setMemoryRecoveryOpen(true);
+    };
+    window.addEventListener("unhandledrejection", onUnhandled);
+    window.addEventListener("error", onUnhandled);
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandled);
+      window.removeEventListener("error", onUnhandled);
     };
   }, []);
 
@@ -362,16 +419,16 @@ export function NewMemoryPage({
         const isPlus = userEntitlements?.tier === "plus";
         const forStaging = getSealStrategy(platform).stagingOnPrep;
         const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-        const status = await evaluateComposerSealSize(
-          {
-            title: title.trim(),
-            story: story.trim(),
-            photo: photos,
-            attachments,
-            releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
-          },
-          { forStaging, isPlus }
-        );
+        const draft = {
+          title: title.trim(),
+          story: story.trim(),
+          photo: photos,
+          attachments,
+          releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
+        };
+        const status = PLATFORM_LIMITS.lightSealSizeEstimate
+          ? estimateComposerSealSizeLight(draft, { forStaging, isPlus })
+          : await evaluateComposerSealSize(draft, { forStaging, isPlus });
         if (cancelled) return;
         const template = status.withinLimit
           ? pageCopy.sealSizeMeterOk || t.sealSizeMeterOk
@@ -381,7 +438,7 @@ export function NewMemoryPage({
           .replace("{limit}", String(status.limitMb));
         setSealSizeStatus({ ...status, message });
       })();
-    }, 350);
+    }, PLATFORM_LIMITS.sealSizeDebounceMs);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -489,7 +546,7 @@ export function NewMemoryPage({
 
   async function handlePhotosSelected(event) {
     const files = Array.from(event.target.files || []);
-    if (!files.length) return;
+    if (!files.length || photoCompressBusy) return;
     const remainingSlots = Math.max(0, MAX_PHOTOS - photos.length);
     if (remainingSlots === 0) {
       setFeedback(`${t.feedbackMaxPhotosPrefix}${MAX_PHOTOS}${t.feedbackMaxPhotosSuffix}`);
@@ -498,19 +555,53 @@ export function NewMemoryPage({
     }
 
     const allowedFiles = files.slice(0, remainingSlots);
+    setPhotoCompressBusy(true);
     setFeedback(t.feedbackCompressing);
 
     try {
-      const compressed = await Promise.all(
-        allowedFiles.map((file) => compressImage(file, 1600, 0.78, t))
-      );
-      const newPhotos = await Promise.all(
-        compressed.map(async (blob, index) => ({
-          id: `${Date.now()}-${index}`,
-          mimeType: blob.type || "image/jpeg",
-          dataUrl: await blobToDataUrl(blob, t),
-        }))
-      );
+      const newPhotos = [];
+      const estimatedBytes = estimateComposerMediaBytes(photos, attachments);
+      const pressure = readMemoryPressure(estimatedBytes);
+      const compressProfile = getCompressionProfileForPressure(pressure, {
+        imageMaxDim: PLATFORM_LIMITS.imageMaxDim,
+        jpegQuality: PLATFORM_LIMITS.jpegQuality,
+      });
+
+      const compressOne = async (file, index) => {
+        const nextPressure = readMemoryPressure(
+          estimatedBytes + estimateComposerMediaBytes(newPhotos, [])
+        );
+        if (shouldPauseForMemoryPressure(nextPressure)) {
+          markComposerMemoryStress();
+          setMemoryRecoveryOpen(true);
+          return null;
+        }
+        const blob = await compressImageFile(file, {
+          maxDim: compressProfile.imageMaxDim,
+          quality: compressProfile.jpegQuality,
+        });
+        return createComposerPhotoFromBlob(blob, `${Date.now()}-${index}`);
+      };
+
+      if (PLATFORM_LIMITS.compressSequentially) {
+        for (let i = 0; i < allowedFiles.length; i += 1) {
+          const row = await compressOne(allowedFiles[i], i);
+          if (!row) break;
+          newPhotos.push(row);
+        }
+      } else {
+        for (let i = 0; i < allowedFiles.length; i += 1) {
+          const row = await compressOne(allowedFiles[i], i);
+          if (!row) break;
+          newPhotos.push(row);
+        }
+      }
+
+      if (!newPhotos.length) {
+        setFeedback(t.feedbackPhotoError);
+        return;
+      }
+
       setPhotos((prev) => [...prev, ...newPhotos]);
       const overLimit = files.length > allowedFiles.length;
       setFeedback(
@@ -521,6 +612,7 @@ export function NewMemoryPage({
     } catch {
       setFeedback(t.feedbackPhotoError);
     } finally {
+      setPhotoCompressBusy(false);
       event.target.value = "";
     }
   }
@@ -623,15 +715,7 @@ export function NewMemoryPage({
   async function persistDraftForSealPrep() {
     const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
     const draftAttachments = await prepareAttachmentsForSave(attachments, t);
-    const sealPhotos = photos
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        mimeType: p.mimeType,
-        size: p.size,
-        dataUrl: typeof p.dataUrl === "string" ? p.dataUrl : "",
-      }))
-      .filter((p) => p.dataUrl);
+    const sealPhotos = await prepareComposerPhotosForSave(photos, (blob) => blobToDataUrl(blob, t));
     return saveDraftItem({
       id: editingDraftId || undefined,
       title: title.trim() || t.untitled,
@@ -662,11 +746,14 @@ export function NewMemoryPage({
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
       let draftAttachments = [];
       draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
+        blobToDataUrl(blob, t)
+      );
       const savedDraft = await saveDraftItem({
         id: editingDraftId || undefined,
         title: title.trim() || t.untitled,
         story: story.trim(),
-        photo: photos,
+        photo: preparedPhotos.length ? preparedPhotos : photos,
         attachments: draftAttachments,
         releaseAt,
       });
@@ -677,7 +764,7 @@ export function NewMemoryPage({
           id: savedDraft.id,
           title: title.trim() || t.untitled,
           story: story.trim(),
-          photo: photos.length > 0 ? photos : [],
+          photo: preparedPhotos.length > 0 ? preparedPhotos : [],
           attachments: draftAttachments,
           releaseAt,
           timelineAt: Date.now(),
@@ -761,6 +848,7 @@ export function NewMemoryPage({
     setTitle("");
     setStory("");
     setReleaseAtInput("");
+    revokeComposerPhotos(photos);
     setPhotos([]);
     setAttachments([]);
     setEditingDraftId("");
@@ -865,11 +953,14 @@ export function NewMemoryPage({
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
       const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
+        blobToDataUrl(blob, t)
+      );
       const savedDraft = await saveDraftItem({
         id: editingDraftId || undefined,
         title: title.trim() || t.untitled,
         story: story.trim(),
-        photo: photos,
+        photo: preparedPhotos.length ? preparedPhotos : photos,
         attachments: draftAttachments,
         releaseAt,
       });
@@ -963,7 +1054,11 @@ export function NewMemoryPage({
   }
 
   function removePhotoById(id) {
-    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setPhotos((prev) => {
+      const removed = prev.find((p) => p.id === id);
+      revokeComposerPhoto(removed);
+      return prev.filter((p) => p.id !== id);
+    });
   }
 
   function footerStatusLine() {
@@ -1055,8 +1150,9 @@ export function NewMemoryPage({
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
                 style={styles.mediaBtn}
+                disabled={photoCompressBusy}
               >
-                📸 {t.addPhotosCta}
+                📸 {photoCompressBusy ? t.feedbackCompressing : t.addPhotosCta}
               </button>
               <button
                 type="button"
@@ -1107,7 +1203,7 @@ export function NewMemoryPage({
                 <div style={styles.photoGrid}>
                   {photos.map((photo) => (
                     <div key={photo.id} style={styles.mediaThumbWrap}>
-                      <img src={photo.dataUrl} alt="" style={styles.photoThumb} />
+                      <img src={getComposerPhotoDisplayUrl(photo)} alt="" style={styles.photoThumb} />
                       <button
                         type="button"
                         onClick={() => removePhotoById(photo.id)}
@@ -1387,49 +1483,13 @@ export function NewMemoryPage({
           onRetry={handleDialogErrorRetry}
         />
       ) : null}
+
+      <ComposerMemoryRecovery open={memoryRecoveryOpen} />
     </main>
   );
 }
 
-async function compressImage(file, maxSize, quality, t) {
-  const img = await loadImageFromFile(file, t);
-  const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
-  const width = Math.round(img.width * ratio);
-  const height = Math.round(img.height * ratio);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error(t.canvasUnavailable);
-  ctx.drawImage(img, 0, 0, width, height);
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error(t.compressionFailed))),
-      "image/jpeg",
-      quality
-    );
-  });
-}
-
-function loadImageFromFile(file, t) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(t.invalidImage));
-    };
-    img.src = url;
-  });
-}
-
-function blobToDataUrl(blob, t) {
+async function blobToDataUrl(blob, t) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));

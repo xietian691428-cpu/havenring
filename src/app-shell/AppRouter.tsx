@@ -15,6 +15,7 @@ import { AppChrome, type ActiveTab } from "./AppChrome";
 import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
 import { useMemories } from "../hooks/useMemories";
+import { getMemoryById } from "../services/localStorageService";
 import { useRingRegistryContext } from "../providers/RingProvider";
 import { useSessionContext } from "../providers/SessionProvider";
 import { useSubscriptionContext } from "../providers/SubscriptionProvider";
@@ -22,8 +23,8 @@ import { ExplorePage } from "../views/ExplorePage";
 import { HelpCenterPage } from "../views/HelpCenterPage";
 import { HomePage } from "../views/HomePage";
 import { MemoryDetailPage } from "../views/MemoryDetailPage";
+import dynamic from "next/dynamic";
 import { MemoryComposerErrorBoundary } from "../components/MemoryComposerErrorBoundary";
-import { NewMemoryPage } from "../views/NewMemoryPage";
 import { RingsPage } from "../views/RingsPage";
 import { PricingPage } from "../views/PricingPage";
 import { SettingsPage } from "../views/SettingsPage";
@@ -47,6 +48,26 @@ import {
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
 import { scheduleWelcomeToast } from "../utils/welcomeToast";
+
+const NewMemoryPage = dynamic(
+  () => import("../views/NewMemoryPage").then((mod) => mod.NewMemoryPage),
+  {
+    ssr: false,
+    loading: () => (
+      <main
+        style={{
+          minHeight: "60vh",
+          display: "grid",
+          placeItems: "center",
+          color: "#d9c3b3",
+          fontFamily: "Inter, system-ui, sans-serif",
+        }}
+      >
+        <p style={{ margin: 0 }}>Loading editor…</p>
+      </main>
+    ),
+  }
+);
 
 type Route =
   | { name: "home"; memoryId: null }
@@ -89,6 +110,10 @@ export function AppRouter() {
     syncMeta,
     syncHealth,
     refresh,
+    loadMoreMemories,
+    timelineHasMore,
+    loadingMore,
+    searchMemories,
     syncNow,
     syncActiveRingNow,
     persistComposerMemory,
@@ -137,7 +162,25 @@ export function AppRouter() {
       null
     );
   }, [memories, route.memoryId]);
+
+  const [detailMemory, setDetailMemory] = useState(null);
+  useEffect(() => {
+    if (route.name !== "detail" || !route.memoryId) {
+      setDetailMemory(null);
+      return undefined;
+    }
+    let active = true;
+    void getMemoryById(String(route.memoryId)).then((row) => {
+      if (active) setDetailMemory(row);
+    });
+    return () => {
+      active = false;
+    };
+  }, [route.name, route.memoryId]);
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
+  const handleTimelinePullRefresh = useCallback(async () => {
+    await syncNow();
+  }, [syncNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
 
   const flowPrimaryAction = useCallback(
@@ -638,6 +681,11 @@ export function AppRouter() {
           syncIssues={syncIssues}
           syncMeta={syncMeta}
           onResyncNow={syncNow}
+          onPullRefresh={handleTimelinePullRefresh}
+          onLoadMore={loadMoreMemories}
+          hasMoreMemories={timelineHasMore}
+          loadingMore={loadingMore}
+          onSearchMemories={searchMemories}
           onResyncActiveRing={syncActiveRingNow}
           onRecoverNow={syncNow}
           onOpenMemory={(memoryId) =>
@@ -710,8 +758,8 @@ export function AppRouter() {
       <FadePage pageKey="detail" direction={transitionDirection}>
         <MemoryDetailPage
           locale={locale}
-          memory={selectedMemory}
-          loading={loading && !selectedMemory}
+          memory={detailMemory ?? selectedMemory}
+          loading={loading && !(detailMemory ?? selectedMemory)}
           error=""
           onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
           onEdit={() => {

@@ -10,6 +10,12 @@
  */
 
 import { localCrypto } from "../../services/encryptionService";
+import { getTimelineStoryPreviewMaxChars } from "@/lib/timeline-ios-guard";
+import {
+  clearAllPersistedTimelineThumbs,
+  deletePersistedTimelineThumb,
+} from "@/lib/timeline-thumb-store";
+import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
 
 /** User-facing decrypted memory shape (timeline / detail UI). */
 export type MemorySupplement = {
@@ -175,6 +181,16 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
       createdByUserId: memory.createdByUserId,
       fromPartner: memory.fromPartner,
       supplements: memory.supplements,
+      hasPhotos: (() => {
+        const raw = memory.photo;
+        const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+        return list.length > 0;
+      })(),
+      photoCount: (() => {
+        const raw = memory.photo;
+        const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+        return list.length;
+      })(),
     }),
   ]);
 
@@ -198,6 +214,158 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
     attachmentsEnc,
     metaEnc,
   };
+}
+
+async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMemorySummary> {
+  const [story, meta] = await Promise.all([
+    localCrypto.decryptValue(record.storyEnc),
+    localCrypto.decryptJson(record.metaEnc),
+  ]);
+  const metaObj = meta as Record<string, unknown>;
+  const photoCount = Number(metaObj.photoCount || 0);
+  const hasPhotos =
+    typeof metaObj.hasPhotos === "boolean"
+      ? Boolean(metaObj.hasPhotos)
+      : photoCount > 0;
+  const previewMax = getTimelineStoryPreviewMaxChars();
+  const storyPreview =
+    story.length > previewMax ? `${story.slice(0, previewMax).trim()}…` : story;
+
+  return {
+    id: record.id,
+    title: record.title || "",
+    story,
+    storyPreview,
+    photo: null,
+    voice: null,
+    attachments: [],
+    createdAt: Number(metaObj.createdAt ?? record.createdAt),
+    updatedAt: Number(metaObj.updatedAt ?? record.updatedAt),
+    timelineAt: Number(metaObj.timelineAt ?? record.timelineAt),
+    releaseAt: Number(metaObj.releaseAt || 0) || 0,
+    tags: Array.isArray(metaObj.tags) ? metaObj.tags : [],
+    is_sealed: Boolean(metaObj.is_sealed),
+    coreLocked: Boolean(metaObj.coreLocked),
+    pairShared: Boolean(metaObj.pairShared),
+    ring_id: (metaObj.ring_id as string | null) ?? null,
+    haven_id: (metaObj.haven_id as string | null) ?? null,
+    createdByUserId: (metaObj.createdByUserId as string | null) ?? null,
+    fromPartner: Boolean(metaObj.fromPartner),
+    supplements: Array.isArray(metaObj.supplements)
+      ? (metaObj.supplements as MemorySupplement[])
+      : [],
+    hasPhotos,
+  };
+}
+
+function firstPhotoDataUrl(photo: unknown): string | null {
+  const raw = Array.isArray(photo) ? photo : photo ? [photo] : [];
+  const first = raw[0];
+  if (!first) return null;
+  if (typeof first === "string") return first;
+  if (typeof first === "object" && first !== null) {
+    const row = first as { dataUrl?: string; previewUrl?: string; src?: string; url?: string };
+    return row.dataUrl || row.previewUrl || row.src || row.url || null;
+  }
+  return null;
+}
+
+async function readRecordsByTimelineDesc(
+  db: IDBDatabase,
+  limit: number,
+  beforeTimelineAt?: number | null
+): Promise<MemoryDbRecord[]> {
+  return new Promise((resolve, reject) => {
+    const records: MemoryDbRecord[] = [];
+    const tx = db.transaction(STORE_MEMORIES, "readonly");
+    const index = tx.objectStore(STORE_MEMORIES).index("timelineAt");
+    const range =
+      beforeTimelineAt != null
+        ? IDBKeyRange.upperBound(beforeTimelineAt, true)
+        : undefined;
+    const req = index.openCursor(range, "prev");
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor || records.length >= limit) {
+        resolve(records);
+        return;
+      }
+      records.push(cursor.value as MemoryDbRecord);
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error ?? new Error("Failed to read timeline cursor."));
+  });
+}
+
+/**
+ * Paginated timeline feed — decrypts story/meta only (no photo blobs).
+ */
+export async function getTimelineMemorySummaries(opts: {
+  limit: number;
+  beforeTimelineAt?: number | null;
+}): Promise<TimelineMemoryPage> {
+  const limit = Math.max(1, Math.min(50, opts.limit || 25));
+  const db = await openDb();
+  try {
+    const records = await readRecordsByTimelineDesc(db, limit, opts.beforeTimelineAt);
+    const items = await Promise.all(records.map((row) => decryptRecordSummary(row)));
+    const last = records[records.length - 1];
+    const hasMore = records.length === limit;
+    return {
+      items,
+      hasMore,
+      nextBeforeTimelineAt: hasMore && last ? last.timelineAt : null,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/** Lazy media — first photo data URL for one memory (viewport-driven). */
+export async function getTimelineMemoryThumbnail(memoryId: string): Promise<string | null> {
+  if (!memoryId) return null;
+  const db = await openDb();
+  try {
+    const record = await new Promise<MemoryDbRecord | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_MEMORIES, "readonly");
+      const req = tx.objectStore(STORE_MEMORIES).get(memoryId);
+      req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
+      req.onerror = () =>
+        reject(req.error ?? new Error("Failed to read memory by id."));
+    });
+    if (!record) return null;
+    const photo = await localCrypto.decryptJson(record.photoEnc);
+    return firstPhotoDataUrl(photo);
+  } finally {
+    db.close();
+  }
+}
+
+/** Search across all memories (text fields only — no photo decrypt). */
+export async function searchTimelineMemorySummaries(query: string): Promise<TimelineMemorySummary[]> {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return [];
+  const db = await openDb();
+  try {
+    const records = await new Promise<MemoryDbRecord[]>((resolve, reject) => {
+      const tx = db.transaction(STORE_MEMORIES, "readonly");
+      const req = tx.objectStore(STORE_MEMORIES).getAll();
+      req.onsuccess = () => resolve((req.result || []) as MemoryDbRecord[]);
+      req.onerror = () =>
+        reject(req.error ?? new Error("Failed to read memories."));
+    });
+    const summaries = await Promise.all(records.map((row) => decryptRecordSummary(row)));
+    return summaries
+      .filter((row) => {
+        const title = String(row.title || "").toLowerCase();
+        const story = String(row.story || "").toLowerCase();
+        const d = new Date(row.timelineAt).toLocaleString().toLowerCase();
+        return title.includes(q) || story.includes(q) || d.includes(q);
+      })
+      .sort((a, b) => b.timelineAt - a.timelineAt);
+  } finally {
+    db.close();
+  }
 }
 
 async function decryptRecord(record: MemoryDbRecord): Promise<LocalMemory> {
@@ -366,6 +534,7 @@ export async function deleteMemory(id: string): Promise<boolean> {
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).delete(id);
     await txDone(tx);
+    await deletePersistedTimelineThumb(id);
     return true;
   } finally {
     db.close();
@@ -378,6 +547,7 @@ export async function clearAllMemories(): Promise<boolean> {
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).clear();
     await txDone(tx);
+    await clearAllPersistedTimelineThumbs();
     return true;
   } finally {
     db.close();

@@ -1,3 +1,4 @@
+import { resolveMemoryPhotoUrl } from "../../lib/memory-photo-display";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
@@ -101,8 +102,8 @@ export function MemoryDetailPage({
 
   const photos = useMemo(() => {
     if (!memory?.photo) return [];
-    if (Array.isArray(memory.photo)) return memory.photo;
-    return [memory.photo];
+    const rows = Array.isArray(memory.photo) ? memory.photo : [memory.photo];
+    return rows.filter((row) => resolveMemoryPhotoUrl(row));
   }, [memory]);
 
   const attachments = useMemo(() => {
@@ -130,7 +131,7 @@ export function MemoryDetailPage({
     return () => window.clearInterval(id);
   }, []);
 
-  const currentPhoto = photos[index]?.dataUrl || photos[index] || "";
+  const currentPhoto = resolveMemoryPhotoUrl(photos[index]) || "";
   const releaseAt = Number(memory?.releaseAt || 0) || 0;
   const isCapsuleLocked = releaseAt > now;
   const sealed = memory && !isCapsuleLocked ? isSealedMemory(memory) : false;
@@ -445,7 +446,7 @@ export function MemoryDetailPage({
                         <>
                           <div style={styles.thumbStrip} role="tablist" aria-label={t.photosHeading}>
                             {photos.map((p, i) => {
-                              const url = p?.dataUrl || p || "";
+                              const url = resolveMemoryPhotoUrl(p) || "";
                               return (
                                 <button
                                   key={url ? `${i}-${String(url).slice(0, 24)}` : i}

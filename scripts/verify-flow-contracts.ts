@@ -235,6 +235,8 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.doesNotMatch(pairBundles, /pair_bundles/);
   assert.match(readRepoFile("supabase/migrations/0025_pair_sync_moments_hardening.sql"), /moments_haven_sealed_created_idx/);
   assert.match(pairSync, /syncPairMemoriesFromServer/);
+  assert.match(pairSync, /normalizePhotosForStorage/);
+  assert.match(pairSync, /photosUpgraded/);
   assert.match(sdmResolve, /RING_OWNER_REQUIRED/);
   assert.match(ringTap, /RING_OWNER_REQUIRED/);
   assert.match(ringsPage, /serverPairActive/);
@@ -264,6 +266,20 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(bindClient, /ensureInviteKeyPackageAuto/);
   assert.match(bindClient, /buildStartBindInviteHref/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /postSdmResolveWithRetry/);
+  assert.match(readRepoFile("lib/composer-platform-limits.ts"), /lightSealSizeEstimate/);
+  assert.match(readRepoFile("lib/composer-platform-limits.ts"), /maxPhotos: 8/);
+  assert.match(readRepoFile("lib/workers/imageCompressor.worker.ts"), /OffscreenCanvas/);
+  assert.match(readRepoFile("lib/image-compressor-client.ts"), /compressImageFile/);
+  assert.match(readRepoFile("lib/composer-memory-guard.ts"), /readMemoryPressure/);
+  assert.match(readRepoFile("src/components/ComposerMemoryRecovery.tsx"), /running low on memory/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /compressImageFile/);
+  assert.match(readRepoFile("src/views/TimelinePage.js"), /useWindowVirtualizer/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemorySummaries/);
+  assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /revokeObjectURL/);
+  assert.match(readRepoFile("lib/timeline-thumb-store.ts"), /writePersistedTimelineThumb/);
+  assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /readPersistedTimelineThumb/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /estimateComposerSealSizeLight/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /enqueueSealFinalize/);
   assert.match(readRepoFile("src/features/seal/sealFinalizeSafe.ts"), /enqueueSealFinalize/);
@@ -403,6 +419,8 @@ check("seal session boundary: no background auto-arm; live size meter on compose
   assert.match(newMemory, /persistDraftOnBackgroundRef/);
   assert.match(newMemory, /evaluateComposerSealSize/);
   assert.match(sealMediaPrep, /evaluateComposerSealSize/);
+  assert.match(sealMediaPrep, /toServerSealCommitPayload/);
+  assert.match(sealMediaPrep, /dataUrl/);
   assert.doesNotMatch(sealFlow, /requiresSealStepUp\(\)/);
   assert.match(sessionBoundary, /abandonSealPrepOnSessionBoundary/);
   assert.doesNotMatch(sessionBoundary, /markSealStepUpRequired/);
@@ -422,10 +440,19 @@ check("seal commit persists memories to local timeline", () => {
   assert.match(sealFlow, /createMemory/);
   assert.match(sealFlow, /is_sealed: true/);
   assert.match(sealFlow, /readSealDraftRelay/);
+  assert.match(sealFlow, /normalizePhotosForStorage/);
   assert.match(readRepoFile("src/features/seal/sealDraftRelay.ts"), /writeSealDraftRelay/);
   const recovery = readRepoFile("src/features/seal/sealComposerRecovery.ts");
   assert.match(recovery, /existingPhotos/);
   assert.match(recovery, /Does NOT arm seal/);
+});
+
+check("pair photo sync: portable dataUrl in vault and detail resolver", () => {
+  const photoDisplay = readRepoFile("lib/memory-photo-display.ts");
+  const detail = readRepoFile("src/views/MemoryDetailPage.js");
+  assert.match(photoDisplay, /resolveMemoryPhotoUrl/);
+  assert.match(photoDisplay, /blob:/);
+  assert.match(detail, /resolveMemoryPhotoUrl/);
 });
 
 console.log("\nAll flow contract checks passed.");

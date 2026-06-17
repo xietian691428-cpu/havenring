@@ -1,4 +1,9 @@
 import { decodeServerMomentVault } from "@/lib/pair-sharing";
+import {
+  countDisplayablePhotos,
+  normalizeAttachmentsForStorage,
+  normalizePhotosForStorage,
+} from "@/lib/memory-photo-display";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -55,12 +60,14 @@ function bundleToLocalPayload(bundle, currentUserId) {
   if (!draft) return null;
   const createdAt = Date.parse(bundle.created_at || "") || Date.now();
   const ownedByYou = bundle.created_by_user_id === currentUserId;
+  const photo = normalizePhotosForStorage(draft.photo);
+  const attachments = normalizeAttachmentsForStorage(draft.attachments) || [];
   return {
     id: draft.id,
     title: draft.title || "Untitled memory",
     story: draft.story || "",
-    photo: draft.photo?.length ? draft.photo : null,
-    attachments: Array.isArray(draft.attachments) ? draft.attachments : [],
+    photo,
+    attachments,
     voice: null,
     timelineAt: createdAt,
     releaseAt: draft.releaseAt || Date.parse(bundle.release_at || "") || 0,
@@ -97,11 +104,14 @@ export async function importPairBundle(bundle, currentUserId) {
     if (payload.fromPartner) {
       const localEmpty =
         !String(existing.story || "").trim() &&
-        !(Array.isArray(existing.photo) && existing.photo.length) &&
+        countDisplayablePhotos(existing.photo) === 0 &&
         !(Array.isArray(existing.attachments) && existing.attachments.length);
-      if (!existing.coreLocked || localEmpty || existing.fromPartner) {
+      const incomingPhotoCount = countDisplayablePhotos(payload.photo);
+      const existingPhotoCount = countDisplayablePhotos(existing.photo);
+      const photosUpgraded = incomingPhotoCount > existingPhotoCount;
+      if (!existing.coreLocked || localEmpty || existing.fromPartner || photosUpgraded) {
         await saveMemory(payload, { allowCoreEdit: true });
-        return { imported: true, reason: "updated_partner" };
+        return { imported: true, reason: photosUpgraded ? "updated_partner_photos" : "updated_partner" };
       }
       return { imported: false, reason: "exists" };
     }
