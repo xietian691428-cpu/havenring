@@ -28,7 +28,6 @@ import { MemoryComposerErrorBoundary } from "../components/MemoryComposerErrorBo
 import { RingsPage } from "../views/RingsPage";
 import { PricingPage } from "../views/PricingPage";
 import { SettingsPage } from "../views/SettingsPage";
-import { TimelinePage } from "../views/TimelinePage";
 import { usePwaLocale } from "../i18n/pwaLocale";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
@@ -64,6 +63,26 @@ const NewMemoryPage = dynamic(
         }}
       >
         <p style={{ margin: 0 }}>Loading editor…</p>
+      </main>
+    ),
+  }
+);
+
+const TimelinePage = dynamic(
+  () => import("../views/TimelinePage").then((mod) => mod.TimelinePage),
+  {
+    ssr: false,
+    loading: () => (
+      <main
+        style={{
+          minHeight: "50vh",
+          display: "grid",
+          placeItems: "center",
+          color: "#d9c3b3",
+          fontFamily: "Inter, system-ui, sans-serif",
+        }}
+      >
+        <p style={{ margin: 0 }}>Loading memories…</p>
       </main>
     ),
   }

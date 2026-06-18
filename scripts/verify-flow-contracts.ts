@@ -266,7 +266,10 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /ensureInviteKeyPackageAuto/);
   assert.match(bindClient, /ensureInviteKeyPackageAuto/);
   assert.match(bindClient, /buildStartBindInviteHref/);
-  assert.match(readRepoFile("app/start/StartClient.tsx"), /postSdmResolveWithRetry/);
+  assert.match(readRepoFile("app/start/StartPageClient.tsx"), /nextDynamic/);
+  assert.match(readRepoFile("lib/entry-defer.ts"), /deferEntryWork/);
+  assert.match(readRepoFile("src/app-shell/AppShell.tsx"), /DeferredAppProviders/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /StartPageSkeleton/);
   assert.match(readRepoFile("lib/composer-platform-limits.ts"), /lightSealSizeEstimate: true/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /resolveComposerMediaRowForSeal/);
   assert.match(readRepoFile("lib/composer-platform-limits.ts"), /maxPhotos: 8/);

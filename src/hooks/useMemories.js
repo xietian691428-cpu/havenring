@@ -21,6 +21,7 @@ import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -440,8 +441,11 @@ export function useMemories() {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => {
+    const run = () => {
       void refresh();
+    };
+    deferEntryWork(run, {
+      timeout: isLowMemoryEntryDevice() ? 2200 : 500,
     });
   }, [refresh]);
 
@@ -485,11 +489,9 @@ export function useMemories() {
         void runSync();
       });
     };
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      window.requestIdleCallback(runSoon, { timeout: 2000 });
-    } else {
-      window.setTimeout(runSoon, 600);
-    }
+    deferEntryWork(runSoon, {
+      timeout: isLowMemoryEntryDevice() ? 3500 : 1500,
+    });
     const onOnline = () => {
       void runSync();
     };

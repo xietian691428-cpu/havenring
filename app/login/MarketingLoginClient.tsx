@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { canonicalAuthOriginFromLocation } from "@/lib/auth-redirect";
 import {
   isPermanentSupabaseSession,
@@ -66,17 +67,19 @@ export function MarketingLoginClient() {
     const supabase = getSupabaseBrowserClient();
     let cancelled = false;
 
-    void (async () => {
-      try {
-        await supabase.auth.initialize();
-        if (cancelled) return;
-        scrubSupabaseAuthArtifactsFromEntryPages();
-        const { data } = await supabase.auth.getSession();
-        if (!cancelled) setSession(data.session ?? null);
-      } catch {
-        if (!cancelled) setNotice("登录失败");
-      }
-    })();
+    deferEntryWork(() => {
+      void (async () => {
+        try {
+          await supabase.auth.initialize();
+          if (cancelled) return;
+          scrubSupabaseAuthArtifactsFromEntryPages();
+          const { data } = await supabase.auth.getSession();
+          if (!cancelled) setSession(data.session ?? null);
+        } catch {
+          if (!cancelled) setNotice("登录失败");
+        }
+      })();
+    }, { timeout: isLowMemoryEntryDevice() ? 800 : 300 });
 
     const {
       data: { subscription },

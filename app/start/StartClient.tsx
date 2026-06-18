@@ -32,36 +32,38 @@ import {
   type StartSdmScene,
   type StartSdmStateForCopy,
 } from "@/src/content/havenCopy";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import {
-  abandonInProgressSealOnStartPage,
   getArmedSealDraftIds,
-  readPendingSealDraftIds,
-  clearSealNfcTapHref,
-  clearSealWaitTabActive,
-  consumeFreshSealNfcTapHref,
-  finalizeSealChainFromSdmResponseSafe,
   getSealArmedRemainingMs,
-  getSealSdmContextPayload,
+  isSealFlowArmed,
+} from "@/lib/seal-flow";
+import { SEAL_SUCCESS_PATH } from "@/src/features/seal/sealTypes";
+import {
   hasLocalSealPrep,
   isPrimarySealWaitPage,
   isRingTapSealLandingPage,
-  isSealFlowArmed,
   isSealWaitSearch,
-  markSealWaitTabActive,
+  sealRelayNavigateHref,
+  shouldDeferSdmResolveToOwnerTab,
+} from "@/src/features/seal/sealNavigate";
+import {
+  clearSealNfcTapHref,
+  consumeFreshSealNfcTapHref,
   readFreshSealNfcTapHref,
   recordSealNfcTapHref,
-  releaseSealResolveLock,
-  sealRelayNavigateHref,
-  SEAL_COMPLETE_STORAGE_KEY,
   SEAL_NFC_TAP_STORAGE_KEY,
-  SEAL_SUCCESS_PATH,
-  shouldDeferSdmResolveToOwnerTab,
-  syncHydrateSealPrepFromStorage,
+} from "@/src/features/seal/sealNfcTapRelay";
+import {
+  clearSealWaitTabActive,
+  markSealWaitTabActive,
+  releaseSealResolveLock,
+  SEAL_COMPLETE_STORAGE_KEY,
   tryAcquireSealResolveLockForSealTap,
   wasSealRecentlyCompleted,
-  subscribeSealBroadcast,
-} from "@/src/features/seal";
+} from "@/src/features/seal/sealCrossTab";
 import { startPageStyles as styles } from "./startPageStyles";
+import { StartPageSkeleton } from "./StartPageSkeleton";
 
 function isSealNfcLaunchSearch(search: string): boolean {
   return hasSdmSearch(search);
@@ -178,39 +180,41 @@ export default function StartClient() {
     entryOrchestratorDoneRef.current = true;
 
     let active = true;
-    void (async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const search = window.location.search || "";
-      const params = new URLSearchParams(search);
-      const plan = await runNfcEntryOrchestrator({
-        surface: "start",
-        search,
-        uid: params.get("uid") || "",
-        inviteCode: params.get("invite") || readPendingPartnerInviteCode(),
-        accessToken: data.session?.access_token || "",
-      });
-      if (!active) return;
+    deferEntryWork(() => {
+      void (async () => {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const search = window.location.search || "";
+        const params = new URLSearchParams(search);
+        const plan = await runNfcEntryOrchestrator({
+          surface: "start",
+          search,
+          uid: params.get("uid") || "",
+          inviteCode: params.get("invite") || readPendingPartnerInviteCode(),
+          accessToken: data.session?.access_token || "",
+        });
+        if (!active) return;
 
-      if (plan.shouldEnablePairSharing) {
-        const { setPairSharingEnabled } = await import(
-          "@/src/services/pairSharingService"
-        );
-        setPairSharingEnabled(true);
-      }
-
-      if (
-        plan.bindRingHref &&
-        isPermanentSupabaseSession(data.session ?? null) &&
-        plan.pendingInvite &&
-        plan.hasOwnedCloudRing
-      ) {
-        const uid = params.get("uid") || "";
-        if (uid || plan.bindRingHref.includes("uid=")) {
-          window.location.assign(plan.bindRingHref);
+        if (plan.shouldEnablePairSharing) {
+          const { setPairSharingEnabled } = await import(
+            "@/src/services/pairSharingService"
+          );
+          setPairSharingEnabled(true);
         }
-      }
-    })();
+
+        if (
+          plan.bindRingHref &&
+          isPermanentSupabaseSession(data.session ?? null) &&
+          plan.pendingInvite &&
+          plan.hasOwnedCloudRing
+        ) {
+          const uid = params.get("uid") || "";
+          if (uid || plan.bindRingHref.includes("uid=")) {
+            window.location.assign(plan.bindRingHref);
+          }
+        }
+      })();
+    }, { timeout: isLowMemoryEntryDevice() ? 1600 : 600 });
 
     return () => {
       active = false;
@@ -226,7 +230,12 @@ export default function StartClient() {
       new URLSearchParams(search.startsWith("?") ? search.slice(1) : search).get("claim") || ""
     );
     if (claim) return;
-    window.location.replace("/app");
+    deferEntryWork(
+      () => {
+        window.location.replace("/app");
+      },
+      { timeout: isLowMemoryEntryDevice() ? 900 : 300 }
+    );
   }, []);
 
   const needsSealLeaveDouble =
@@ -332,13 +341,16 @@ export default function StartClient() {
     }
   }
 
-  function confirmLeaveWithoutRing() {
+  async function confirmLeaveWithoutRing() {
     if (typeof window === "undefined") return;
     setSealLeaveAck(false);
     clearSealWaitTabActive();
     const armedIds = getArmedSealDraftIds();
+    const { readPendingSealDraftIds, clearSealPrepState } = await import(
+      "@/src/features/seal/sealFlowClient"
+    );
     const draftId = armedIds[0] || readPendingSealDraftIds()[0] || "";
-    abandonInProgressSealOnStartPage();
+    clearSealPrepState();
     if (draftId) {
       window.location.assign(
         `/app?open=new&fromDraft=${encodeURIComponent(draftId)}`
@@ -545,11 +557,14 @@ export default function StartClient() {
         goSuccess();
       }
     };
-    const unsubBroadcast = subscribeSealBroadcast((message) => {
-      if (message.type === "nfc_tap") followSealTap();
-      if (message.type === "seal_complete" && wasSealRecentlyCompleted()) {
-        goSuccess();
-      }
+    let unsubBroadcast: (() => void) | null = null;
+    void import("@/src/features/seal/sealBroadcast").then((mod) => {
+      unsubBroadcast = mod.subscribeSealBroadcast((message) => {
+        if (message.type === "nfc_tap") followSealTap();
+        if (message.type === "seal_complete" && wasSealRecentlyCompleted()) {
+          goSuccess();
+        }
+      });
     });
     const onVisible = () => {
       if (document.visibilityState === "visible") followSealTap();
@@ -562,7 +577,7 @@ export default function StartClient() {
       window.clearInterval(poll);
       window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisible);
-      unsubBroadcast();
+      unsubBroadcast?.();
     };
   }, [sealWaitMode]);
 
@@ -575,7 +590,6 @@ export default function StartClient() {
     const cmac = params.get("cmac") || "";
     const picc = params.get("picc") || params.get("picc_data") || "";
     if (!cmac || (!picc && (!uid || !ctr))) return;
-    syncHydrateSealPrepFromStorage();
     if (hasLocalSealPrep()) {
       try {
         const u = new URL(window.location.href);
@@ -638,14 +652,15 @@ export default function StartClient() {
         setNotice(USER_FACING.tapRingAgain);
       }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
       try {
-        syncHydrateSealPrepFromStorage();
+        const sealFlow = await import("@/src/features/seal/sealFlowClient");
+        sealFlow.syncHydrateSealPrepFromStorage();
         setSealPrepRevision((n) => n + 1);
 
         const {
           context,
           draft_ids: pendingSealDraftIds,
           staging_id: pendingSealStagingId,
-        } = getSealSdmContextPayload();
+        } = sealFlow.getSealSdmContextPayload();
         pendingSealTapRef.current =
           Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
         setSealLeaveGuard(pendingSealTapRef.current);
@@ -787,6 +802,9 @@ export default function StartClient() {
           }
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
           setNotice(START_PAGE_EN.preparingMemory);
+          const { finalizeSealChainFromSdmResponseSafe } = await import(
+            "@/src/features/seal/sealFinalizeSafe"
+          );
           const finalizeResult = await withTimeout(
             finalizeSealChainFromSdmResponseSafe({
               sealTicket: String(data.sealTicket),
@@ -880,7 +898,7 @@ export default function StartClient() {
   }, [sdmState]);
 
   if (!useMinimalShell) {
-    return null;
+    return <StartPageSkeleton />;
   }
 
   const copy = minimalNfcCopy();
