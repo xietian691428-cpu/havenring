@@ -21,6 +21,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* iOS WebKit: Inter + system stack only — skip Geist/Cormorant download. */
+html.ios-font-minimal {
+  --font-sans: var(--font-inter);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html.ios-font-minimal,
+html.ios-font-minimal body {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
 /* HavenRing marketing site: Inter + light grotesk headlines (design system). */
 main.landing-marketing {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

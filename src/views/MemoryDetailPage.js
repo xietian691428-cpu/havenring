@@ -1,4 +1,5 @@
-import { resolveMemoryPhotoUrl } from "../../lib/memory-photo-display";
+import { resolveMemoryPhotoUrl, isBlobRefPhoto } from "../../lib/memory-photo-display";
+import { useMemoryPhotoDisplayUrl } from "../hooks/useMemoryPhotoDisplayUrl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { requestStoragePersistenceFromUserGesture } from "../../lib/requestStoragePersistence";
 import { verifyAndTrustCurrentDevice } from "../services/deviceTrustService";
@@ -67,6 +68,60 @@ function formatStoryRichText(text) {
   });
 }
 
+function MemoryDetailPhoto({ photo, style }) {
+  const url = useMemoryPhotoDisplayUrl(photo);
+  if (!url) {
+    const placeholder =
+      photo && typeof photo === "object" && photo.placeholder
+        ? String(photo.placeholder)
+        : "#3d3530";
+    return (
+      <div
+        aria-hidden
+        style={{
+          ...style,
+          background: placeholder,
+          minHeight: 200,
+        }}
+      />
+    );
+  }
+  return <img src={url} alt="" style={style} />;
+}
+
+function MemoryDetailThumb({ photo, selected, onSelect, styles }) {
+  const url = useMemoryPhotoDisplayUrl(photo, "medium");
+  const placeholder =
+    photo && typeof photo === "object" && photo.placeholder
+      ? String(photo.placeholder)
+      : "#3d3530";
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onSelect}
+      style={{
+        ...styles.thumbBtn,
+        outline: selected ? `2px solid ${sanctuaryTheme.accent}` : "none",
+      }}
+    >
+      {url ? (
+        <img src={url} alt="" style={styles.thumbImg} />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            ...styles.thumbImg,
+            display: "block",
+            background: placeholder,
+          }}
+        />
+      )}
+    </button>
+  );
+}
+
 /**
  * Memory detail — sealed-memory viewing, metadata, and protected actions.
  * Copy: `havenCopy` → `getMemoryDetailPageCopy` / `getMemoryDetailUiCopy`.
@@ -103,7 +158,7 @@ export function MemoryDetailPage({
   const photos = useMemo(() => {
     if (!memory?.photo) return [];
     const rows = Array.isArray(memory.photo) ? memory.photo : [memory.photo];
-    return rows.filter((row) => resolveMemoryPhotoUrl(row));
+    return rows.filter((row) => resolveMemoryPhotoUrl(row) || isBlobRefPhoto(row));
   }, [memory]);
 
   const attachments = useMemo(() => {
@@ -131,7 +186,7 @@ export function MemoryDetailPage({
     return () => window.clearInterval(id);
   }, []);
 
-  const currentPhoto = resolveMemoryPhotoUrl(photos[index]) || "";
+  const currentPhotoRow = photos[index] || null;
   const releaseAt = Number(memory?.releaseAt || 0) || 0;
   const isCapsuleLocked = releaseAt > now;
   const sealed = memory && !isCapsuleLocked ? isSealedMemory(memory) : false;
@@ -441,28 +496,19 @@ export function MemoryDetailPage({
                       {t.photosHeading}
                     </h2>
                     <div style={styles.carousel}>
-                      <img src={currentPhoto} alt="" style={styles.photo} />
+                      <MemoryDetailPhoto photo={currentPhotoRow} style={styles.photo} />
                       {photos.length > 1 ? (
                         <>
                           <div style={styles.thumbStrip} role="tablist" aria-label={t.photosHeading}>
-                            {photos.map((p, i) => {
-                              const url = resolveMemoryPhotoUrl(p) || "";
-                              return (
-                                <button
-                                  key={url ? `${i}-${String(url).slice(0, 24)}` : i}
-                                  type="button"
-                                  role="tab"
-                                  aria-selected={i === index}
-                                  onClick={() => setIndex(i)}
-                                  style={{
-                                    ...styles.thumbBtn,
-                                    outline: i === index ? `2px solid ${sanctuaryTheme.accent}` : "none",
-                                  }}
-                                >
-                                  <img src={url} alt="" style={styles.thumbImg} />
-                                </button>
-                              );
-                            })}
+                            {photos.map((p, i) => (
+                              <MemoryDetailThumb
+                                key={String(p?.id || i)}
+                                photo={p}
+                                selected={i === index}
+                                onSelect={() => setIndex(i)}
+                                styles={styles}
+                              />
+                            ))}
                           </div>
                           <div style={styles.carouselActions}>
                             <button type="button" onClick={prevPhoto} style={styles.carouselButton}>

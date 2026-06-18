@@ -1,28 +1,35 @@
 /**
- * Timeline memory pressure — thin wrapper for iOS text-first degradation.
+ * Timeline memory pressure — iOS heuristics + composer pressure fallback.
  */
 import {
   readMemoryPressure,
   type MemoryPressure,
 } from "@/lib/composer-memory-guard";
-import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
+import {
+  estimateOomRisk,
+  oomRiskToMemoryPressure,
+  shouldDisableTimelineThumbsForOomRisk,
+} from "@/lib/ios-memory-heuristics";
 
 export type { MemoryPressure };
 
 export function readTimelineMemoryPressure(): MemoryPressure {
+  if (isIosWebKit()) {
+    return oomRiskToMemoryPressure(estimateOomRisk());
+  }
   return readMemoryPressure(0);
 }
 
-/** Hide timeline thumbnails; show title + story preview only. */
+/** Text-first list when OOM risk is medium/high (iOS) or heap is critical. */
 export function shouldUseTextFirstTimeline(pressure: MemoryPressure): boolean {
-  if (isIosAppBootQuiet()) return true;
-  if (!isIosWebKit()) return pressure === "critical";
-  return pressure === "elevated" || pressure === "critical";
+  if (shouldDisableTimelineThumbsForOomRisk()) return true;
+  return pressure === "critical";
 }
 
-/** Block all thumb decode work (sync/scroll). */
+/** Block thumb decode during sync/scroll when OOM risk is elevated. */
 export function shouldBlockTimelineThumbs(pressure: MemoryPressure): boolean {
+  if (shouldDisableTimelineThumbsForOomRisk()) return true;
   return pressure === "critical";
 }
 

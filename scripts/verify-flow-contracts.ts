@@ -273,6 +273,56 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /shouldRunIosBackgroundSync/);
   assert.match(readRepoFile("src/components/SaveToHavenDialog.js"), /onClose/);
   assert.match(readRepoFile("lib/composer-photo-utils.ts"), /composerPhotosForDraft/);
+  assert.match(readRepoFile("lib/app-entry-nav.ts"), /buildAppEntryHref/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /useRouter/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /router\.(push|replace)/);
+  assert.doesNotMatch(
+    readRepoFile("app/start/StartClient.tsx"),
+    /window\.location\.(replace|assign)\("\/app/
+  );
+  assert.doesNotMatch(readRepoFile("lib/ios-app-boot.ts"), /IOS_FROM_START_EXTRA_MS/);
+  assert.match(readRepoFile("src/providers/MemoriesProvider.tsx"), /timelineLifecycleActive/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /MemoriesProvider/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /useMemoriesContext/);
+  assert.doesNotMatch(readRepoFile("src/app-shell/AppRouter.tsx"), /useMemories\(/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /queueBackgroundSync\("session"\)/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /shouldAllowTimelinePullRefresh/);
+  assert.match(
+    readRepoFile("src/app-shell/AppRouter.tsx"),
+    /handleTimelinePullRefresh = useCallback\(async \(\) => \{[\s\S]*?await syncNow\(\{ includePairSync: true, fullPairSync: true \}\)/
+  );
+  assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v11/);
+  assert.match(readRepoFile("public/sw.js"), /skipWaiting/);
+  assert.match(readRepoFile("app/layout.tsx"), /fonts-inter/);
+  assert.match(readRepoFile("app/layout.tsx"), /ios-font-minimal/);
+  assert.doesNotMatch(readRepoFile("app/layout.tsx"), /from "next\/font\/google"[\s\S]*Geist/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /MemoryDetailPage = dynamic/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /SettingsPage = dynamic/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /ExplorePage = dynamic/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /syncInFlightRef/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /autoSyncQueuedRef/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /queueBackgroundSync/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_PULL_REFRESH_MIN_BOOT_MS = 20_000/);
+  assert.match(readRepoFile("lib/memory-photo-types.ts"), /PhotoBlobType/);
+  assert.match(readRepoFile("lib/photo-blob-store.ts"), /STORE_PHOTO_BLOBS/);
+  assert.match(readRepoFile("lib/memory-db.ts"), /MEMORY_DB_VERSION = 3/);
+  assert.match(readRepoFile("lib/composer-photo-utils.ts"), /PreparedComposerPhoto/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getMemoryPhotoBlob/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /persistPhotoInputs/);
+  assert.match(readRepoFile("lib/photo-blob-migration.ts"), /scheduleLegacyPhotoBlobMigration/);
+  assert.match(readRepoFile("src/hooks/useMemoryPhotoDisplayUrl.js"), /getMemoryPhotoBlob/);
+  assert.doesNotMatch(
+    readRepoFile("lib/composer-photo-utils.ts"),
+    /prepareComposerPhotosForSave[\s\S]*?dataUrl: string/
+  );
+  assert.match(readRepoFile("lib/timeline-memory-preview.ts"), /memoryPayloadToTimelinePreview/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /memoryPayloadToTimelinePreview/);
+  assert.doesNotMatch(
+    readRepoFile("src/hooks/useMemories.js"),
+    /createMemory\(enrichedPayload\);\s*\n\s*const created = await getMemoryById/
+  );
+  assert.doesNotMatch(readRepoFile("src/views/NewMemoryPage.js"), /prepareComposerPhotosForSave\([^)]+,/);
   assert.match(readRepoFile("lib/composer-platform-limits.ts"), /getComposerSaveLimits/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /resolveComposerMediaRowForSeal/);
   assert.match(readRepoFile("lib/composer-platform-limits.ts"), /maxPhotos: 8/);
@@ -290,6 +340,13 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/timeline-decode-queue.ts"), /runTimelineDecodeTask/);
   assert.match(readRepoFile("lib/timeline-media-decode.ts"), /dataUrlToTimelineMediaBlobs/);
   assert.match(readRepoFile("lib/timeline-image-worker-client.ts"), /resizeImageDataUrlInWorker/);
+  assert.match(readRepoFile("lib/ios-memory-heuristics.ts"), /estimateOomRisk/);
+  assert.match(readRepoFile("lib/ios-memory-heuristics.ts"), /shouldBlockSaveForOomRisk/);
+  assert.match(readRepoFile("lib/ios-memory-heuristics.ts"), /shouldDisableTimelineThumbsForOomRisk/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /getOomRiskSyncDelayMs/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockSaveForOomRisk/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /markLastSaveOom/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getMemoryCount/);
   assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /shouldUseTextFirstTimeline/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemoryThumbBlob/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /story: ""/);

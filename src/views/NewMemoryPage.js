@@ -54,6 +54,13 @@ import {
   isLikelyMemoryCrashError,
 } from "@/lib/composer-memory-guard";
 import {
+  clearLastSaveOom,
+  markLastSaveOom,
+  refreshOomRiskSnapshot,
+  shouldBlockSaveForOomRisk,
+} from "@/lib/ios-memory-heuristics";
+import { getMemoryCount } from "../services/localStorageService";
+import {
   composerPhotosForDraft,
   createComposerPhotoFromBlob,
   getComposerPhotoDisplayUrl,
@@ -293,6 +300,10 @@ export function NewMemoryPage({
   useEffect(() => {
     photosRef.current = photos;
   }, [photos]);
+
+  useEffect(() => {
+    void refreshOomRiskSnapshot(getMemoryCount);
+  }, []);
 
   useEffect(() => {
     // Hydrate composer once per memory id.
@@ -732,7 +743,7 @@ export function NewMemoryPage({
   async function persistDraftForSealPrep() {
     const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
     const draftAttachments = await prepareAttachmentsForSave(attachments, t);
-    const sealPhotos = await prepareComposerPhotosForSave(photos, (blob) => blobToDataUrl(blob, t));
+    const sealPhotos = composerPhotosForDraft(photos);
     return saveDraftItem({
       id: editingDraftId || undefined,
       title: title.trim() || t.untitled,
@@ -751,6 +762,18 @@ export function NewMemoryPage({
       attachments.length === 0
     ) {
       setFeedback(t.feedbackNeedContent);
+      return;
+    }
+
+    if (shouldBlockSaveForOomRisk()) {
+      const message = t.feedbackOomSaveBlocked;
+      setFeedback(message);
+      setSaveDialog({
+        open: true,
+        status: "error",
+        errorMessage: message,
+        errorTitle: "",
+      });
       return;
     }
 
@@ -774,9 +797,7 @@ export function NewMemoryPage({
       setEditingDraftId(savedDraft.id);
       if (typeof onSaveMemory === "function") {
         setFeedback(t.feedbackSavingTimeline);
-        const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
-          blobToDataUrl(blob, t)
-        );
+        const preparedPhotos = await prepareComposerPhotosForSave(photos);
         await onSaveMemory({
           id: savedDraft.id,
           title: title.trim() || t.untitled,
@@ -788,8 +809,6 @@ export function NewMemoryPage({
         });
         await removeDraftItem(savedDraft.id);
         setEditingDraftId("");
-      }
-      if (typeof onSaveMemory === "function") {
         setFeedback("");
         setSecureSaveToast(true);
         if (showCloudBackupUpsell && typeof window !== "undefined") {
@@ -805,6 +824,8 @@ export function NewMemoryPage({
       } else {
         setFeedback(t.feedbackSaved);
       }
+      clearLastSaveOom();
+      void refreshOomRiskSnapshot(getMemoryCount);
       clearDraftSnapshot();
       triggerSuccessFeedback({
         soundEnabled,
@@ -821,6 +842,10 @@ export function NewMemoryPage({
         });
       }
     } catch (error) {
+      if (isLikelyMemoryCrashError(error)) {
+        markLastSaveOom();
+        void refreshOomRiskSnapshot(getMemoryCount);
+      }
       const message = formatComposerSaveError(error, t);
       setFeedback(message);
       setSaveDialog({
@@ -979,9 +1004,7 @@ export function NewMemoryPage({
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
       const draftAttachments = await prepareAttachmentsForSave(attachments, t);
-      const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
-        blobToDataUrl(blob, t)
-      );
+      const preparedPhotos = composerPhotosForDraft(photos);
       const savedDraft = await saveDraftItem({
         id: editingDraftId || undefined,
         title: title.trim() || t.untitled,

@@ -34,6 +34,9 @@ export function TimelineMemoryCard({
           </span>
         ) : null}
       </div>
+      {textFirst && memory?.hasPhotos ? (
+        <p style={styles.photoHint}>{t.textFirstPhotoHint}</p>
+      ) : null}
       {showThumb ? (
         <div style={styles.thumbRow}>
           {thumbUrl ? (
@@ -102,6 +105,12 @@ const styles = {
   },
   cardTitle: { margin: 0, fontSize: 18, lineHeight: 1.3 },
   sealBadge: { fontSize: 11, opacity: 0.85, whiteSpace: "nowrap" },
+  photoHint: {
+    margin: 0,
+    fontSize: 12,
+    opacity: 0.72,
+    fontStyle: "italic",
+  },
   thumbRow: { display: "flex", gap: 8 },
   thumb: {
     width: 88,

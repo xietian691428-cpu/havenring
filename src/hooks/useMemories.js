@@ -25,6 +25,7 @@ import {
   shouldRunIosBackgroundSync,
 } from "@/lib/ios-app-boot";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
+import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 
 const SAVE_RETRY_LIMIT = 2;
@@ -40,7 +41,8 @@ function nextBackoffMs(failureStreak) {
   return Math.min(SYNC_BACKOFF_MAX_MS, SYNC_BACKOFF_BASE_MS * 2 ** exp);
 }
 
-export function useMemories() {
+export function useMemories(options = {}) {
+  const timelineLifecycleActive = Boolean(options.timelineLifecycleActive);
   const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,6 +62,7 @@ export function useMemories() {
     lastRecoveryCount: 0,
   });
   const syncInFlightRef = useRef(null);
+  const autoSyncQueuedRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const timelineCursorRef = useRef(null);
   const [timelineHasMore, setTimelineHasMore] = useState(false);
@@ -235,8 +238,9 @@ export function useMemories() {
       });
 
       const existing = await getMemoryById(id);
+      let savedMeta;
       if (existing) {
-        await saveMemory({
+        savedMeta = await saveMemory({
           ...existing,
           title: enrichedPayload.title,
           story: enrichedPayload.story,
@@ -246,17 +250,22 @@ export function useMemories() {
           timelineAt: enrichedPayload.timelineAt,
         });
       } else {
-        await createMemory(enrichedPayload);
+        savedMeta = await createMemory(enrichedPayload);
       }
 
-      const created = await getMemoryById(id);
-      if (created) {
-        setMemories((prev) => {
-          const filtered = prev.filter((item) => item.id !== id);
-          return [created, ...filtered].sort((a, b) => b.timelineAt - a.timelineAt);
-        });
-      }
-      return created;
+      const preview = memoryPayloadToTimelinePreview(
+        {
+          ...enrichedPayload,
+          createdAt: savedMeta.createdAt ?? existing?.createdAt,
+          updatedAt: savedMeta.updatedAt,
+        },
+        existing
+      );
+      setMemories((prev) => {
+        const filtered = prev.filter((item) => item.id !== id);
+        return [preview, ...filtered].sort((a, b) => b.timelineAt - a.timelineAt);
+      });
+      return { id, preview };
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save memory.";
@@ -267,10 +276,12 @@ export function useMemories() {
     }
   }, []);
 
-  const runSync = useCallback(async () => {
+  const runSync = useCallback(async (opts = {}) => {
     if (syncInFlightRef.current) {
       return syncInFlightRef.current;
     }
+    const includePairSync = Boolean(opts.includePairSync);
+    const fullPairSync = Boolean(opts.fullPairSync);
     const runner = (async () => {
     const startedAt = Date.now();
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
@@ -287,7 +298,10 @@ export function useMemories() {
         /* background flush */
       }
 
-      const outcome = await syncRingScopedCaches();
+      const outcome = await syncRingScopedCaches({
+        includePairSync,
+        fullPairSync,
+      });
       setIntegrityWarning("");
       setCloudPlaceholders(
         Array.isArray(outcome?.cloudPlaceholders) ? outcome.cloudPlaceholders : []
@@ -349,13 +363,41 @@ export function useMemories() {
     return runner;
   }, [refresh]);
 
-  const runSyncForActiveRing = useCallback(async () => {
+  const queueBackgroundSync = useCallback(
+    (trigger = "session") => {
+      if (!timelineLifecycleActive) return null;
+      if (syncInFlightRef.current) return syncInFlightRef.current;
+      if (autoSyncQueuedRef.current) return null;
+      if (!shouldRunIosBackgroundSync(trigger)) return null;
+      autoSyncQueuedRef.current = true;
+      const timeout =
+        trigger === "session"
+          ? isLowMemoryEntryDevice()
+            ? 12_000
+            : 1500
+          : isLowMemoryEntryDevice()
+            ? 16_000
+            : 1500;
+      deferEntryWork(() => {
+        autoSyncQueuedRef.current = false;
+        void reconcilePairStateOnAppLifecycle().finally(() => {
+          void runSync();
+        });
+      }, { timeout });
+      return null;
+    },
+    [timelineLifecycleActive, runSync]
+  );
+
+  const runSyncForActiveRing = useCallback(async (opts = {}) => {
     if (syncInFlightRef.current) {
       return syncInFlightRef.current;
     }
+    const includePairSync = Boolean(opts.includePairSync);
+    const fullPairSync = Boolean(opts.fullPairSync);
     const targetUidKey = getActiveRingUidKey();
     if (!targetUidKey) {
-      return runSync();
+      return runSync(opts);
     }
     const runner = (async () => {
     const startedAt = Date.now();
@@ -373,7 +415,11 @@ export function useMemories() {
         /* background flush */
       }
 
-      const outcome = await syncRingScopedCaches({ targetUidKey });
+      const outcome = await syncRingScopedCaches({
+        targetUidKey,
+        includePairSync,
+        fullPairSync,
+      });
       setIntegrityWarning("");
       setCloudPlaceholders((prev) => {
         const keep = prev.filter((row) => row.uidKey !== targetUidKey);
@@ -453,15 +499,17 @@ export function useMemories() {
   }, []);
 
   useEffect(() => {
+    if (!timelineLifecycleActive) return undefined;
     const run = () => {
       void refresh();
     };
     deferEntryWork(run, {
       timeout: isLowMemoryEntryDevice() ? IOS_BOOT_REFRESH_DELAY_MS : 500,
     });
-  }, [refresh]);
+  }, [timelineLifecycleActive, refresh]);
 
   useEffect(() => {
+    if (!timelineLifecycleActive) return undefined;
     if (typeof window === "undefined") return undefined;
     const onStorage = (event) => {
       if (event.key === STORAGE_KEYS.sealCompleteRelay) {
@@ -481,9 +529,10 @@ export function useMemories() {
       window.removeEventListener("storage", onStorage);
       unsubBroadcast();
     };
-  }, [refresh]);
+  }, [timelineLifecycleActive, refresh]);
 
   useEffect(() => {
+    if (!timelineLifecycleActive) return undefined;
     if (typeof window === "undefined") return undefined;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
@@ -494,27 +543,26 @@ export function useMemories() {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [runSync]);
+  }, [timelineLifecycleActive, runSync]);
 
   useEffect(() => {
-    const runSoon = () => {
-      if (!shouldRunIosBackgroundSync("mount-sync")) return;
-      void reconcilePairStateOnAppLifecycle().finally(() => {
-        void runSync();
-      });
-    };
-    deferEntryWork(runSoon, {
-      timeout: isLowMemoryEntryDevice() ? 16_000 : 1500,
-    });
+    if (!timelineLifecycleActive) return undefined;
+    queueBackgroundSync("mount-sync");
+  }, [timelineLifecycleActive, queueBackgroundSync]);
+
+  useEffect(() => {
+    if (!timelineLifecycleActive) return undefined;
     const onOnline = () => {
       if (!shouldRunIosBackgroundSync("visibility")) return;
       void runSync();
     };
+    if (typeof window === "undefined") return undefined;
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [runSync]);
+  }, [timelineLifecycleActive, runSync]);
 
   useEffect(() => {
+    if (!timelineLifecycleActive) return undefined;
     if (syncing) return undefined;
     if (!syncMeta?.nextRetryAt) return undefined;
     if (!shouldRunIosBackgroundSync("retry")) return undefined;
@@ -527,7 +575,7 @@ export function useMemories() {
       void runSync();
     }, wait);
     return () => window.clearTimeout(timer);
-  }, [syncMeta?.nextRetryAt, syncing, runSync]);
+  }, [timelineLifecycleActive, syncMeta?.nextRetryAt, syncing, runSync]);
 
   return useMemo(
     () => ({
@@ -546,12 +594,14 @@ export function useMemories() {
         syncMeta,
       }),
       refresh,
+      refreshTimelinePreviews: refresh,
       loadMoreMemories,
       timelineHasMore,
       loadingMore,
       searchMemories,
       syncNow: runSync,
       syncActiveRingNow: runSyncForActiveRing,
+      queueBackgroundSync,
       createMemory: create,
       persistComposerMemory,
       deleteMemory: remove,
@@ -573,6 +623,7 @@ export function useMemories() {
       searchMemories,
       runSync,
       runSyncForActiveRing,
+      queueBackgroundSync,
       create,
       persistComposerMemory,
       remove,

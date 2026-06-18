@@ -17,7 +17,11 @@ export type ComposerPlatformLimits = {
 
 export function isIosWebKit(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return isIosWebKitUserAgent(navigator.userAgent);
+}
+
+export function isIosWebKitUserAgent(userAgent: string): boolean {
+  return /iphone|ipad|ipod/i.test(userAgent || "");
 }
 
 export function getComposerSaveLimits(): {

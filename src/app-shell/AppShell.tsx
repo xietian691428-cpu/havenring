@@ -7,6 +7,8 @@ import {
   consumeIosBootFromStartQuery,
   markIosAppBootStarted,
 } from "@/lib/ios-app-boot";
+import { refreshOomRiskSnapshot } from "@/lib/ios-memory-heuristics";
+import { getMemoryCount } from "../features/memories/localMemoryStore";
 import { RingProvider } from "../providers/RingProvider";
 import { SessionProvider, useSessionContext } from "../providers/SessionProvider";
 import { SubscriptionProvider } from "../providers/SubscriptionProvider";
@@ -84,8 +86,9 @@ export default function AppShell() {
   const [bootReady, setBootReady] = useState(!isLowMemoryEntryDevice());
 
   useEffect(() => {
-    const fromStart = consumeIosBootFromStartQuery();
-    markIosAppBootStarted({ fromStart });
+    consumeIosBootFromStartQuery();
+    markIosAppBootStarted();
+    void refreshOomRiskSnapshot(getMemoryCount);
     if (!isLowMemoryEntryDevice()) return undefined;
     let active = true;
     deferEntryWork(

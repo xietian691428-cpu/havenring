@@ -14,20 +14,13 @@ import {
 import { AppChrome, type ActiveTab } from "./AppChrome";
 import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
-import { useMemories } from "../hooks/useMemories";
+import { useMemoriesContext, MemoriesProvider } from "../providers/MemoriesProvider";
 import { getMemoryById } from "../services/localStorageService";
 import { useRingRegistryContext } from "../providers/RingProvider";
 import { useSessionContext } from "../providers/SessionProvider";
 import { useSubscriptionContext } from "../providers/SubscriptionProvider";
-import { ExplorePage } from "../views/ExplorePage";
-import { HelpCenterPage } from "../views/HelpCenterPage";
-import { HomePage } from "../views/HomePage";
-import { MemoryDetailPage } from "../views/MemoryDetailPage";
 import dynamic from "next/dynamic";
 import { MemoryComposerErrorBoundary } from "../components/MemoryComposerErrorBoundary";
-import { RingsPage } from "../views/RingsPage";
-import { PricingPage } from "../views/PricingPage";
-import { SettingsPage } from "../views/SettingsPage";
 import { usePwaLocale } from "../i18n/pwaLocale";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { canonicalAuthOriginFromLocation } from "../../lib/auth-redirect";
@@ -42,8 +35,23 @@ import {
   TEMP_DEVICE_MODE_EVENT,
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
-import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
-import { shouldRunIosBackgroundSync } from "@/lib/ios-app-boot";
+import { shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
+
+function RoutePageSkeleton({ label }: { label: string }) {
+  return (
+    <main
+      style={{
+        minHeight: "50vh",
+        display: "grid",
+        placeItems: "center",
+        color: "#d9c3b3",
+        fontFamily: "Inter, system-ui, sans-serif",
+      }}
+    >
+      <p style={{ margin: 0 }}>{label}</p>
+    </main>
+  );
+}
 
 const NewMemoryPage = dynamic(
   () => import("../views/NewMemoryPage").then((mod) => mod.NewMemoryPage),
@@ -85,6 +93,41 @@ const TimelinePage = dynamic(
   }
 );
 
+const ExplorePage = dynamic(
+  () => import("../views/ExplorePage").then((mod) => mod.ExplorePage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading explore…" /> }
+);
+
+const HomePage = dynamic(
+  () => import("../views/HomePage").then((mod) => mod.HomePage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading…" /> }
+);
+
+const RingsPage = dynamic(
+  () => import("../views/RingsPage").then((mod) => mod.RingsPage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading rings…" /> }
+);
+
+const MemoryDetailPage = dynamic(
+  () => import("../views/MemoryDetailPage").then((mod) => mod.MemoryDetailPage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading memory…" /> }
+);
+
+const SettingsPage = dynamic(
+  () => import("../views/SettingsPage").then((mod) => mod.SettingsPage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading settings…" /> }
+);
+
+const PricingPage = dynamic(
+  () => import("../views/PricingPage").then((mod) => mod.PricingPage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading pricing…" /> }
+);
+
+const HelpCenterPage = dynamic(
+  () => import("../views/HelpCenterPage").then((mod) => mod.HelpCenterPage),
+  { ssr: false, loading: () => <RoutePageSkeleton label="Loading help…" /> }
+);
+
 type Route =
   | { name: "home"; memoryId: null }
   | { name: "timeline"; memoryId: null }
@@ -112,6 +155,44 @@ export function AppRouter() {
   );
   const [swipeDx, setSwipeDx] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+
+  return (
+    <MemoriesProvider timelineLifecycleActive={route.name === "timeline"}>
+      <AppRouterInner
+        route={route}
+        setRoute={setRoute}
+        transitionDirection={transitionDirection}
+        setTransitionDirection={setTransitionDirection}
+        swipeDx={swipeDx}
+        setSwipeDx={setSwipeDx}
+        isSwiping={isSwiping}
+        setIsSwiping={setIsSwiping}
+      />
+    </MemoriesProvider>
+  );
+}
+
+type AppRouterInnerProps = {
+  route: Route;
+  setRoute: (route: Route) => void;
+  transitionDirection: "forward" | "back";
+  setTransitionDirection: (direction: "forward" | "back") => void;
+  swipeDx: number;
+  setSwipeDx: (dx: number) => void;
+  isSwiping: boolean;
+  setIsSwiping: (swiping: boolean) => void;
+};
+
+function AppRouterInner({
+  route,
+  setRoute,
+  transitionDirection,
+  setTransitionDirection,
+  swipeDx,
+  setSwipeDx,
+  isSwiping,
+  setIsSwiping,
+}: AppRouterInnerProps) {
   const locale = usePwaLocale();
   const touchStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
   const {
@@ -134,7 +215,8 @@ export function AppRouter() {
     syncActiveRingNow,
     persistComposerMemory,
     deleteMemory,
-  } = useMemories();
+    queueBackgroundSync,
+  } = useMemoriesContext();
   const { session: supabaseSession, sessionLoading } = useSessionContext();
   const { entitlements } = useSubscriptionContext();
   const { boundRingCount, bumpRingRegistry } = useRingRegistryContext();
@@ -195,7 +277,8 @@ export function AppRouter() {
   }, [route.name, route.memoryId]);
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
   const handleTimelinePullRefresh = useCallback(async () => {
-    await syncNow();
+    if (!shouldAllowTimelinePullRefresh()) return;
+    await syncNow({ includePairSync: true, fullPairSync: true });
   }, [syncNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
 
@@ -338,14 +421,8 @@ export function AppRouter() {
   }
 
   const scheduleBackgroundSync = useCallback(() => {
-    if (!shouldRunIosBackgroundSync("session")) return;
-    const run = () => {
-      void syncNow().catch(() => null);
-    };
-    deferEntryWork(run, {
-      timeout: isLowMemoryEntryDevice() ? 12_000 : 1500,
-    });
-  }, [syncNow]);
+    queueBackgroundSync("session");
+  }, [queueBackgroundSync]);
 
   async function handleQuickSignIn(provider: "apple" | "google", token: string) {
     setQuickSigningIn(true);

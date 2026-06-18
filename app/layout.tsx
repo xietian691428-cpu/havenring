@@ -1,32 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono, Inter } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { RegisterServiceWorker } from "./register-sw";
 import { ContrastToggle } from "./contrast-toggle";
 import { LanguageSwitcher } from "./language-switcher";
 import { SupabaseUrlSessionBootstrap } from "./supabase-url-session-bootstrap";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const landingSerif = Cormorant_Garamond({
-  variable: "--font-landing-serif",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+import { inter } from "./fonts-inter";
+import { isIosWebKitUserAgent } from "@/lib/composer-platform-limits";
 
 export const metadata: Metadata = {
   title: "Haven Ring",
@@ -57,16 +37,29 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+async function resolveFontClasses(): Promise<{ className: string; iosMinimal: boolean }> {
+  const headersList = await headers();
+  const userAgent = headersList.get("user-agent") || "";
+  const iosMinimal = isIosWebKitUserAgent(userAgent);
+  if (iosMinimal) {
+    return { className: `${inter.variable} ios-font-minimal`, iosMinimal: true };
+  }
+  const { geistSans, geistMono, landingSerif } = await import("./fonts-marketing");
+  return {
+    className: `${geistSans.variable} ${geistMono.variable} ${landingSerif.variable} ${inter.variable}`,
+    iosMinimal: false,
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { className: fontClasses, iosMinimal } = await resolveFontClasses();
+
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${landingSerif.variable} ${inter.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${fontClasses} h-full antialiased`} data-ios-font={iosMinimal ? "minimal" : undefined}>
       <body className="min-h-full flex flex-col bg-black text-white selection:bg-white selection:text-black high-contrast">
         <SupabaseUrlSessionBootstrap />
         <RegisterServiceWorker />

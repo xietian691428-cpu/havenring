@@ -1,4 +1,9 @@
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
+import {
+  estimateOomRisk,
+  oomRiskToMemoryPressure,
+} from "@/lib/ios-memory-heuristics";
 
 export type MemoryPressure = "normal" | "elevated" | "critical";
 
@@ -36,6 +41,10 @@ export function estimateComposerMediaBytes(
 }
 
 export function readMemoryPressure(estimatedComposerBytes = 0): MemoryPressure {
+  if (isIosWebKit()) {
+    return oomRiskToMemoryPressure(estimateOomRisk());
+  }
+
   const perf = readPerformanceMemory();
   if (perf) {
     const ratio = perf.usedJSHeapSize / perf.jsHeapSizeLimit;

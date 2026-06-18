@@ -1,3 +1,5 @@
+import { buildPreparedComposerPhoto } from "@/lib/photo-blob-prep";
+import type { MemoryPhotoRef, PreparedComposerPhoto } from "@/lib/memory-photo-types";
 import { compressImageBuffer } from "@/lib/image-compressor-client";
 import { getComposerSaveLimits, isIosWebKit } from "@/lib/composer-platform-limits";
 
@@ -63,7 +65,7 @@ function yieldToMain(): Promise<void> {
 }
 
 /** Re-compress before persist to keep iOS WebKit under memory limits. */
-async function blobToPersistDataUrl(blob: Blob): Promise<string> {
+export async function blobToPersistDataUrl(blob: Blob): Promise<string> {
   const limits = getComposerSaveLimits();
   let source = blob;
   if (isIosWebKit() || blob.size > limits.recompressAboveBytes) {
@@ -136,42 +138,48 @@ export async function resolveComposerMediaRowForSeal(
   };
 }
 
+/**
+ * Save path: build thumb/medium/full blobs + lightweight refs (no base64 in photoEnc).
+ * Blob persistence happens in localMemoryStore when the memory row is written.
+ */
 export async function prepareComposerPhotosForSave(
-  photos: ComposerPhotoRow[] = [],
-  blobToDataUrl?: (blob: Blob) => Promise<string>
-): Promise<
-  Array<{
-    id: string;
-    name?: string;
-    mimeType?: string;
-    size?: number;
-    dataUrl: string;
-  }>
-> {
-  const toDataUrl = blobToDataUrl ?? blobToPersistDataUrl;
-  const prepared = [];
+  photos: ComposerPhotoRow[] = []
+): Promise<PreparedComposerPhoto[]> {
+  const prepared: PreparedComposerPhoto[] = [];
   for (const photo of photos) {
-    if (typeof photo?.dataUrl === "string" && photo.dataUrl) {
-      prepared.push({
-        id: photo.id,
-        name: photo.name,
-        mimeType: photo.mimeType,
-        size: photo.size,
-        dataUrl: photo.dataUrl,
-      });
+    const row = await buildPreparedComposerPhoto(photo);
+    if (row) {
+      prepared.push(row);
       await yieldToMain();
+    }
+  }
+  return prepared;
+}
+
+/** Extract refs for encrypted photoEnc from save prep or existing rows. */
+export function memoryPhotoRefsFromInput(photos: unknown): MemoryPhotoRef[] {
+  const rows = Array.isArray(photos) ? photos : photos ? [photos] : [];
+  const refs: MemoryPhotoRef[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if ("ref" in row && (row as PreparedComposerPhoto).ref?.id) {
+      refs.push((row as PreparedComposerPhoto).ref);
       continue;
     }
-    if (!photo?.blob) continue;
-    const dataUrl = await toDataUrl(photo.blob);
-    prepared.push({
-      id: photo.id,
-      name: photo.name,
-      mimeType: photo.mimeType || "image/jpeg",
-      size: photo.blob.size || photo.size,
-      dataUrl,
-    });
-    await yieldToMain();
+    const typed = row as MemoryPhotoRef & { dataUrl?: string };
+    if (typeof typed.id === "string" && !typed.dataUrl) {
+      refs.push({
+        id: typed.id,
+        name: typed.name,
+        mimeType: typed.mimeType,
+        size: typed.size,
+        w: typed.w,
+        h: typed.h,
+        placeholder: typed.placeholder,
+      });
+    }
   }
-  return prepared.filter((row) => row.dataUrl);
+  return refs;
 }
+
+export type { MemoryPhotoRef, PreparedComposerPhoto };

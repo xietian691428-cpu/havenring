@@ -2,6 +2,8 @@
 
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { buildAppEntryHref } from "@/lib/app-entry-nav";
 import { buildBindRingUrl } from "@/lib/partner-invite-pending";
 import {
   NFC_FLOW_TIMING,
@@ -127,6 +129,7 @@ function StartRingGlyphPulse() {
 }
 
 export default function StartClient() {
+  const router = useRouter();
   const [notice, setNotice] = useState("");
   const [sdmState, setSdmState] = useState<StartSdmStateForCopy>(() => readInitialSdmState());
   const { platform: detectedPlatform, ready: platformReady } = usePlatform();
@@ -154,6 +157,25 @@ export default function StartClient() {
   const [nfcUiTick, setNfcUiTick] = useState(0);
   const webNfcAvailable =
     typeof window !== "undefined" && "NDEFReader" in window;
+
+  function appEntryHref(opts: { fromStart?: boolean; open?: string; fromDraft?: string } = {}) {
+    return buildAppEntryHref({
+      fromStart: opts.fromStart ?? isLowMemoryEntryDevice(),
+      open: opts.open,
+      fromDraft: opts.fromDraft,
+    });
+  }
+
+  function navigateToApp(
+    opts: { replace?: boolean; fromStart?: boolean; open?: string; fromDraft?: string } = {}
+  ) {
+    const href = appEntryHref(opts);
+    if (opts.replace) {
+      router.replace(href);
+      return;
+    }
+    router.push(href);
+  }
 
   const nfcFlow = sdmState.kind !== "idle";
   const useMinimalShell = nfcFlow || sealWaitMode;
@@ -232,11 +254,11 @@ export default function StartClient() {
     if (claim) return;
     deferEntryWork(
       () => {
-        window.location.replace("/app");
+        navigateToApp({ replace: true });
       },
       { timeout: isLowMemoryEntryDevice() ? 900 : 300 }
     );
-  }, []);
+  }, [router]);
 
   const needsSealLeaveDouble =
     sealLeaveGuard &&
@@ -352,12 +374,10 @@ export default function StartClient() {
     const draftId = armedIds[0] || readPendingSealDraftIds()[0] || "";
     clearSealPrepState();
     if (draftId) {
-      window.location.assign(
-        `/app?open=new&fromDraft=${encodeURIComponent(draftId)}`
-      );
+      navigateToApp({ open: "new", fromDraft: draftId });
       return;
     }
-    window.location.assign("/app");
+    navigateToApp();
   }
 
   function onFooterContinueWithoutRing() {
@@ -377,14 +397,11 @@ export default function StartClient() {
       confirmLeaveWithoutRing();
       return;
     }
-    window.location.assign("/app");
+    navigateToApp();
   }
 
   function openApp() {
-    if (typeof window === "undefined") return;
-    window.location.replace(
-      isLowMemoryEntryDevice() ? "/app?from=start" : "/app"
-    );
+    navigateToApp();
   }
 
   function goToLoginForBind() {

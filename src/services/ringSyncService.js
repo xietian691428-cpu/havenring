@@ -1,4 +1,5 @@
 import { classifySyncFailure } from "@/lib/sync-failure";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   backupToCloud,
@@ -131,6 +132,13 @@ async function fetchMomentsDelta(accessToken, cloudRingIds) {
 
 function isCriticalSyncIssue(issue) {
   return issue === "auth" || issue === "hash";
+}
+
+/** iOS background sync skips pair bundle import unless explicitly requested (pull refresh). */
+function shouldImportPairMemories(options = {}) {
+  if (options.includePairSync === true) return true;
+  if (options.includePairSync === false) return false;
+  return !isIosWebKit();
 }
 
 export async function syncRingScopedCaches(options = {}) {
@@ -273,18 +281,22 @@ export async function syncRingScopedCaches(options = {}) {
   let pairImported = 0;
   let pairActive = false;
   let pairBundlesSeen = 0;
-  try {
-    const pairOutcome = await syncPairMemoriesFromServer(accessToken);
-    pairImported = Number(pairOutcome?.imported || 0);
-    pairActive = Boolean(pairOutcome?.pairActive);
-    pairBundlesSeen = Number(pairOutcome?.bundlesSeen ?? pairOutcome?.total ?? 0);
-  } catch (error) {
-    console.warn("[haven-ring] pair memory import skipped:", error);
+  if (shouldImportPairMemories(options)) {
     try {
-      const { enqueuePairSyncRetry } = await import("./offlineSyncQueue");
-      await enqueuePairSyncRetry();
-    } catch {
-      /* ignore */
+      const pairOutcome = await syncPairMemoriesFromServer(accessToken, {
+        fullPairSync: Boolean(options.fullPairSync),
+      });
+      pairImported = Number(pairOutcome?.imported || 0);
+      pairActive = Boolean(pairOutcome?.pairActive);
+      pairBundlesSeen = Number(pairOutcome?.bundlesSeen ?? pairOutcome?.total ?? 0);
+    } catch (error) {
+      console.warn("[haven-ring] pair memory import skipped:", error);
+      try {
+        const { enqueuePairSyncRetry } = await import("./offlineSyncQueue");
+        await enqueuePairSyncRetry();
+      } catch {
+        /* ignore */
+      }
     }
   }
 

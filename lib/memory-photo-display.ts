@@ -8,11 +8,20 @@ type PhotoLike = {
   name?: string;
   mimeType?: string;
   size?: number;
+  w?: number;
+  h?: number;
+  placeholder?: string;
   dataUrl?: string;
   previewUrl?: string;
   src?: string;
   url?: string;
 };
+
+export function isBlobRefPhoto(photo: unknown): boolean {
+  if (!photo || typeof photo !== "object") return false;
+  const row = photo as PhotoLike;
+  return typeof row.id === "string" && !resolveMemoryPhotoUrl(photo);
+}
 
 export function resolveMemoryPhotoUrl(photo: unknown): string {
   if (typeof photo === "string") {
@@ -65,7 +74,7 @@ export function resolveMemoryAttachmentUrl(item: unknown): string {
 
 export function countDisplayablePhotos(photos: unknown): number {
   const rows = Array.isArray(photos) ? photos : photos ? [photos] : [];
-  return rows.filter((row) => resolveMemoryPhotoUrl(row)).length;
+  return rows.filter((row) => resolveMemoryPhotoUrl(row) || isBlobRefPhoto(row)).length;
 }
 
 export type StoredMemoryPhoto = {
@@ -74,6 +83,16 @@ export type StoredMemoryPhoto = {
   mimeType: string;
   size: number;
   dataUrl: string;
+};
+
+export type StoredMemoryPhotoRef = {
+  id: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  w?: number;
+  h?: number;
+  placeholder?: string;
 };
 
 /** Keep only portable inline image rows (data URL or remote URL). */

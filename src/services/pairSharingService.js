@@ -129,7 +129,7 @@ export async function importPairBundle(bundle, currentUserId) {
 /**
  * Pull Pair sealed bundles from server and merge into local timeline.
  */
-export async function syncPairMemoriesFromServer(accessToken) {
+export async function syncPairMemoriesFromServer(accessToken, options = {}) {
   if (!isPairSharingEnabled()) {
     return { ok: true, imported: 0, skipped: true, pairActive: false };
   }
@@ -139,7 +139,7 @@ export async function syncPairMemoriesFromServer(accessToken) {
     return { ok: false, imported: 0, reason: "auth" };
   }
 
-  const since = readImportCursor();
+  const since = options.fullPairSync ? "" : readImportCursor();
   const qs = since ? `?since=${encodeURIComponent(since)}` : "";
   let res;
   try {

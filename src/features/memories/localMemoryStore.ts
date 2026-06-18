@@ -14,6 +14,7 @@ import {
   getTimelineStoryPreviewMaxChars,
   isMobileMemorySensitive,
 } from "@/lib/timeline-ios-guard";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { runTimelineDecodeTask } from "@/lib/timeline-decode-queue";
 import {
   dataUrlToTimelineMediaBlobs,
@@ -27,6 +28,32 @@ import {
 } from "@/lib/timeline-thumb-store";
 import { warmTimelineMediaFromDataUrl } from "@/lib/timeline-thumb-cache";
 import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
+import {
+  isPreparedComposerPhoto,
+  isMemoryPhotoRef,
+  photoRowHasInlineDataUrl,
+  firstPhotoRef,
+  type MemoryPhotoRef,
+  type PhotoBlobType,
+} from "@/lib/memory-photo-types";
+import {
+  deletePhotoBlobsForMemory,
+  deletePhotoBlobsForPhotoIds,
+  getPhotoBlob,
+  listPhotoIdsForMemory,
+  putPhotoBlobVariants,
+} from "@/lib/photo-blob-store";
+import {
+  migrateInlinePhotosToRefs,
+  scheduleLegacyPhotoBlobMigration,
+} from "@/lib/photo-blob-migration";
+import { setCachedMemoryCount } from "@/lib/ios-memory-heuristics";
+import {
+  openMemoryDb,
+  STORE_MEMORIES,
+  STORE_PHOTO_BLOBS,
+  txDone,
+} from "@/lib/memory-db";
 
 /** User-facing decrypted memory shape (timeline / detail UI). */
 export type MemorySupplement = {
@@ -73,9 +100,7 @@ export type MemoryCreatedMeta = Pick<LocalMemory, "id" | "createdAt" | "updatedA
 
 export type MemorySavedMeta = Pick<LocalMemory, "id" | "updatedAt">;
 
-const DB_NAME = "haven_ring_memories_db";
-const DB_VERSION = 2;
-const STORE_MEMORIES = "memories";
+const openDb = openMemoryDb;
 
 type EncPayload = {
   alg: string;
@@ -99,6 +124,83 @@ type MemoryDbRecord = {
   attachmentsEnc: EncPayload;
   metaEnc: EncPayload;
 };
+
+async function persistPhotoInputs(
+  memoryId: string,
+  photo: unknown,
+  previousPhotoIds: string[] = []
+): Promise<MemoryPhotoRef[] | null> {
+  if (photo == null) {
+    if (previousPhotoIds.length) {
+      await deletePhotoBlobsForPhotoIds(previousPhotoIds);
+    }
+    return null;
+  }
+
+  const rows = Array.isArray(photo) ? photo : [photo];
+  if (!rows.length) {
+    if (previousPhotoIds.length) {
+      await deletePhotoBlobsForPhotoIds(previousPhotoIds);
+    }
+    return null;
+  }
+
+  const refs: MemoryPhotoRef[] = [];
+  for (const row of rows) {
+    if (isPreparedComposerPhoto(row)) {
+      await putPhotoBlobVariants(memoryId, row.ref.id, row.blobs);
+      refs.push(row.ref);
+      continue;
+    }
+    if (isMemoryPhotoRef(row)) {
+      refs.push(row);
+      continue;
+    }
+    if (photoRowHasInlineDataUrl(row)) {
+      const migrated = await migrateInlinePhotosToRefs(memoryId, [row]);
+      if (migrated[0]) refs.push(migrated[0]);
+    }
+  }
+
+  const nextIds = new Set(refs.map((ref) => ref.id));
+  const removed = previousPhotoIds.filter((id) => !nextIds.has(id));
+  if (removed.length) await deletePhotoBlobsForPhotoIds(removed);
+
+  return refs.length ? refs : null;
+}
+
+async function readPreviousPhotoIds(memoryId: string): Promise<string[]> {
+  try {
+    return await listPhotoIdsForMemory(memoryId);
+  } catch {
+    return [];
+  }
+}
+
+async function touchOomRiskSnapshot(): Promise<void> {
+  try {
+    setCachedMemoryCount(await getMemoryCount());
+  } catch {
+    /* best-effort */
+  }
+}
+
+async function readPreviousPhotoIdsFromRecord(
+  record: MemoryDbRecord | null
+): Promise<string[]> {
+  if (!record) return [];
+  try {
+    const photos = await localCrypto.decryptJson(record.photoEnc);
+    const rows = Array.isArray(photos) ? photos : photos ? [photos] : [];
+    return rows
+      .map((row) =>
+        row && typeof row === "object" ? String((row as MemoryPhotoRef).id || "") : ""
+      )
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 function normalizeMemoryInput(input: MemoryUpsertPayload = {}) {
   const now = Date.now();
@@ -124,33 +226,6 @@ function normalizeMemoryInput(input: MemoryUpsertPayload = {}) {
     fromPartner: Boolean(input.fromPartner),
     supplements: Array.isArray(input.supplements) ? input.supplements : [],
   };
-}
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_MEMORIES)) {
-        const store = db.createObjectStore(STORE_MEMORIES, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-        store.createIndex("timelineAt", "timelineAt");
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () =>
-      reject(req.error ?? new Error("Failed to open memory database."));
-  });
-}
-
-function txDone(tx: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () =>
-      reject(tx.error ?? new Error("IndexedDB transaction failed."));
-    tx.onabort = () =>
-      reject(tx.error ?? new Error("IndexedDB transaction aborted."));
-  });
 }
 
 function toRecord(
@@ -317,15 +392,18 @@ async function decryptSummariesForTimeline(
 
 async function scheduleTimelineThumbWarm(
   memoryId: string,
-  memoryUpdatedAt: number,
+  _memoryUpdatedAt: number,
   photo: unknown
 ): Promise<void> {
+  if (isIosWebKit()) return;
+  const ref = firstPhotoRef(photo);
+  if (ref) return;
   const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
   if (!dataUrl) return;
   try {
-    await warmTimelineMediaFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
+    await warmTimelineMediaFromDataUrl(memoryId, _memoryUpdatedAt, dataUrl);
   } catch {
-    /* best-effort */
+    /* best-effort legacy inline warm */
   }
 }
 
@@ -363,6 +441,7 @@ export async function getTimelineMemorySummaries(opts: {
   limit: number;
   beforeTimelineAt?: number | null;
 }): Promise<TimelineMemoryPage> {
+  scheduleLegacyPhotoBlobMigration();
   const limit = Math.max(1, Math.min(50, opts.limit || 25));
   const db = await openDb();
   try {
@@ -380,9 +459,10 @@ export async function getTimelineMemorySummaries(opts: {
   }
 }
 
-/** Lazy media — thumb JPEG blob (IDB cache → decrypt + worker resize). */
+/** Lazy media — thumb JPEG blob from photoBlobs store (legacy inline fallback). */
 export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
+  if (isIosWebKit()) return null;
   return runTimelineDecodeTask(async () => {
     const db = await openDb();
     try {
@@ -403,6 +483,12 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
       if (cached) return cached;
 
       const photo = await localCrypto.decryptJson(record.photoEnc);
+      const ref = firstPhotoRef(photo);
+      if (ref?.id) {
+        const blob = await getPhotoBlob(ref.id, "thumb");
+        if (blob) return blob;
+      }
+
       const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
       if (!dataUrl) return null;
 
@@ -417,7 +503,7 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
   });
 }
 
-/** Medium preview blob (800px) for detail warm path. */
+/** Medium preview blob (800px) — photoBlobs first, legacy inline fallback. */
 export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
   return runTimelineDecodeTask(async () => {
@@ -440,6 +526,12 @@ export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blo
       if (cached) return cached;
 
       const photo = await localCrypto.decryptJson(record.photoEnc);
+      const ref = firstPhotoRef(photo);
+      if (ref?.id) {
+        const blob = await getPhotoBlob(ref.id, "medium");
+        if (blob) return blob;
+      }
+
       const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
       if (!dataUrl) return null;
 
@@ -453,6 +545,15 @@ export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blo
       db.close();
     }
   });
+}
+
+/** Detail view — load one photo variant from photoBlobs (no base64 in heap). */
+export async function getMemoryPhotoBlob(
+  photoId: string,
+  type: PhotoBlobType = "full"
+): Promise<Blob | null> {
+  if (!photoId) return null;
+  return getPhotoBlob(photoId, type);
 }
 
 /** @deprecated Prefer getTimelineMemoryThumbBlob — avoids keeping data URLs in heap. */
@@ -536,6 +637,8 @@ export async function createMemory(
   input?: MemoryUpsertPayload
 ): Promise<MemoryCreatedMeta> {
   const memory = normalizeMemoryInput(input ?? {});
+  const photoRefs = await persistPhotoInputs(memory.id, memory.photo);
+  memory.photo = photoRefs;
   const encrypted = await encryptMemoryFields(memory);
   const record = toRecord(memory, encrypted);
 
@@ -545,6 +648,8 @@ export async function createMemory(
     tx.objectStore(STORE_MEMORIES).add(record);
     await txDone(tx);
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
+    scheduleLegacyPhotoBlobMigration();
+    void touchOomRiskSnapshot();
     return {
       id: memory.id,
       createdAt: memory.createdAt,
@@ -571,16 +676,54 @@ export async function saveMemory(
     }
   }
   const memory = normalizeMemoryInput(merged);
+  const db = await openDb();
+  let previousPhotoIds: string[] = [];
+  try {
+    const existingRecord = memory.id
+      ? await new Promise<MemoryDbRecord | null>((resolve, reject) => {
+          const tx = db.transaction(STORE_MEMORIES, "readonly");
+          const req = tx.objectStore(STORE_MEMORIES).get(memory.id);
+          req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
+          req.onerror = () =>
+            reject(req.error ?? new Error("Failed to read memory by id."));
+        })
+      : null;
+    previousPhotoIds = await readPreviousPhotoIdsFromRecord(existingRecord);
+  } catch {
+    previousPhotoIds = await readPreviousPhotoIds(memory.id);
+  }
+
+  if (merged.photo !== undefined) {
+    const photoRefs = await persistPhotoInputs(memory.id, memory.photo, previousPhotoIds);
+    memory.photo = photoRefs;
+  }
+
   const encrypted = await encryptMemoryFields(memory);
   const record = toRecord(memory, encrypted);
 
-  const db = await openDb();
   try {
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).put(record);
     await txDone(tx);
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
+    scheduleLegacyPhotoBlobMigration();
+    void touchOomRiskSnapshot();
     return { id: memory.id, updatedAt: memory.updatedAt };
+  } finally {
+    db.close();
+  }
+}
+
+export async function getMemoryCount(): Promise<number> {
+  const db = await openDb();
+  try {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_MEMORIES, "readonly");
+      const req = tx.objectStore(STORE_MEMORIES).count();
+      req.onsuccess = () => resolve(Number(req.result || 0));
+      req.onerror = () =>
+        reject(req.error ?? new Error("Failed to count memories."));
+    });
   } finally {
     db.close();
   }
@@ -653,12 +796,14 @@ export async function appendMemorySupplement(
 
 export async function deleteMemory(id: string): Promise<boolean> {
   if (!id) return false;
+  await deletePhotoBlobsForMemory(id);
   const db = await openDb();
   try {
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).delete(id);
     await txDone(tx);
     await deletePersistedTimelineThumb(id);
+    void touchOomRiskSnapshot();
     return true;
   } finally {
     db.close();
@@ -672,9 +817,17 @@ export async function clearAllMemories(): Promise<boolean> {
     tx.objectStore(STORE_MEMORIES).clear();
     await txDone(tx);
     await clearAllPersistedTimelineThumbs();
-    return true;
   } finally {
     db.close();
+  }
+  const blobDb = await openDb();
+  try {
+    const tx = blobDb.transaction(STORE_PHOTO_BLOBS, "readwrite");
+    tx.objectStore(STORE_PHOTO_BLOBS).clear();
+    await txDone(tx);
+    return true;
+  } finally {
+    blobDb.close();
   }
 }
 
