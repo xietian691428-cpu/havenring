@@ -5,6 +5,7 @@ import {
   readMemoryPressure,
   type MemoryPressure,
 } from "@/lib/composer-memory-guard";
+import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 
 export type { MemoryPressure };
@@ -15,6 +16,7 @@ export function readTimelineMemoryPressure(): MemoryPressure {
 
 /** Hide timeline thumbnails; show title + story preview only. */
 export function shouldUseTextFirstTimeline(pressure: MemoryPressure): boolean {
+  if (isIosAppBootQuiet()) return true;
   if (!isIosWebKit()) return pressure === "critical";
   return pressure === "elevated" || pressure === "critical";
 }

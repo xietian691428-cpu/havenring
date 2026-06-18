@@ -382,7 +382,9 @@ export default function StartClient() {
 
   function openApp() {
     if (typeof window === "undefined") return;
-    window.location.assign("/app");
+    window.location.replace(
+      isLowMemoryEntryDevice() ? "/app?from=start" : "/app"
+    );
   }
 
   function goToLoginForBind() {

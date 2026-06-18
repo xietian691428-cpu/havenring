@@ -1,14 +1,50 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState, type ReactNode } from "react";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
+import {
+  consumeIosBootFromStartQuery,
+  markIosAppBootStarted,
+} from "@/lib/ios-app-boot";
 import { RingProvider } from "../providers/RingProvider";
 import { SessionProvider, useSessionContext } from "../providers/SessionProvider";
 import { SubscriptionProvider } from "../providers/SubscriptionProvider";
 import { AppFlowProvider } from "../state/appFlowContext";
-import { AppRouter } from "./AppRouter";
 import { AppEntrySkeleton } from "./AppEntrySkeleton";
 import { SessionOrStartRedirect } from "./SessionOrStartRedirect";
+
+const LazyAppRouter = dynamic(
+  () => import("./AppRouter").then((mod) => mod.AppRouter),
+  {
+    ssr: false,
+    loading: () => <AppEntrySkeleton />,
+  }
+);
+
+function DeferredAppRouter() {
+  const [routerReady, setRouterReady] = useState(!isLowMemoryEntryDevice());
+
+  useEffect(() => {
+    if (!isLowMemoryEntryDevice()) return undefined;
+    let active = true;
+    deferEntryWork(
+      () => {
+        if (active) setRouterReady(true);
+      },
+      { timeout: 2200 }
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!routerReady) {
+    return <AppEntrySkeleton />;
+  }
+
+  return <LazyAppRouter />;
+}
 
 function DeferredAppProviders({ children }: { children: ReactNode }) {
   const { sessionLoading } = useSessionContext();
@@ -25,7 +61,7 @@ function DeferredAppProviders({ children }: { children: ReactNode }) {
       () => {
         if (active) setHeavyReady(true);
       },
-      { timeout: 1200 }
+      { timeout: 1800 }
     );
     return () => {
       active = false;
@@ -48,13 +84,15 @@ export default function AppShell() {
   const [bootReady, setBootReady] = useState(!isLowMemoryEntryDevice());
 
   useEffect(() => {
+    const fromStart = consumeIosBootFromStartQuery();
+    markIosAppBootStarted({ fromStart });
     if (!isLowMemoryEntryDevice()) return undefined;
     let active = true;
     deferEntryWork(
       () => {
         if (active) setBootReady(true);
       },
-      { timeout: 500 }
+      { timeout: 700 }
     );
     return () => {
       active = false;
@@ -70,7 +108,7 @@ export default function AppShell() {
       <SessionProvider>
         <SessionOrStartRedirect>
           <DeferredAppProviders>
-            <AppRouter />
+            <DeferredAppRouter />
           </DeferredAppProviders>
         </SessionOrStartRedirect>
       </SessionProvider>

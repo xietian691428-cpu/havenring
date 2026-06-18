@@ -7,7 +7,7 @@
 //   2. Provide an offline fallback for the shell, so the user can still open
 //      the input screen without network — moments simply can't be saved.
 
-const SHELL_CACHE = "haven-shell-v9";
+const SHELL_CACHE = "haven-shell-v10";
 const SHELL_ASSETS = ["/"];
 
 self.addEventListener("install", (event) => {

@@ -19,9 +19,13 @@ import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
+import {
+  IOS_BOOT_REFRESH_DELAY_MS,
+  shouldRunIosBackgroundSync,
+} from "@/lib/ios-app-boot";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
-import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -56,6 +60,7 @@ export function useMemories() {
     lastRecoveryCount: 0,
   });
   const syncInFlightRef = useRef(null);
+  const lastRefreshAtRef = useRef(0);
   const timelineCursorRef = useRef(null);
   const [timelineHasMore, setTimelineHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -69,6 +74,7 @@ export function useMemories() {
       timelineCursorRef.current = page.nextBeforeTimelineAt;
       setTimelineHasMore(page.hasMore);
       setMemories(page.items);
+      lastRefreshAtRef.current = Date.now();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load memories.");
     } finally {
@@ -288,7 +294,10 @@ export function useMemories() {
       );
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      await refresh();
+      const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+      if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
+        await refresh();
+      }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,
@@ -375,7 +384,10 @@ export function useMemories() {
       });
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      await refresh();
+      const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+      if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
+        await refresh();
+      }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
           ...prev,
@@ -445,7 +457,7 @@ export function useMemories() {
       void refresh();
     };
     deferEntryWork(run, {
-      timeout: isLowMemoryEntryDevice() ? 2200 : 500,
+      timeout: isLowMemoryEntryDevice() ? IOS_BOOT_REFRESH_DELAY_MS : 500,
     });
   }, [refresh]);
 
@@ -475,6 +487,7 @@ export function useMemories() {
     if (typeof window === "undefined") return undefined;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (!shouldRunIosBackgroundSync("visibility")) return;
       void reconcilePairStateOnAppLifecycle().then(() => {
         void runSync();
       });
@@ -485,14 +498,16 @@ export function useMemories() {
 
   useEffect(() => {
     const runSoon = () => {
+      if (!shouldRunIosBackgroundSync("mount-sync")) return;
       void reconcilePairStateOnAppLifecycle().finally(() => {
         void runSync();
       });
     };
     deferEntryWork(runSoon, {
-      timeout: isLowMemoryEntryDevice() ? 3500 : 1500,
+      timeout: isLowMemoryEntryDevice() ? 16_000 : 1500,
     });
     const onOnline = () => {
+      if (!shouldRunIosBackgroundSync("visibility")) return;
       void runSync();
     };
     window.addEventListener("online", onOnline);
@@ -502,6 +517,7 @@ export function useMemories() {
   useEffect(() => {
     if (syncing) return undefined;
     if (!syncMeta?.nextRetryAt) return undefined;
+    if (!shouldRunIosBackgroundSync("retry")) return undefined;
     const wait = syncMeta.nextRetryAt - Date.now();
     if (wait <= 0) {
       void runSync();

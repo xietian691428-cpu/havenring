@@ -19,6 +19,7 @@ import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
 import {
   getTimelineVirtualOverscan,
 } from "@/lib/timeline-ios-guard";
+import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -336,7 +337,7 @@ export function TimelinePage({
         ) : null}
 
         {loading ? <p style={styles.feedback}>{t.loading}</p> : null}
-        {syncing && !showPullBar ? (
+        {syncing && !showPullBar && !isIosAppBootQuiet() ? (
           <section style={styles.syncBanner} role="status" aria-live="polite">
             <p style={styles.syncBannerText}>{t.syncStatusRunning}</p>
           </section>

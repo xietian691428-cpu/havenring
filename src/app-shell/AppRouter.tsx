@@ -36,17 +36,14 @@ import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelec
 import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
-import {
-  bindSealSessionBoundaryListeners,
-  syncSealPrepWithSessionArm,
-} from "../features/seal";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   isTemporaryDeviceModeEnabled,
   TEMP_DEVICE_MODE_EVENT,
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
-import { scheduleWelcomeToast } from "../utils/welcomeToast";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
+import { shouldRunIosBackgroundSync } from "@/lib/ios-app-boot";
 
 const NewMemoryPage = dynamic(
   () => import("../views/NewMemoryPage").then((mod) => mod.NewMemoryPage),
@@ -341,16 +338,14 @@ export function AppRouter() {
   }
 
   const scheduleBackgroundSync = useCallback(() => {
+    if (!shouldRunIosBackgroundSync("session")) return;
     const run = () => {
       void syncNow().catch(() => null);
-      void refresh().catch(() => null);
     };
-    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(run, { timeout: 1500 });
-      return;
-    }
-    setTimeout(run, 400);
-  }, [syncNow, refresh]);
+    deferEntryWork(run, {
+      timeout: isLowMemoryEntryDevice() ? 12_000 : 1500,
+    });
+  }, [syncNow]);
 
   async function handleQuickSignIn(provider: "apple" | "google", token: string) {
     setQuickSigningIn(true);
@@ -464,15 +459,24 @@ export function AppRouter() {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const unbindBoundary = bindSealSessionBoundaryListeners();
+    let unbindBoundary = () => undefined;
+    let cancelled = false;
+    void import("../features/seal/sealSessionBoundary").then((boundary) => {
+      if (cancelled) return;
+      unbindBoundary = boundary.bindSealSessionBoundaryListeners();
+    });
     const syncOrphans = () => {
-      if (document.visibilityState === "visible") {
-        syncSealPrepWithSessionArm();
-      }
+      if (document.visibilityState !== "visible") return;
+      void import("../features/seal/sealFlowClient").then((sealFlow) => {
+        sealFlow.syncSealPrepWithSessionArm();
+      });
     };
     document.addEventListener("visibilitychange", syncOrphans);
-    syncSealPrepWithSessionArm();
+    void import("../features/seal/sealFlowClient").then((sealFlow) => {
+      if (!cancelled) sealFlow.syncSealPrepWithSessionArm();
+    });
     return () => {
+      cancelled = true;
       unbindBoundary();
       document.removeEventListener("visibilitychange", syncOrphans);
     };
