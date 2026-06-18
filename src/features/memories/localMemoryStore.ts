@@ -174,35 +174,63 @@ function toRecord(
 }
 
 async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInput>) {
+  const metaPayload = {
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+    timelineAt: memory.timelineAt,
+    releaseAt: memory.releaseAt,
+    tags: memory.tags,
+    is_sealed: memory.is_sealed,
+    coreLocked: memory.coreLocked,
+    pairShared: memory.pairShared,
+    ring_id: memory.ring_id,
+    haven_id: memory.haven_id,
+    createdByUserId: memory.createdByUserId,
+    fromPartner: memory.fromPartner,
+    supplements: memory.supplements,
+    hasPhotos: (() => {
+      const raw = memory.photo;
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      return list.length > 0;
+    })(),
+    photoCount: (() => {
+      const raw = memory.photo;
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      return list.length;
+    })(),
+  };
+
+  if (isMobileMemorySensitive()) {
+    const storyEnc = await localCrypto.encryptValue(memory.story || "");
+    const photoEnc = await localCrypto.encryptJson(memory.photo);
+    const attachmentsEnc = await localCrypto.encryptJson(memory.attachments || []);
+    const metaEnc = await localCrypto.encryptJson(metaPayload);
+    if (memory.encryptVoice) {
+      const voiceEnc = await localCrypto.encryptJson(memory.voice);
+      return {
+        storyEnc,
+        photoEnc,
+        voiceEnc,
+        voicePlain: null,
+        attachmentsEnc,
+        metaEnc,
+      };
+    }
+    return {
+      storyEnc,
+      photoEnc,
+      voiceEnc: null,
+      voicePlain: memory.voice,
+      attachmentsEnc,
+      metaEnc,
+    };
+  }
+
   const [storyEnc, photoEnc, attachmentsEnc, metaEnc] = await Promise.all([
     localCrypto.encryptValue(memory.story || ""),
     localCrypto.encryptJson(memory.photo),
     localCrypto.encryptJson(memory.attachments || []),
-    localCrypto.encryptJson({
-      createdAt: memory.createdAt,
-      updatedAt: memory.updatedAt,
-      timelineAt: memory.timelineAt,
-      releaseAt: memory.releaseAt,
-      tags: memory.tags,
-      is_sealed: memory.is_sealed,
-      coreLocked: memory.coreLocked,
-      pairShared: memory.pairShared,
-      ring_id: memory.ring_id,
-      haven_id: memory.haven_id,
-      createdByUserId: memory.createdByUserId,
-      fromPartner: memory.fromPartner,
-      supplements: memory.supplements,
-      hasPhotos: (() => {
-        const raw = memory.photo;
-        const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-        return list.length > 0;
-      })(),
-      photoCount: (() => {
-        const raw = memory.photo;
-        const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-        return list.length;
-      })(),
-    }),
+    localCrypto.encryptJson(metaPayload),
   ]);
 
   if (memory.encryptVoice) {

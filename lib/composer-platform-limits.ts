@@ -20,6 +20,25 @@ export function isIosWebKit(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
+export function getComposerSaveLimits(): {
+  imageMaxDim: number;
+  jpegQuality: number;
+  recompressAboveBytes: number;
+} {
+  if (isIosWebKit()) {
+    return {
+      imageMaxDim: 1024,
+      jpegQuality: 0.68,
+      recompressAboveBytes: 280_000,
+    };
+  }
+  return {
+    imageMaxDim: 1280,
+    jpegQuality: 0.74,
+    recompressAboveBytes: 450_000,
+  };
+}
+
 export function getComposerPlatformLimits(): ComposerPlatformLimits {
   if (isIosWebKit()) {
     return {

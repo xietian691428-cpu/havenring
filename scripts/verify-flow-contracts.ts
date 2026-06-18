@@ -271,7 +271,9 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/app-shell/AppShell.tsx"), /DeferredAppProviders/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /StartPageSkeleton/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /shouldRunIosBackgroundSync/);
-  assert.match(readRepoFile("lib/composer-platform-limits.ts"), /lightSealSizeEstimate: true/);
+  assert.match(readRepoFile("src/components/SaveToHavenDialog.js"), /onClose/);
+  assert.match(readRepoFile("lib/composer-photo-utils.ts"), /composerPhotosForDraft/);
+  assert.match(readRepoFile("lib/composer-platform-limits.ts"), /getComposerSaveLimits/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /resolveComposerMediaRowForSeal/);
   assert.match(readRepoFile("lib/composer-platform-limits.ts"), /maxPhotos: 8/);
   assert.match(readRepoFile("lib/workers/imageCompressor.worker.ts"), /OffscreenCanvas/);

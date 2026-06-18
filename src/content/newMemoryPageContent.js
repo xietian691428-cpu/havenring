@@ -157,6 +157,10 @@ const EN = {
   feedbackMissingVerifiedTap: "Tap your ring to continue.",
   feedbackDraftRestored: "Draft restored.",
   feedbackSaveFailed: "Could not save. Please try again.",
+  feedbackSaveQuota:
+    "This device is out of storage space. Remove a photo or free space, then try again.",
+  feedbackSaveMemoryPressure:
+    "This memory is too large for this device right now. Remove a photo or try again.",
   sealStagingErrorTitle: "Memory too large to seal",
   sealStagingTooLarge:
     "This memory is too large to seal (limit: {mb} MB). Remove a video, file, or some photos to shrink it, then try again.",

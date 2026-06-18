@@ -13,6 +13,8 @@ export function SaveToHavenDialog({
   onSealNow,
   onCreateAnother,
   onRetry,
+  onClose,
+  onBack,
   errorTitle = "",
 }) {
   const t = SAVE_TO_HAVEN_DIALOG_CONTENT[locale] || SAVE_TO_HAVEN_DIALOG_CONTENT.en;
@@ -44,6 +46,16 @@ export function SaveToHavenDialog({
       aria-label={t.dialogAriaLabel}
     >
       <section style={styles.dialog}>
+        {status === "error" && onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.dismissBtn}
+            aria-label={t.close}
+          >
+            ×
+          </button>
+        ) : null}
         <h2 style={styles.title}>{title}</h2>
         <p style={styles.subtitle}>{subtitle}</p>
 
@@ -67,10 +79,20 @@ export function SaveToHavenDialog({
             <button
               type="button"
               onClick={onRetry || onCreateAnother}
-              style={styles.secondaryButton}
+              style={styles.primaryButton}
             >
               {t.tryAgain}
             </button>
+            {onClose ? (
+              <button type="button" onClick={onClose} style={styles.secondaryButton}>
+                {t.close}
+              </button>
+            ) : null}
+            {onBack ? (
+              <button type="button" onClick={onBack} style={styles.secondaryButton}>
+                {t.backToMemories}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -90,6 +112,7 @@ const styles = {
     padding: 16,
   },
   dialog: {
+    position: "relative",
     width: "100%",
     maxWidth: 460,
     borderRadius: 18,
@@ -100,11 +123,26 @@ const styles = {
     display: "grid",
     gap: 12,
   },
+  dismissBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    border: "1px solid #5a3b30",
+    background: "transparent",
+    color: "#f8efe7",
+    fontSize: 20,
+    lineHeight: 1,
+    cursor: "pointer",
+  },
   title: {
     margin: 0,
     fontSize: 22,
     fontWeight: 600,
     color: "#f8efe7",
+    paddingRight: 28,
   },
   subtitle: {
     margin: 0,

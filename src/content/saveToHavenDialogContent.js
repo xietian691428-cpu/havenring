@@ -11,6 +11,8 @@ const EN = {
   touchRingToSeal: "Touch Ring to Seal",
   createAnother: "Create Another",
   tryAgain: "Try Again",
+  close: "Close",
+  backToMemories: "Back to Memories",
 };
 
 export const SAVE_TO_HAVEN_DIALOG_CONTENT = {
@@ -23,6 +25,8 @@ export const SAVE_TO_HAVEN_DIALOG_CONTENT = {
     touchRingToSeal: "Touch Ring to Seal",
     createAnother: "Creer un autre",
     tryAgain: "Reessayer",
+    close: "Fermer",
+    backToMemories: "Retour aux souvenirs",
   },
   es: {
     ...EN,
@@ -32,6 +36,8 @@ export const SAVE_TO_HAVEN_DIALOG_CONTENT = {
     touchRingToSeal: "Touch Ring to Seal",
     createAnother: "Crear otro",
     tryAgain: "Intentar de nuevo",
+    close: "Cerrar",
+    backToMemories: "Volver a recuerdos",
   },
   de: {
     ...EN,
@@ -41,6 +47,8 @@ export const SAVE_TO_HAVEN_DIALOG_CONTENT = {
     touchRingToSeal: "Touch Ring to Seal",
     createAnother: "Weitere erstellen",
     tryAgain: "Erneut versuchen",
+    close: "Schließen",
+    backToMemories: "Zurück zu Erinnerungen",
   },
   it: {
     ...EN,
@@ -50,5 +58,7 @@ export const SAVE_TO_HAVEN_DIALOG_CONTENT = {
     touchRingToSeal: "Touch Ring to Seal",
     createAnother: "Crea un altro",
     tryAgain: "Riprova",
+    close: "Chiudi",
+    backToMemories: "Torna ai ricordi",
   },
 };

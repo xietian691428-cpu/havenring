@@ -1,3 +1,6 @@
+import { compressImageBuffer } from "@/lib/image-compressor-client";
+import { getComposerSaveLimits, isIosWebKit } from "@/lib/composer-platform-limits";
+
 export type ComposerPhotoRow = {
   id: string;
   name?: string;
@@ -52,6 +55,48 @@ export async function blobToDataUrlFromBlob(blob: Blob): Promise<string> {
   });
 }
 
+function yieldToMain(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+/** Re-compress before persist to keep iOS WebKit under memory limits. */
+async function blobToPersistDataUrl(blob: Blob): Promise<string> {
+  const limits = getComposerSaveLimits();
+  let source = blob;
+  if (isIosWebKit() || blob.size > limits.recompressAboveBytes) {
+    try {
+      const buffer = await blob.arrayBuffer();
+      source = await compressImageBuffer(buffer, blob.type || "image/jpeg", {
+        maxDim: limits.imageMaxDim,
+        quality: limits.jpegQuality,
+      });
+    } catch {
+      /* keep original */
+    }
+  }
+  return blobToDataUrlFromBlob(source);
+}
+
+/** Draft rows: blobs only — avoids base64 spike before timeline encrypt. */
+export function composerPhotosForDraft(
+  photos: ComposerPhotoRow[] = []
+): ComposerPhotoRow[] {
+  return photos.map((photo) => {
+    const row: ComposerPhotoRow = {
+      id: photo.id,
+      name: photo.name,
+      mimeType: photo.mimeType,
+      size: photo.size,
+    };
+    if (photo.blob instanceof Blob) row.blob = photo.blob;
+    if (typeof photo.dataUrl === "string" && photo.dataUrl) row.dataUrl = photo.dataUrl;
+    return row;
+  });
+}
+
 /** Resolve composer blob previews to inline data URLs for seal size fitting. */
 export async function resolveComposerMediaRowForSeal(
   row: unknown
@@ -74,7 +119,7 @@ export async function resolveComposerMediaRowForSeal(
     };
   }
   if (typed.blob instanceof Blob) {
-    const dataUrl = await blobToDataUrlFromBlob(typed.blob);
+    const dataUrl = await blobToPersistDataUrl(typed.blob);
     return {
       id: typed.id,
       name: typed.name,
@@ -93,7 +138,7 @@ export async function resolveComposerMediaRowForSeal(
 
 export async function prepareComposerPhotosForSave(
   photos: ComposerPhotoRow[] = [],
-  blobToDataUrl: (blob: Blob) => Promise<string>
+  blobToDataUrl?: (blob: Blob) => Promise<string>
 ): Promise<
   Array<{
     id: string;
@@ -103,6 +148,7 @@ export async function prepareComposerPhotosForSave(
     dataUrl: string;
   }>
 > {
+  const toDataUrl = blobToDataUrl ?? blobToPersistDataUrl;
   const prepared = [];
   for (const photo of photos) {
     if (typeof photo?.dataUrl === "string" && photo.dataUrl) {
@@ -113,10 +159,11 @@ export async function prepareComposerPhotosForSave(
         size: photo.size,
         dataUrl: photo.dataUrl,
       });
+      await yieldToMain();
       continue;
     }
     if (!photo?.blob) continue;
-    const dataUrl = await blobToDataUrl(photo.blob);
+    const dataUrl = await toDataUrl(photo.blob);
     prepared.push({
       id: photo.id,
       name: photo.name,
@@ -124,6 +171,7 @@ export async function prepareComposerPhotosForSave(
       size: photo.blob.size || photo.size,
       dataUrl,
     });
+    await yieldToMain();
   }
   return prepared.filter((row) => row.dataUrl);
 }

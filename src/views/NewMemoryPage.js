@@ -54,6 +54,7 @@ import {
   isLikelyMemoryCrashError,
 } from "@/lib/composer-memory-guard";
 import {
+  composerPhotosForDraft,
   createComposerPhotoFromBlob,
   getComposerPhotoDisplayUrl,
   prepareComposerPhotosForSave,
@@ -70,6 +71,22 @@ const MAX_ATTACHMENT_SIZE_MB = 50;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const STORY_SOFT_MAX = 8000;
 const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
+
+function formatComposerSaveError(error, t) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("quota") ||
+    lower.includes("exceeded") ||
+    lower.includes("quotaexceeded")
+  ) {
+    return t.feedbackSaveQuota || t.feedbackSaveFailed;
+  }
+  if (isLikelyMemoryCrashError(error)) {
+    return t.feedbackSaveMemoryPressure || t.feedbackSaveFailed;
+  }
+  return message || t.feedbackSaveFailed;
+}
 
 function isVideoMime(mime) {
   return String(mime || "")
@@ -744,22 +761,22 @@ export function NewMemoryPage({
     setSecureSaveToast(false);
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-      let draftAttachments = [];
-      draftAttachments = await prepareAttachmentsForSave(attachments, t);
-      const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
-        blobToDataUrl(blob, t)
-      );
+      const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const draftPhotoRows = composerPhotosForDraft(photos);
       const savedDraft = await saveDraftItem({
         id: editingDraftId || undefined,
         title: title.trim() || t.untitled,
         story: story.trim(),
-        photo: preparedPhotos.length ? preparedPhotos : photos,
+        photo: draftPhotoRows,
         attachments: draftAttachments,
         releaseAt,
       });
       setEditingDraftId(savedDraft.id);
       if (typeof onSaveMemory === "function") {
         setFeedback(t.feedbackSavingTimeline);
+        const preparedPhotos = await prepareComposerPhotosForSave(photos, (blob) =>
+          blobToDataUrl(blob, t)
+        );
         await onSaveMemory({
           id: savedDraft.id,
           title: title.trim() || t.untitled,
@@ -804,7 +821,7 @@ export function NewMemoryPage({
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : t.feedbackSaveFailed;
+      const message = formatComposerSaveError(error, t);
       setFeedback(message);
       setSaveDialog({
         open: true,
@@ -865,6 +882,15 @@ export function NewMemoryPage({
     setSaving(false);
     setRingTapError("");
     clearSealPrepState();
+  }
+
+  function handleDialogClose() {
+    setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
+  }
+
+  function handleDialogBack() {
+    handleDialogClose();
+    onBack?.();
   }
 
   function handleDialogErrorRetry() {
@@ -1481,6 +1507,8 @@ export function NewMemoryPage({
           onSealNow={() => void handleSealNow()}
           onCreateAnother={handleCreateAnother}
           onRetry={handleDialogErrorRetry}
+          onClose={handleDialogClose}
+          onBack={handleDialogBack}
         />
       ) : null}
 
