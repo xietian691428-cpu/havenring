@@ -13,6 +13,7 @@ export {
   getTimelineMemorySummaries,
   getTimelineMemoryThumbnail,
   getTimelineMemoryThumbBlob,
+  getTimelineMemoryMediumBlob,
   searchTimelineMemorySummaries,
   memoryRepository,
   saveMemory,

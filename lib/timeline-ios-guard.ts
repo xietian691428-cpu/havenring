@@ -9,38 +9,48 @@ function isMobileMemorySensitive(): boolean {
   return isIosWebKit() || isAndroidWeb();
 }
 
-export { isMobileMemorySensitive };
+export { isMobileMemorySensitive, isIosWebKit };
 
-/** Timeline page size — smaller first paint on iOS WebKit. */
+/** Timeline list page size (infinite scroll chunk). */
 export function getTimelinePageSize(): number {
-  return isMobileMemorySensitive() ? 12 : 30;
+  return isMobileMemorySensitive() ? 15 : 30;
 }
 
-/** Max edge length for timeline thumbnails. */
+/** Persisted + list thumbnail max edge (px). */
 export function getTimelineThumbMaxDim(): number {
-  return isMobileMemorySensitive() ? 200 : 320;
+  return isMobileMemorySensitive() ? 300 : 320;
 }
 
-/** In-memory object URL cache cap (visible rows + overscan). */
+/** Persisted medium preview max edge (px) — detail warm cache. */
+export function getTimelineMediumMaxDim(): number {
+  return isMobileMemorySensitive() ? 800 : 960;
+}
+
+/** In-memory Object URL cap (visible viewport only). */
 export function getTimelineThumbCacheMax(): number {
-  return isMobileMemorySensitive() ? 6 : 16;
+  return isIosWebKit() ? 4 : isMobileMemorySensitive() ? 6 : 16;
 }
 
-/** Virtual list overscan row count. */
+/** TanStack Virtual overscan rows. */
 export function getTimelineVirtualOverscan(): number {
-  return isMobileMemorySensitive() ? 1 : 3;
+  return isIosWebKit() ? 0 : isMobileMemorySensitive() ? 1 : 3;
 }
 
 export function getTimelineStoryPreviewMaxChars(): number {
   return isMobileMemorySensitive() ? 120 : 280;
 }
 
-/** Max persisted JPEG thumbs in IndexedDB (LRU prune on write). */
+/** Max persisted thumb rows in IndexedDB (LRU). */
 export function getTimelinePersistedThumbMax(): number {
-  return isMobileMemorySensitive() ? 60 : 200;
+  return isIosWebKit() ? 48 : isMobileMemorySensitive() ? 60 : 200;
 }
 
-/** Minimum ms between pull-to-refresh sync runs on mobile WebKit. */
+/** Min ms between pull-to-refresh sync on mobile WebKit. */
 export function getTimelinePullRefreshCooldownMs(): number {
-  return isMobileMemorySensitive() ? 4000 : 1500;
+  return isMobileMemorySensitive() ? 5000 : 1500;
+}
+
+/** iOS memory pressure poll interval (ms). */
+export function getTimelineMemoryPollMs(): number {
+  return isIosWebKit() ? 4000 : 8000;
 }

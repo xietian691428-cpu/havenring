@@ -31,6 +31,17 @@ function compressInWorker(
   file: File,
   opts: CompressOpts
 ): Promise<Blob> {
+  return file.arrayBuffer().then((buffer) =>
+    compressImageBuffer(buffer, file.type || "image/jpeg", opts)
+  );
+}
+
+/** Off-thread resize/encode — shared by composer + timeline thumb pipeline. */
+export function compressImageBuffer(
+  buffer: ArrayBuffer,
+  mimeType: string,
+  opts: CompressOpts
+): Promise<Blob> {
   const instance = getWorker();
   if (!instance) {
     return Promise.reject(new Error("worker-unavailable"));
@@ -53,27 +64,19 @@ function compressInWorker(
         resolve(new Blob([data.buffer], { type: data.mimeType || "image/jpeg" }));
         return;
       }
-      reject(new Error(data.reason || "worker-compress-failed"));
+      reject(new Error(data.reason || "compress-failed"));
     };
 
     instance.addEventListener("message", onMessage);
-    void file.arrayBuffer().then(
-      (buffer) => {
-        instance.postMessage(
-          {
-            id,
-            buffer,
-            mimeType: file.type || "image/jpeg",
-            maxDim: opts.maxDim,
-            quality: opts.quality,
-          },
-          [buffer]
-        );
+    instance.postMessage(
+      {
+        id,
+        buffer,
+        mimeType: mimeType || "image/jpeg",
+        maxDim: opts.maxDim,
+        quality: opts.quality,
       },
-      (error) => {
-        instance.removeEventListener("message", onMessage);
-        reject(error instanceof Error ? error : new Error("read-file-failed"));
-      }
+      [buffer]
     );
   });
 }

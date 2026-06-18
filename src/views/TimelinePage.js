@@ -12,6 +12,7 @@ import { TIMELINE_PAGE_CONTENT } from "../content/timelinePageContent";
 import { sanctuaryTheme } from "../theme/sanctuaryTheme";
 import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
@@ -45,6 +46,7 @@ export function TimelinePage({
   locale = "en",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
+  const { textFirst: memoryTextFirst } = useTimelineMemoryMode();
   const [networkOnline, setNetworkOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine
   );
@@ -219,7 +221,7 @@ export function TimelinePage({
     [visibleMemories]
   );
   const thumbPaused = loading || syncing || pullSyncActive || pullRefreshing;
-  const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused);
+  const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused, memoryTextFirst);
 
   useEffect(() => {
     const last = virtualRows[virtualRows.length - 1];
@@ -327,6 +329,12 @@ export function TimelinePage({
           </section>
         ) : null}
 
+        {memoryTextFirst ? (
+          <section style={styles.memoryGuardBanner} role="status" aria-live="polite">
+            <p style={styles.syncBannerText}>{t.memoryGuardTextFirst}</p>
+          </section>
+        ) : null}
+
         {loading ? <p style={styles.feedback}>{t.loading}</p> : null}
         {syncing && !showPullBar ? (
           <section style={styles.syncBanner} role="status" aria-live="polite">
@@ -406,7 +414,8 @@ export function TimelinePage({
                     >
                       <TimelineMemoryCard
                         memory={memory}
-                        thumbUrl={thumbById[memory.id] || ""}
+                        thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
+                        textFirst={memoryTextFirst}
                         pinned={pinned}
                         locked={locked}
                         viewerNow={viewerNow}
@@ -662,6 +671,9 @@ const styles = {
     top: 0,
     left: 0,
     width: "100%",
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
     paddingBottom: 14,
   },
   card: {
@@ -797,6 +809,12 @@ const styles = {
     color: "rgba(248, 239, 231, 0.82)",
     fontSize: 14,
     lineHeight: 1.5,
+  },
+  memoryGuardBanner: {
+    borderRadius: 12,
+    border: "1px solid rgba(217, 166, 122, 0.25)",
+    background: "rgba(217, 166, 122, 0.08)",
+    padding: "10px 12px",
   },
   syncBannerHint: {
     margin: 0,

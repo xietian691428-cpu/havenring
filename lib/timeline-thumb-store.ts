@@ -1,18 +1,24 @@
-import { getTimelinePersistedThumbMax, getTimelineThumbMaxDim } from "@/lib/timeline-ios-guard";
+import {
+  getTimelineMediumMaxDim,
+  getTimelinePersistedThumbMax,
+  getTimelineThumbMaxDim,
+} from "@/lib/timeline-ios-guard";
 
 const DB_NAME = "haven_timeline_thumbs_v1";
-const DB_VERSION = 1;
-const STORE_THUMBS = "thumbs";
+const DB_VERSION = 2;
+const STORE_MEDIA = "media";
 
-export type PersistedTimelineThumb = {
+export type TimelineMediaVariant = "thumb" | "medium";
+
+export type PersistedTimelineMedia = {
   memoryId: string;
   memoryUpdatedAt: number;
-  maxDim: number;
+  thumbMaxDim: number;
+  mediumMaxDim: number;
+  thumbBlob: Blob;
+  mediumBlob: Blob;
   storedAt: number;
-  blob: Blob;
 };
-
-type ThumbRow = PersistedTimelineThumb;
 
 function openThumbDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -23,8 +29,11 @@ function openThumbDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_THUMBS)) {
-        const store = db.createObjectStore(STORE_THUMBS, { keyPath: "memoryId" });
+      if (db.objectStoreNames.contains("thumbs")) {
+        db.deleteObjectStore("thumbs");
+      }
+      if (!db.objectStoreNames.contains(STORE_MEDIA)) {
+        const store = db.createObjectStore(STORE_MEDIA, { keyPath: "memoryId" });
         store.createIndex("storedAt", "storedAt");
       }
     };
@@ -41,37 +50,44 @@ function txDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
-function isValidThumbRow(
-  row: ThumbRow | null | undefined,
+function isValidMediaRow(
+  row: PersistedTimelineMedia | null | undefined,
   memoryUpdatedAt: number
-): row is ThumbRow {
-  if (!row?.blob || !(row.blob instanceof Blob)) return false;
-  if (row.maxDim !== getTimelineThumbMaxDim()) return false;
+): row is PersistedTimelineMedia {
+  if (!row?.thumbBlob || !(row.thumbBlob instanceof Blob)) return false;
+  if (!row?.mediumBlob || !(row.mediumBlob instanceof Blob)) return false;
+  if (row.thumbMaxDim !== getTimelineThumbMaxDim()) return false;
+  if (row.mediumMaxDim !== getTimelineMediumMaxDim()) return false;
   if (Number(row.memoryUpdatedAt || 0) !== Number(memoryUpdatedAt || 0)) return false;
-  return row.blob.size > 0;
+  return row.thumbBlob.size > 0 && row.mediumBlob.size > 0;
 }
 
-/**
- * Read a persisted JPEG thumb when it still matches the memory revision.
- */
-export async function readPersistedTimelineThumb(
+function pickVariantBlob(
+  row: PersistedTimelineMedia,
+  variant: TimelineMediaVariant
+): Blob {
+  return variant === "medium" ? row.mediumBlob : row.thumbBlob;
+}
+
+export async function readPersistedTimelineMedia(
   memoryId: string,
-  memoryUpdatedAt: number
+  memoryUpdatedAt: number,
+  variant: TimelineMediaVariant = "thumb"
 ): Promise<Blob | null> {
   if (!memoryId || typeof indexedDB === "undefined") return null;
   const db = await openThumbDb();
   try {
-    const row = await new Promise<ThumbRow | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_THUMBS, "readonly");
-      const req = tx.objectStore(STORE_THUMBS).get(memoryId);
-      req.onsuccess = () => resolve((req.result ?? null) as ThumbRow | null);
+    const row = await new Promise<PersistedTimelineMedia | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_MEDIA, "readonly");
+      const req = tx.objectStore(STORE_MEDIA).get(memoryId);
+      req.onsuccess = () => resolve((req.result ?? null) as PersistedTimelineMedia | null);
       req.onerror = () => reject(req.error ?? new Error("thumb-read-failed"));
     });
-    if (!isValidThumbRow(row, memoryUpdatedAt)) {
-      if (row) await deletePersistedTimelineThumb(memoryId);
+    if (!isValidMediaRow(row, memoryUpdatedAt)) {
+      if (row) await deletePersistedTimelineMedia(memoryId);
       return null;
     }
-    return row.blob;
+    return pickVariantBlob(row, variant);
   } catch {
     return null;
   } finally {
@@ -79,12 +95,20 @@ export async function readPersistedTimelineThumb(
   }
 }
 
-async function prunePersistedTimelineThumbs(db: IDBDatabase): Promise<void> {
+/** @deprecated Use readPersistedTimelineMedia */
+export async function readPersistedTimelineThumb(
+  memoryId: string,
+  memoryUpdatedAt: number
+): Promise<Blob | null> {
+  return readPersistedTimelineMedia(memoryId, memoryUpdatedAt, "thumb");
+}
+
+async function prunePersistedTimelineMedia(db: IDBDatabase): Promise<void> {
   const max = getTimelinePersistedThumbMax();
-  const rows = await new Promise<ThumbRow[]>((resolve, reject) => {
-    const tx = db.transaction(STORE_THUMBS, "readonly");
-    const req = tx.objectStore(STORE_THUMBS).getAll();
-    req.onsuccess = () => resolve((req.result || []) as ThumbRow[]);
+  const rows = await new Promise<PersistedTimelineMedia[]>((resolve, reject) => {
+    const tx = db.transaction(STORE_MEDIA, "readonly");
+    const req = tx.objectStore(STORE_MEDIA).getAll();
+    req.onsuccess = () => resolve((req.result || []) as PersistedTimelineMedia[]);
     req.onerror = () => reject(req.error ?? new Error("thumb-list-failed"));
   });
   if (rows.length <= max) return;
@@ -92,36 +116,36 @@ async function prunePersistedTimelineThumbs(db: IDBDatabase): Promise<void> {
     (a, b) => Number(a.storedAt || 0) - Number(b.storedAt || 0)
   );
   const remove = sorted.slice(0, rows.length - max);
-  const tx = db.transaction(STORE_THUMBS, "readwrite");
-  const store = tx.objectStore(STORE_THUMBS);
+  const tx = db.transaction(STORE_MEDIA, "readwrite");
+  const store = tx.objectStore(STORE_MEDIA);
   for (const row of remove) {
     store.delete(row.memoryId);
   }
   await txDone(tx);
 }
 
-/**
- * Persist a generated timeline thumb blob (JPEG).
- */
-export async function writePersistedTimelineThumb(
+export async function writePersistedTimelineMedia(
   memoryId: string,
   memoryUpdatedAt: number,
-  blob: Blob
+  thumbBlob: Blob,
+  mediumBlob: Blob
 ): Promise<void> {
-  if (!memoryId || !blob || typeof indexedDB === "undefined") return;
+  if (!memoryId || !thumbBlob || !mediumBlob || typeof indexedDB === "undefined") return;
   const db = await openThumbDb();
   try {
-    const row: ThumbRow = {
+    const row: PersistedTimelineMedia = {
       memoryId,
       memoryUpdatedAt: Number(memoryUpdatedAt || 0),
-      maxDim: getTimelineThumbMaxDim(),
+      thumbMaxDim: getTimelineThumbMaxDim(),
+      mediumMaxDim: getTimelineMediumMaxDim(),
+      thumbBlob,
+      mediumBlob,
       storedAt: Date.now(),
-      blob,
     };
-    const tx = db.transaction(STORE_THUMBS, "readwrite");
-    tx.objectStore(STORE_THUMBS).put(row);
+    const tx = db.transaction(STORE_MEDIA, "readwrite");
+    tx.objectStore(STORE_MEDIA).put(row);
     await txDone(tx);
-    await prunePersistedTimelineThumbs(db);
+    await prunePersistedTimelineMedia(db);
   } catch {
     /* best-effort cache */
   } finally {
@@ -129,12 +153,21 @@ export async function writePersistedTimelineThumb(
   }
 }
 
-export async function deletePersistedTimelineThumb(memoryId: string): Promise<void> {
+/** @deprecated Use writePersistedTimelineMedia */
+export async function writePersistedTimelineThumb(
+  memoryId: string,
+  memoryUpdatedAt: number,
+  blob: Blob
+): Promise<void> {
+  await writePersistedTimelineMedia(memoryId, memoryUpdatedAt, blob, blob);
+}
+
+export async function deletePersistedTimelineMedia(memoryId: string): Promise<void> {
   if (!memoryId || typeof indexedDB === "undefined") return;
   const db = await openThumbDb();
   try {
-    const tx = db.transaction(STORE_THUMBS, "readwrite");
-    tx.objectStore(STORE_THUMBS).delete(memoryId);
+    const tx = db.transaction(STORE_MEDIA, "readwrite");
+    tx.objectStore(STORE_MEDIA).delete(memoryId);
     await txDone(tx);
   } catch {
     /* ignore */
@@ -143,16 +176,28 @@ export async function deletePersistedTimelineThumb(memoryId: string): Promise<vo
   }
 }
 
+/** @deprecated */
+export async function deletePersistedTimelineThumb(memoryId: string): Promise<void> {
+  return deletePersistedTimelineMedia(memoryId);
+}
+
 export async function clearAllPersistedTimelineThumbs(): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   const db = await openThumbDb();
   try {
-    const tx = db.transaction(STORE_THUMBS, "readwrite");
-    tx.objectStore(STORE_THUMBS).clear();
+    const tx = db.transaction(STORE_MEDIA, "readwrite");
+    tx.objectStore(STORE_MEDIA).clear();
     await txDone(tx);
   } catch {
     /* ignore */
   } finally {
     db.close();
   }
+}
+
+export async function readPersistedTimelineMedium(
+  memoryId: string,
+  memoryUpdatedAt: number
+): Promise<Blob | null> {
+  return readPersistedTimelineMedia(memoryId, memoryUpdatedAt, "medium");
 }

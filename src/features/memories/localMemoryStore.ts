@@ -16,14 +16,16 @@ import {
 } from "@/lib/timeline-ios-guard";
 import { runTimelineDecodeTask } from "@/lib/timeline-decode-queue";
 import {
-  dataUrlToTimelineThumbBlob,
+  dataUrlToTimelineMediaBlobs,
   firstPhotoDataUrl,
 } from "@/lib/timeline-media-decode";
-import { warmTimelineThumbFromDataUrl } from "@/lib/timeline-thumb-cache";
 import {
   clearAllPersistedTimelineThumbs,
   deletePersistedTimelineThumb,
+  readPersistedTimelineMedia,
+  writePersistedTimelineMedia,
 } from "@/lib/timeline-thumb-store";
+import { warmTimelineMediaFromDataUrl } from "@/lib/timeline-thumb-cache";
 import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
 
 /** User-facing decrypted memory shape (timeline / detail UI). */
@@ -293,7 +295,7 @@ async function scheduleTimelineThumbWarm(
   const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
   if (!dataUrl) return;
   try {
-    await warmTimelineThumbFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
+    await warmTimelineMediaFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
   } catch {
     /* best-effort */
   }
@@ -350,7 +352,7 @@ export async function getTimelineMemorySummaries(opts: {
   }
 }
 
-/** Lazy media — low-res JPEG blob for one memory (viewport-driven, queued). */
+/** Lazy media — thumb JPEG blob (IDB cache → decrypt + worker resize). */
 export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
   return runTimelineDecodeTask(async () => {
@@ -364,10 +366,61 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
           reject(req.error ?? new Error("Failed to read memory by id."));
       });
       if (!record) return null;
+
+      const meta = await localCrypto.decryptJson(record.metaEnc);
+      const metaObj = meta as Record<string, unknown>;
+      const updatedAt = Number(metaObj.updatedAt ?? record.updatedAt);
+
+      const cached = await readPersistedTimelineMedia(memoryId, updatedAt, "thumb");
+      if (cached) return cached;
+
       const photo = await localCrypto.decryptJson(record.photoEnc);
       const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
       if (!dataUrl) return null;
-      return dataUrlToTimelineThumbBlob(dataUrl);
+
+      const { thumb, medium } = await dataUrlToTimelineMediaBlobs(dataUrl);
+      if (thumb && medium) {
+        void writePersistedTimelineMedia(memoryId, updatedAt, thumb, medium);
+      }
+      return thumb;
+    } finally {
+      db.close();
+    }
+  });
+}
+
+/** Medium preview blob (800px) for detail warm path. */
+export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blob | null> {
+  if (!memoryId) return null;
+  return runTimelineDecodeTask(async () => {
+    const db = await openDb();
+    try {
+      const record = await new Promise<MemoryDbRecord | null>((resolve, reject) => {
+        const tx = db.transaction(STORE_MEMORIES, "readonly");
+        const req = tx.objectStore(STORE_MEMORIES).get(memoryId);
+        req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
+        req.onerror = () =>
+          reject(req.error ?? new Error("Failed to read memory by id."));
+      });
+      if (!record) return null;
+
+      const meta = await localCrypto.decryptJson(record.metaEnc);
+      const metaObj = meta as Record<string, unknown>;
+      const updatedAt = Number(metaObj.updatedAt ?? record.updatedAt);
+
+      const cached = await readPersistedTimelineMedia(memoryId, updatedAt, "medium");
+      if (cached) return cached;
+
+      const photo = await localCrypto.decryptJson(record.photoEnc);
+      const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
+      if (!dataUrl) return null;
+
+      const { thumb, medium } = await dataUrlToTimelineMediaBlobs(dataUrl);
+      if (thumb && medium) {
+        await writePersistedTimelineMedia(memoryId, updatedAt, thumb, medium);
+        return medium;
+      }
+      return null;
     } finally {
       db.close();
     }

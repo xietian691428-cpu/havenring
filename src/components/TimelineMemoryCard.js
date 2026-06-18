@@ -4,6 +4,7 @@
 export function TimelineMemoryCard({
   memory,
   thumbUrl = "",
+  textFirst = false,
   pinned = false,
   locked = false,
   viewerNow = Date.now(),
@@ -12,7 +13,7 @@ export function TimelineMemoryCard({
   onOpen,
 }) {
   const sealed = Boolean(memory?.is_sealed || memory?.ring_id);
-  const showThumb = Boolean(thumbUrl) || memory?.hasPhotos !== false;
+  const showThumb = !textFirst && (Boolean(thumbUrl) || memory?.hasPhotos !== false);
 
   return (
     <article style={styles.card}>

@@ -83,6 +83,7 @@ const EN = {
   pullToRefresh: "Pull down to refresh",
   pullToRefreshRelease: "Release to refresh",
   pullToRefreshSyncing: "Refreshing…",
+  memoryGuardTextFirst: "Photos paused to keep Haven stable — text still loads.",
   loadingMore: "Loading more…",
   syncStatusIdle: "Idle",
   syncLastAttempt: "Last attempt: {time}",

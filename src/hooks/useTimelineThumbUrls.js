@@ -20,11 +20,24 @@ function parseVisibleKey(visibleKey = "") {
     });
 }
 
+function pruneThumbState(prev, keepIds) {
+  const next = {};
+  let changed = false;
+  for (const [id, url] of Object.entries(prev)) {
+    if (keepIds.has(id)) {
+      next[id] = url;
+    } else {
+      changed = true;
+    }
+  }
+  return changed ? next : prev;
+}
+
 /**
- * Hydrates low-res object URLs for visible timeline rows; revokes on scroll-away.
- * Pauses during sync/refresh to avoid iOS WebKit OOM spikes.
+ * Hydrates low-res object URLs for visible virtual rows only.
+ * Pauses during sync/refresh or text-first memory mode.
  */
-export function useTimelineThumbUrls(visibleKey = "", paused = false) {
+export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst = false) {
   const [thumbById, setThumbById] = useState({});
   const visibleKeyRef = useRef(visibleKey);
 
@@ -33,7 +46,8 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false) {
   }, [visibleKey]);
 
   useEffect(() => {
-    if (paused) {
+    const blocked = textFirst || paused;
+    if (blocked) {
       releaseAllTimelineThumbUrls();
       setThumbById({});
       return undefined;
@@ -44,12 +58,14 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false) {
       rows.filter((row) => row.id && row.hasPhotos).map((row) => row.id)
     );
     retainTimelineThumbUrls(visibleIds);
+    setThumbById((prev) => pruneThumbState(prev, visibleIds));
 
     let cancelled = false;
     void (async () => {
       for (const row of rows) {
         if (cancelled || !row.id || !row.hasPhotos) continue;
         if (!visibleIds.has(row.id)) continue;
+
         const url = await acquireTimelineThumbUrl(
           row.id,
           () => getTimelineMemoryThumbBlob(row.id),
@@ -68,7 +84,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false) {
     return () => {
       cancelled = true;
     };
-  }, [visibleKey, paused]);
+  }, [visibleKey, paused, textFirst]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;

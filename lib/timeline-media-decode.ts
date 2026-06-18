@@ -1,11 +1,20 @@
-import { getTimelineThumbMaxDim } from "@/lib/timeline-ios-guard";
+import {
+  getTimelineMediumMaxDim,
+  getTimelineThumbMaxDim,
+} from "@/lib/timeline-ios-guard";
+import { resizeImageDataUrlInWorker } from "@/lib/timeline-image-worker-client";
 
-/** Decode an inline image to a small JPEG blob (release source strings ASAP). */
+/** Decode an inline image to a small JPEG blob (worker first, canvas fallback). */
 export async function dataUrlToTimelineThumbBlob(
   dataUrl: string,
   maxDim = getTimelineThumbMaxDim()
 ): Promise<Blob | null> {
-  if (!dataUrl || typeof document === "undefined") return null;
+  if (!dataUrl) return null;
+
+  const fromWorker = await resizeImageDataUrlInWorker(dataUrl, { maxDim, quality: 0.72 });
+  if (fromWorker) return fromWorker;
+
+  if (typeof document === "undefined") return null;
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
@@ -37,6 +46,29 @@ export async function dataUrlToTimelineThumbBlob(
       0.72
     );
   });
+}
+
+/** Generate thumb (300px) + medium (800px) JPEG blobs for persistence. */
+export async function dataUrlToTimelineMediaBlobs(dataUrl: string): Promise<{
+  thumb: Blob | null;
+  medium: Blob | null;
+}> {
+  if (!dataUrl) return { thumb: null, medium: null };
+  const thumbDim = getTimelineThumbMaxDim();
+  const mediumDim = getTimelineMediumMaxDim();
+  const thumb = await resizeImageDataUrlInWorker(dataUrl, {
+    maxDim: thumbDim,
+    quality: 0.72,
+  });
+  const medium = await resizeImageDataUrlInWorker(dataUrl, {
+    maxDim: mediumDim,
+    quality: 0.78,
+  });
+  if (thumb && medium) return { thumb, medium };
+  const thumbFallback = thumb || (await dataUrlToTimelineThumbBlob(dataUrl, thumbDim));
+  const mediumFallback =
+    medium || (await dataUrlToTimelineThumbBlob(dataUrl, mediumDim));
+  return { thumb: thumbFallback, medium: mediumFallback };
 }
 
 export function firstPhotoDataUrl(photo: unknown): string | null {
