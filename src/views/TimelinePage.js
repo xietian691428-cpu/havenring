@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   isFirstMemoryCompleted,
   ONBOARDING_DONE_KEY,
@@ -16,9 +15,6 @@ import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
-import {
-  getTimelineVirtualOverscan,
-} from "@/lib/timeline-ios-guard";
 import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 
 /**
@@ -164,23 +160,7 @@ export function TimelinePage({
 
   const orderedFiltered = useMemo(() => ordered, [ordered]);
 
-  const listRef = useRef(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  useLayoutEffect(() => {
-    if (listRef.current) {
-      setScrollMargin(listRef.current.offsetTop);
-    }
-  }, [loading, orderedFiltered.length, showPostFtuxBanner]);
-
-  const virtualizer = useWindowVirtualizer({
-    count: orderedFiltered.length,
-    estimateSize: () => 268,
-    overscan: getTimelineVirtualOverscan(),
-    scrollMargin,
-  });
-
-  const virtualRows = virtualizer.getVirtualItems();
-
+  const loadMoreRef = useRef(null);
   const [pullSyncActive, setPullSyncActive] = useState(false);
 
   const handlePullRefresh = useCallback(async () => {
@@ -210,10 +190,7 @@ export function TimelinePage({
     }
   }, [syncing, pullRefreshing]);
 
-  const visibleMemories = useMemo(
-    () => virtualRows.map((row) => orderedFiltered[row.index]).filter(Boolean),
-    [virtualRows, orderedFiltered]
-  );
+  const visibleMemories = orderedFiltered;
   const visibleThumbKey = useMemo(
     () =>
       visibleMemories
@@ -225,13 +202,21 @@ export function TimelinePage({
   const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused, memoryTextFirst);
 
   useEffect(() => {
-    const last = virtualRows[virtualRows.length - 1];
-    if (!last || !hasMoreMemories || loadingMore || searchQuery.trim()) return;
-    if (last.index >= orderedFiltered.length - 4) {
-      void onLoadMore?.();
-    }
+    if (!hasMoreMemories || loadingMore || searchQuery.trim()) return undefined;
+    const root = document.querySelector(".haven-app-main-scroll");
+    const target = loadMoreRef.current;
+    if (!root || !target) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void onLoadMore?.();
+        }
+      },
+      { root, rootMargin: "240px" }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
   }, [
-    virtualRows,
     hasMoreMemories,
     loadingMore,
     orderedFiltered.length,
@@ -388,47 +373,34 @@ export function TimelinePage({
           </section>
         ) : null}
 
-        <div ref={listRef}>
+        <div>
           {orderedFiltered.length ? (
-            <div
-              style={{
-                height: virtualizer.getTotalSize(),
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              <ol style={styles.virtualList}>
-                {virtualRows.map((virtualRow) => {
-                  const memory = orderedFiltered[virtualRow.index];
-                  if (!memory) return null;
-                  const pinned = pinnedId === memory.id;
-                  const locked = Number(memory?.releaseAt || 0) > viewerNow;
-                  return (
-                    <li
-                      key={memory.id}
-                      data-index={virtualRow.index}
-                      ref={virtualizer.measureElement}
-                      style={{
-                        ...styles.virtualItem,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                    >
-                      <TimelineMemoryCard
-                        memory={memory}
-                        thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
-                        textFirst={memoryTextFirst}
-                        pinned={pinned}
-                        locked={locked}
-                        viewerNow={viewerNow}
-                        t={t}
-                        onTogglePin={togglePin}
-                        onOpen={onOpenMemory}
-                      />
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
+            <ol style={styles.list}>
+              {orderedFiltered.map((memory, index) => {
+                const pinned = pinnedId === memory.id;
+                const locked = Number(memory?.releaseAt || 0) > viewerNow;
+                const isLast = index === orderedFiltered.length - 1;
+                return (
+                  <li
+                    key={memory.id}
+                    ref={isLast ? loadMoreRef : undefined}
+                    style={styles.listItem}
+                  >
+                    <TimelineMemoryCard
+                      memory={memory}
+                      thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
+                      textFirst={memoryTextFirst}
+                      pinned={pinned}
+                      locked={locked}
+                      viewerNow={viewerNow}
+                      t={t}
+                      onTogglePin={togglePin}
+                      onOpen={onOpenMemory}
+                    />
+                  </li>
+                );
+              })}
+            </ol>
           ) : null}
         </div>
 
@@ -454,16 +426,17 @@ const styles = {
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 720,
+    maxWidth: 560,
     margin: "0 auto",
     display: "grid",
-    gap: 14,
+    gap: 10,
+    width: "100%",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 8,
   },
   headerLeft: {
     flex: 1,
@@ -575,10 +548,11 @@ const styles = {
     gap: 8,
   },
   title: {
-    margin: "6px 0 0",
-    fontSize: 28,
-    fontWeight: 500,
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 600,
     color: sanctuaryTheme.cream,
+    lineHeight: 1.2,
   },
   createButton: {
     border: `1px solid ${sanctuaryTheme.accent}`,
@@ -592,11 +566,23 @@ const styles = {
     whiteSpace: "nowrap",
   },
   tagline: {
-    margin: "6px 0 0",
-    fontSize: 14,
-    lineHeight: 1.45,
+    margin: "4px 0 0",
+    fontSize: 13,
+    lineHeight: 1.4,
     color: "rgba(248, 239, 231, 0.65)",
     maxWidth: 420,
+  },
+  list: {
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+    display: "grid",
+    gap: 10,
+  },
+  listItem: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
   },
   ftuxBanner: {
     border: "1px solid rgba(196, 149, 106, 0.35)",

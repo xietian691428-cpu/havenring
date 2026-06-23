@@ -28,7 +28,6 @@ export function ExplorePage({
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <p style={styles.brand}>{t.brand}</p>
             <h1 style={styles.title}>{t.title}</h1>
           </div>
           <OnlineStatusBadge locale={locale} />
@@ -71,10 +70,11 @@ const styles = {
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 720,
+    maxWidth: 560,
     margin: "0 auto",
     display: "grid",
-    gap: 16,
+    gap: 12,
+    width: "100%",
   },
   header: {
     display: "flex",
@@ -90,10 +90,11 @@ const styles = {
     color: sanctuaryTheme.accentSoft,
   },
   title: {
-    margin: "6px 0 0",
-    fontSize: 28,
-    fontWeight: 500,
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 600,
     color: sanctuaryTheme.cream,
+    lineHeight: 1.2,
   },
   card: {
     borderRadius: sanctuaryTheme.radiusLg,

@@ -470,7 +470,6 @@ export function SettingsPage({
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <p style={styles.brand}>{localeCopy.brand}</p>
             <h1 style={styles.title}>{localeCopy.title}</h1>
           </div>
           <OnlineStatusBadge locale={locale} />
@@ -923,8 +922,9 @@ const styles = {
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 720,
+    maxWidth: 560,
     margin: "0 auto",
+    width: "100%",
     display: "grid",
     gap: 12,
   },

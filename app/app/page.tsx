@@ -50,7 +50,7 @@ export default function AppHomePage() {
       >
         <div>
           <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f8efe7" }}>
-            {loading ? "正在进入" : redirecting ? "请先登录" : "正在进入"}
+            {loading ? "Opening Haven…" : redirecting ? "Sign in required" : "Opening Haven…"}
           </p>
         </div>
       </main>

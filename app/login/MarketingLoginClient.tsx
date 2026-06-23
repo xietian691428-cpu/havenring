@@ -48,11 +48,11 @@ function isOAuthProviderNotEnabledMessage(message: string): boolean {
 function friendlyOAuthError(message: string, provider: "apple" | "google"): string {
   if (isOAuthProviderNotEnabledMessage(message)) {
     if (provider === "apple") {
-      return "Apple 不可用";
+      return "Apple sign-in is not available.";
     }
-    return "Google 不可用";
+    return "Google sign-in is not available.";
   }
-  return "登录失败";
+  return "Sign-in failed. Please try again.";
 }
 
 export function MarketingLoginClient() {
@@ -76,7 +76,7 @@ export function MarketingLoginClient() {
           const { data } = await supabase.auth.getSession();
           if (!cancelled) setSession(data.session ?? null);
         } catch {
-          if (!cancelled) setNotice("登录失败");
+          if (!cancelled) setNotice("Sign-in failed. Please try again.");
         }
       })();
     }, { timeout: isLowMemoryEntryDevice() ? 800 : 300 });
@@ -116,7 +116,7 @@ export function MarketingLoginClient() {
         /iphone|ipad|ipod/.test(ua) ||
         (ua.includes("macintosh") && "ontouchend" in window);
       if (provider === "apple" && !isAppleDevice) {
-        setNotice("Apple 不可用");
+        setNotice("Apple sign-in is not available on this device.");
         return;
       }
       const supabase = getSupabaseBrowserClient();
@@ -131,7 +131,7 @@ export function MarketingLoginClient() {
           isOAuthProviderNotEnabledMessage(String(error.message || ""))
         ) {
           setAppleReady(false);
-          setNotice("Apple 不可用，打开 Google");
+          setNotice("Apple sign-in unavailable — opening Google.");
           window.setTimeout(() => void signInWith("google"), 280);
           return;
         }
@@ -143,14 +143,14 @@ export function MarketingLoginClient() {
   }
 
   return (
-    <main className="min-h-[100svh] bg-[#0a0908] px-5 pb-16 pt-[calc(5.5rem+env(safe-area-inset-top))] text-[#f8efe7] sm:px-8">
+    <main className="min-h-[100svh] bg-[#0a0908] px-5 pb-16 pt-[calc(2.5rem+env(safe-area-inset-top))] text-[#f8efe7] sm:px-8">
       <div className="mx-auto max-w-md">
         <p className="text-[10px] uppercase tracking-[0.28em] text-amber-200/55">Haven</p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-          {signedIn ? "已登录" : "登录"}
+          {signedIn ? "Signed in" : "Sign in"}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-white/58">
-          {signedIn ? "正在进入" : "继续使用 Haven"}
+          {signedIn ? "Opening Haven…" : "Continue with Haven"}
         </p>
 
         {signedIn ? (
@@ -159,20 +159,20 @@ export function MarketingLoginClient() {
               href={nextHref}
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-gradient-to-b from-[#e6b48d] to-[#c99562] px-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1209]"
             >
-              继续
+              Continue
             </Link>
             <Link
               href={APP_ENTRY_PATH}
               className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/18 bg-white/[0.04] px-6 text-xs font-medium uppercase tracking-[0.18em] text-white/88 hover:border-amber-400/35"
             >
-              打开 App
+              Open app
             </Link>
             <button
               type="button"
               onClick={() => void signOut()}
               className="mt-2 text-center text-[13px] text-white/45 underline-offset-4 hover:text-white/70 hover:underline"
             >
-              退出
+              Sign out
             </button>
           </div>
         ) : (
@@ -183,7 +183,11 @@ export function MarketingLoginClient() {
               onClick={() => void signInWith("apple")}
               className="min-h-12 rounded-full border border-amber-400/40 bg-amber-400/[0.12] px-6 text-xs font-semibold uppercase tracking-[0.16em] text-amber-50/95 enabled:hover:border-amber-300/55 disabled:opacity-55"
             >
-              {busy === "apple" ? "打开中" : appleReady ? "Apple 登录" : "Apple 不可用"}
+              {busy === "apple"
+                ? "Opening…"
+                : appleReady
+                  ? "Sign in with Apple"
+                  : "Apple unavailable"}
             </button>
             <button
               type="button"
@@ -191,7 +195,7 @@ export function MarketingLoginClient() {
               onClick={() => void signInWith("google")}
               className="min-h-12 rounded-full border border-white/18 bg-white/[0.04] px-6 text-xs font-medium uppercase tracking-[0.16em] text-white/88 hover:border-amber-400/35 disabled:opacity-55"
             >
-              {busy === "google" ? "打开中" : "Google 登录"}
+              {busy === "google" ? "Opening…" : "Sign in with Google"}
             </button>
           </div>
         )}

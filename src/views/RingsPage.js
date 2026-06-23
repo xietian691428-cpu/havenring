@@ -327,8 +327,9 @@ const styles = {
     fontFamily: sanctuaryTheme.font,
   },
   shell: {
-    maxWidth: 720,
+    maxWidth: 560,
     margin: "0 auto",
+    width: "100%",
     display: "grid",
     gap: 14,
   },
