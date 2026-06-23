@@ -34,6 +34,11 @@ export function estimateComposerMediaBytes(
       total += Math.ceil((dataUrl.length * 3) / 4);
       continue;
     }
+    const blob = (row as { blob?: Blob }).blob;
+    if (blob instanceof Blob && blob.size > 0) {
+      total += blob.size;
+      continue;
+    }
     const size = Number((row as { size?: number }).size || 0);
     if (size > 0) total += size;
   }

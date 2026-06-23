@@ -273,7 +273,9 @@ export function NewMemoryPage({
     withinLimit: true,
     limitMb: 50,
     usedMb: 0,
+    usedBytes: 0,
     wouldTrimMedia: false,
+    showMeter: false,
     message: "",
   });
   const [nfcSealScanBusy, setNfcSealScanBusy] = useState(false);
@@ -436,7 +438,9 @@ export function NewMemoryPage({
         withinLimit: true,
         limitMb: userEntitlements?.tier === "plus" ? 100 : 50,
         usedMb: 0,
+        usedBytes: 0,
         wouldTrimMedia: false,
+        showMeter: false,
         message: "",
       });
       return undefined;
@@ -1179,7 +1183,7 @@ export function NewMemoryPage({
 
           <section style={styles.mediaZone} aria-label={t.mediaZoneAria}>
             <p style={styles.mediaLimitsSummary}>{t.mediaLimitsSummary}</p>
-            {hasDraftContent && sealSizeStatus.message ? (
+            {hasDraftContent && sealSizeStatus.showMeter && sealSizeStatus.message ? (
               <p
                 style={{
                   ...styles.sealSizeMeter,

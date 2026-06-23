@@ -227,12 +227,43 @@ function countMediaWithInlineData(items: unknown[]): number {
  * Fail fast before ring prep when media cannot fit the seal handoff budget.
  * Surfaces limit errors instead of silent trimming or generic upload failures.
  */
+/** Show the seal size meter only when near/over budget — not for a single small photo. */
+export const SEAL_SIZE_METER_MIN_BYTES = 2 * 1024 * 1024;
+
 export type ComposerSealSizeStatus = {
   withinLimit: boolean;
   limitMb: number;
   usedMb: number;
+  usedBytes: number;
   wouldTrimMedia: boolean;
+  showMeter: boolean;
 };
+
+function formatUsedMb(usedBytes: number): number {
+  return Math.round((usedBytes / (1024 * 1024)) * 10) / 10;
+}
+
+function hasHeavyAttachments(attachments: unknown[]): boolean {
+  if (!Array.isArray(attachments)) return false;
+  return attachments.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const mime = String((row as MediaRow).mimeType || "").toLowerCase();
+    if (mime.startsWith("video/")) return true;
+    const blob = (row as { blob?: Blob }).blob;
+    const blobSize = blob instanceof Blob ? blob.size : 0;
+    const size = Number((row as MediaRow).size || 0);
+    return Math.max(size, blobSize) > 512 * 1024;
+  });
+}
+
+export function shouldShowComposerSealSizeMeter(
+  status: Pick<ComposerSealSizeStatus, "withinLimit" | "wouldTrimMedia" | "usedBytes">,
+  attachments: unknown[] = []
+): boolean {
+  if (!status.withinLimit || status.wouldTrimMedia) return true;
+  if (hasHeavyAttachments(attachments)) return true;
+  return status.usedBytes >= SEAL_SIZE_METER_MIN_BYTES;
+}
 
 export async function evaluateComposerSealSize(
   item: {
@@ -262,7 +293,7 @@ export async function evaluateComposerSealSize(
 
   const payload = await buildSealPayloadFromDraft(draft, { maxBytes });
   const usedBytes = payload ? estimateJsonBytes(payload) : 0;
-  const usedMb = Math.max(0.1, Math.round((usedBytes / (1024 * 1024)) * 10) / 10);
+  const usedMb = formatUsedMb(usedBytes);
 
   const origPhotoCount = countMediaWithInlineData(draft.photo);
   const origAttachCount = countMediaWithInlineData(draft.attachments);
@@ -272,11 +303,16 @@ export async function evaluateComposerSealSize(
     origPhotoCount > stagedPhotoCount || origAttachCount > stagedAttachCount;
   const overBudget = usedBytes > maxBytes;
 
-  return {
+  const status = {
     withinLimit: !wouldTrimMedia && !overBudget,
     limitMb,
     usedMb,
+    usedBytes,
     wouldTrimMedia,
+  };
+  return {
+    ...status,
+    showMeter: shouldShowComposerSealSizeMeter(status, draft.attachments),
   };
 }
 
@@ -288,6 +324,11 @@ function estimateInlineMediaBytes(items: unknown[]): number {
     const dataUrl = (row as MediaRow).dataUrl;
     if (typeof dataUrl === "string" && dataUrl.length > 0) {
       total += Math.ceil((dataUrl.length * 3) / 4);
+      continue;
+    }
+    const blob = (row as { blob?: Blob }).blob;
+    if (blob instanceof Blob && blob.size > 0) {
+      total += blob.size;
       continue;
     }
     const size = Number((row as MediaRow).size || 0);
@@ -328,13 +369,18 @@ export function estimateComposerSealSizeLight(
     estimateInlineMediaBytes(item.photo ?? []) +
     estimateInlineMediaBytes(item.attachments ?? []);
   const usedBytes = baseBytes + mediaBytes;
-  const usedMb = Math.max(0.1, Math.round((usedBytes / (1024 * 1024)) * 10) / 10);
+  const usedMb = formatUsedMb(usedBytes);
 
-  return {
+  const status = {
     withinLimit: usedBytes <= maxBytes,
     limitMb,
     usedMb,
+    usedBytes,
     wouldTrimMedia: false,
+  };
+  return {
+    ...status,
+    showMeter: shouldShowComposerSealSizeMeter(status, item.attachments ?? []),
   };
 }
 
