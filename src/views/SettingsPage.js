@@ -9,6 +9,7 @@ import {
   CLOUD_STORAGE_FULL_MESSAGE,
   getCloudBackupSettings,
   restoreFromCloud,
+  restoreCloudBackupsQuietly,
   setCloudBackupEnabled,
   signOutCloudBackup,
   syncCloudBackupFromAuthSession,
@@ -94,6 +95,9 @@ export function SettingsPage({
       await refreshLocalStats();
       const synced = await syncCloudBackupFromAuthSession();
       setCloud(synced);
+      if (synced.enabled && synced.user?.id) {
+        void restoreCloudBackupsQuietly();
+      }
       try {
         const sb = getSupabaseBrowserClient();
         const {
@@ -303,7 +307,10 @@ export function SettingsPage({
     setStatus(localeCopy.backingUp);
     try {
       const payload = await getAllMemories();
-      await backupToCloud(payload);
+      await backupToCloud(payload, {
+        kind: "full_export",
+        memoryId: "00000000-0000-0000-0000-000000000000",
+      });
       setStatus(localeCopy.backupDone);
     } catch (err) {
       const msg = err instanceof Error ? err.message : localeCopy.backupFailed;
@@ -620,6 +627,7 @@ export function SettingsPage({
             </p>
           ) : null}
           <p style={styles.copyMuted}>{localeCopy.cloudQuotaNote}</p>
+          <p style={styles.copyMuted}>{localeCopy.cloudSupplementsNote}</p>
           <div style={styles.actions}>
             {havenPlus?.pairActive && !havenPlus?.isBillingAccount ? (
               <button

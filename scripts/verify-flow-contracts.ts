@@ -25,6 +25,7 @@ import {
 } from "../src/features/subscription/subscriptionTypes";
 import { MAX_RING_QUANTITY } from "../lib/shop/catalog";
 import { MAX_BOUND_RINGS } from "../src/services/ringRegistryService";
+import { mergeSupplements } from "../lib/memory-supplements";
 
 function check(label: string, fn: () => void) {
   try {
@@ -306,7 +307,12 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_PULL_REFRESH_MIN_BOOT_MS = 20_000/);
   assert.match(readRepoFile("lib/memory-photo-types.ts"), /PhotoBlobType/);
   assert.match(readRepoFile("lib/photo-blob-store.ts"), /STORE_PHOTO_BLOBS/);
-  assert.match(readRepoFile("lib/memory-db.ts"), /MEMORY_DB_VERSION = 3/);
+  assert.match(readRepoFile("lib/memory-db.ts"), /MEMORY_DB_VERSION = 4/);
+  assert.match(readRepoFile("lib/memory-db.ts"), /STORE_MEMORY_SUPPLEMENTS/);
+  assert.match(readRepoFile("lib/memory-supplements.ts"), /mergeSupplements/);
+  assert.match(readRepoFile("lib/memory-supplements-store.ts"), /writeSupplementsForMemory/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /mergeSupplements/);
+  assert.match(readRepoFile("src/services/pairSharingService.js"), /mergeSupplements/);
   assert.match(readRepoFile("lib/composer-photo-utils.ts"), /PreparedComposerPhoto/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getMemoryPhotoBlob/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /persistPhotoInputs/);
@@ -371,15 +377,25 @@ check("cloud backup 50GB quota compress and chunk upload", () => {
   const backup = readRepoFile("src/services/cloudBackupService.js");
   const quotaRoute = readRepoFile("app/api/cloud-backup/quota/route.ts");
   const uploadRoute = readRepoFile("app/api/cloud-backup/upload/route.ts");
+  const latestRoute = readRepoFile("app/api/cloud-backup/latest/route.ts");
+  const migration = readRepoFile("supabase/migrations/0026_cloud_memory_backups.sql");
   assert.match(config, /CLOUD_STORAGE_QUOTA_BYTES/);
   assert.match(config, /CLOUD_STORAGE_QUOTA_GB = PLUS_STORAGE_GB/);
   assert.match(config, /CLOUD_STORAGE_FULL_MESSAGE/);
   assert.match(server, /assertCloudQuotaHeadroom/);
-  assert.match(backup, /compressPayloadForCloud/);
-  assert.match(backup, /chunkBlobForCloudUpload/);
-  assert.match(backup, /precheckCloudUpload/);
+  assert.match(server, /cloud_memory_backups/);
+  assert.match(server, /listLatestCloudMemoryBackups/);
+  assert.match(backup, /encryptCloudBackupPlaintext/);
+  assert.match(backup, /restoreFromCloud/);
+  assert.match(backup, /restoreCloudBackupsQuietly/);
+  assert.match(backup, /backupMemoryToCloud/);
   assert.match(quotaRoute, /CLOUD_STORAGE_FULL/);
   assert.match(uploadRoute, /mode === "commit"/);
+  assert.match(uploadRoute, /memory_id/);
+  assert.match(latestRoute, /listLatestCloudMemoryBackups/);
+  assert.match(migration, /cloud_memory_backups/);
+  assert.match(readRepoFile("lib/cloud-backup-merge.ts"), /applyCloudMemoryToLocal/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /restoreCloudBackupsQuietly/);
 });
 
 check("timeline sync does not fail when optional cloud backup is off", () => {
@@ -530,6 +546,21 @@ check("pair photo sync: portable dataUrl in vault and detail resolver", () => {
   assert.match(photoDisplay, /resolveMemoryPhotoUrl/);
   assert.match(photoDisplay, /blob:/);
   assert.match(detail, /resolveMemoryPhotoUrl/);
+});
+
+check("supplements merge preserves existing on empty incoming", () => {
+  const existing = [
+    { id: "n1", text: "hello", createdAt: 1000 },
+  ];
+  assert.deepEqual(mergeSupplements(existing, null), existing);
+  assert.deepEqual(mergeSupplements(existing, undefined), existing);
+  assert.deepEqual(mergeSupplements(existing, []), existing);
+  const merged = mergeSupplements(existing, [
+    { id: "n2", text: "world", createdAt: 2000 },
+  ]);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]?.id, "n1");
+  assert.equal(merged[1]?.id, "n2");
 });
 
 console.log("\nAll flow contract checks passed.");

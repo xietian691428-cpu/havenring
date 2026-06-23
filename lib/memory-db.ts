@@ -1,7 +1,8 @@
 export const MEMORY_DB_NAME = "haven_ring_memories_db";
-export const MEMORY_DB_VERSION = 3;
+export const MEMORY_DB_VERSION = 4;
 export const STORE_MEMORIES = "memories";
 export const STORE_PHOTO_BLOBS = "photoBlobs";
+export const STORE_MEMORY_SUPPLEMENTS = "memorySupplements";
 
 export function openMemoryDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -17,6 +18,9 @@ export function openMemoryDb(): Promise<IDBDatabase> {
         const blobs = db.createObjectStore(STORE_PHOTO_BLOBS, { keyPath: "id" });
         blobs.createIndex("memoryId", "memoryId", { unique: false });
         blobs.createIndex("photoId", "photoId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_MEMORY_SUPPLEMENTS)) {
+        db.createObjectStore(STORE_MEMORY_SUPPLEMENTS, { keyPath: "memoryId" });
       }
     };
     req.onsuccess = () => resolve(req.result);

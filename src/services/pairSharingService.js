@@ -1,4 +1,5 @@
 import { decodeServerMomentVault } from "@/lib/pair-sharing";
+import { mergeSupplements } from "@/lib/memory-supplements";
 import {
   countDisplayablePhotos,
   normalizeAttachmentsForStorage,
@@ -11,7 +12,7 @@ import {
   getMemoryById,
   saveMemory,
 } from "./localStorageService";
-import { backupToCloud, isCloudBackupReady } from "./cloudBackupService";
+import { isCloudBackupReady, backupMemoryToCloud } from "./cloudBackupService";
 
 const IMPORT_CURSOR_KEY = "haven.pair.import_cursor.v1";
 
@@ -100,17 +101,21 @@ export async function importPairBundle(bundle, currentUserId) {
   if (!payload) return { imported: false, reason: "decode_failed" };
 
   const existing = await getMemoryById(payload.id);
+  const mergedPayload = existing
+    ? { ...payload, supplements: mergeSupplements(existing.supplements, payload.supplements) }
+    : payload;
+
   if (existing) {
-    if (payload.fromPartner) {
+    if (mergedPayload.fromPartner) {
       const localEmpty =
         !String(existing.story || "").trim() &&
         countDisplayablePhotos(existing.photo) === 0 &&
         !(Array.isArray(existing.attachments) && existing.attachments.length);
-      const incomingPhotoCount = countDisplayablePhotos(payload.photo);
+      const incomingPhotoCount = countDisplayablePhotos(mergedPayload.photo);
       const existingPhotoCount = countDisplayablePhotos(existing.photo);
       const photosUpgraded = incomingPhotoCount > existingPhotoCount;
       if (!existing.coreLocked || localEmpty || existing.fromPartner || photosUpgraded) {
-        await saveMemory(payload, { allowCoreEdit: true });
+        await saveMemory(mergedPayload, { allowCoreEdit: true });
         return { imported: true, reason: photosUpgraded ? "updated_partner_photos" : "updated_partner" };
       }
       return { imported: false, reason: "exists" };
@@ -118,11 +123,11 @@ export async function importPairBundle(bundle, currentUserId) {
     if (existing.coreLocked) {
       return { imported: false, reason: "exists" };
     }
-    await saveMemory(payload, { allowCoreEdit: true });
+    await saveMemory(mergedPayload, { allowCoreEdit: true });
     return { imported: true, reason: "updated" };
   }
 
-  await createMemory(payload);
+  await createMemory(mergedPayload);
   return { imported: true, reason: "created" };
 }
 
@@ -186,17 +191,11 @@ export async function syncPairMemoriesFromServer(accessToken, options = {}) {
   };
 }
 
-/** Backup a sealed memory for Plus cloud (Pair cross-device recovery). */
+/** Backup a sealed memory for Plus cloud (cross-device supplements via manifest). */
 export async function backupPairMemoryToCloud(memory) {
   if (!memory?.id || !isCloudBackupReady()) return { ok: false };
   try {
-    await backupToCloud({
-      kind: "pair_memory",
-      memoryId: memory.id,
-      havenId: memory.haven_id || null,
-      backedUpAt: Date.now(),
-      payload: memory,
-    });
+    await backupMemoryToCloud(memory);
     return { ok: true };
   } catch (error) {
     console.warn("[haven-ring] pair cloud backup skipped:", error);

@@ -54,14 +54,15 @@ import {
   STORE_PHOTO_BLOBS,
   txDone,
 } from "@/lib/memory-db";
+import { mergeSupplements, type MemorySupplement } from "@/lib/memory-supplements";
+import {
+  clearAllMemorySupplements,
+  deleteSupplementsForMemory,
+  resolveMemorySupplements,
+  writeSupplementsForMemory,
+} from "@/lib/memory-supplements-store";
 
-/** User-facing decrypted memory shape (timeline / detail UI). */
-export type MemorySupplement = {
-  id: string;
-  text: string;
-  createdAt: number;
-  authorUserId?: string | null;
-};
+export type { MemorySupplement };
 
 export type LocalMemory = {
   id: string;
@@ -224,7 +225,10 @@ function normalizeMemoryInput(input: MemoryUpsertPayload = {}) {
     haven_id: input.haven_id ?? null,
     createdByUserId: input.createdByUserId ?? null,
     fromPartner: Boolean(input.fromPartner),
-    supplements: Array.isArray(input.supplements) ? input.supplements : [],
+    supplements:
+      input.supplements !== undefined
+        ? mergeSupplements([], input.supplements)
+        : [],
   };
 }
 
@@ -262,7 +266,7 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
     haven_id: memory.haven_id,
     createdByUserId: memory.createdByUserId,
     fromPartner: memory.fromPartner,
-    supplements: memory.supplements,
+    supplements: memory.supplements ?? [],
     hasPhotos: (() => {
       const raw = memory.photo;
       const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
@@ -345,6 +349,10 @@ async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMem
   const storyPreview =
     story.length > previewMax ? `${story.slice(0, previewMax).trim()}…` : story;
 
+  const metaSupplements = Array.isArray(metaObj.supplements)
+    ? (metaObj.supplements as MemorySupplement[])
+    : [];
+
   return {
     id: record.id,
     title: record.title || "",
@@ -365,9 +373,7 @@ async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMem
     haven_id: (metaObj.haven_id as string | null) ?? null,
     createdByUserId: (metaObj.createdByUserId as string | null) ?? null,
     fromPartner: Boolean(metaObj.fromPartner),
-    supplements: Array.isArray(metaObj.supplements)
-      ? (metaObj.supplements as MemorySupplement[])
-      : [],
+    supplements: await resolveMemorySupplements(record.id, metaSupplements),
     hasPhotos,
   };
 }
@@ -622,6 +628,9 @@ async function decryptRecord(record: MemoryDbRecord): Promise<LocalMemory> {
       : record.voicePlain ?? null;
 
   const metaObj = meta as Record<string, unknown>;
+  const metaSupplements = Array.isArray(metaObj.supplements)
+    ? (metaObj.supplements as MemorySupplement[])
+    : [];
 
   return {
     id: record.id,
@@ -642,9 +651,7 @@ async function decryptRecord(record: MemoryDbRecord): Promise<LocalMemory> {
     haven_id: (metaObj.haven_id as string | null) ?? null,
     createdByUserId: (metaObj.createdByUserId as string | null) ?? null,
     fromPartner: Boolean(metaObj.fromPartner),
-    supplements: Array.isArray(metaObj.supplements)
-      ? (metaObj.supplements as MemorySupplement[])
-      : [],
+    supplements: await resolveMemorySupplements(record.id, metaSupplements),
   };
 }
 
@@ -662,6 +669,7 @@ export async function createMemory(
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).add(record);
     await txDone(tx);
+    void writeSupplementsForMemory(memory.id, memory.supplements ?? []);
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
@@ -682,22 +690,33 @@ export async function saveMemory(
   let merged = input;
   if (input.id) {
     const existing = await getMemoryById(input.id);
+    const mergedSupplements = mergeSupplements(
+      existing?.supplements,
+      input.supplements
+    );
     if (existing) {
       if (!opts.allowCoreEdit && existing.coreLocked) {
         merged = {
           ...existing,
-          supplements: input.supplements ?? existing.supplements,
+          supplements: mergedSupplements,
           updatedAt: Date.now(),
         };
       } else if (opts.allowCoreEdit) {
         merged = {
           ...input,
-          supplements:
-            input.supplements !== undefined
-              ? input.supplements
-              : (existing.supplements ?? []),
+          supplements: mergedSupplements,
+        };
+      } else {
+        merged = {
+          ...input,
+          supplements: mergedSupplements,
         };
       }
+    } else if (input.supplements !== undefined) {
+      merged = {
+        ...input,
+        supplements: mergedSupplements,
+      };
     }
   }
   const memory = normalizeMemoryInput(merged);
@@ -730,6 +749,7 @@ export async function saveMemory(
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
     tx.objectStore(STORE_MEMORIES).put(record);
     await txDone(tx);
+    void writeSupplementsForMemory(memory.id, memory.supplements ?? []);
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
@@ -807,21 +827,21 @@ export async function appendMemorySupplement(
   if (!existing.coreLocked && !existing.is_sealed) {
     throw new Error("Only sealed memories accept append notes.");
   }
-  const supplements = [
-    ...(Array.isArray(existing.supplements) ? existing.supplements : []),
+  const supplements = mergeSupplements(existing.supplements, [
     {
       id: crypto.randomUUID(),
       text: trimmed,
       createdAt: Date.now(),
       authorUserId: authorUserId || null,
     },
-  ];
+  ]);
   return saveMemory({ ...existing, supplements });
 }
 
 export async function deleteMemory(id: string): Promise<boolean> {
   if (!id) return false;
   await deletePhotoBlobsForMemory(id);
+  await deleteSupplementsForMemory(id);
   const db = await openDb();
   try {
     const tx = db.transaction(STORE_MEMORIES, "readwrite");
@@ -842,6 +862,7 @@ export async function clearAllMemories(): Promise<boolean> {
     tx.objectStore(STORE_MEMORIES).clear();
     await txDone(tx);
     await clearAllPersistedTimelineThumbs();
+    await clearAllMemorySupplements();
   } finally {
     db.close();
   }

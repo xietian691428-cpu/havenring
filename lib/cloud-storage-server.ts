@@ -13,6 +13,19 @@ export type CloudQuotaSnapshot = {
   remainingBytes: number;
 };
 
+export type CloudMemoryBackupRow = {
+  id: string;
+  user_id: string;
+  memory_id: string;
+  upload_id: string;
+  backed_up_at: string;
+  version: number;
+  byte_size: number;
+  kind: string;
+};
+
+const FULL_EXPORT_MEMORY_ID = "00000000-0000-0000-0000-000000000000";
+
 function pendingChunkPath(userId: string, uploadId: string, chunkIndex: number): string {
   return `${userId}/pending/${uploadId}/${chunkIndex}.bin`;
 }
@@ -123,11 +136,30 @@ export async function commitCloudUpload(opts: {
   uploadId: string;
   totalChunks: number;
   storedByteSize: number;
+  memoryId?: string | null;
+  kind?: string | null;
+  version?: number | null;
 }): Promise<CloudQuotaSnapshot> {
   const admin = getSupabaseAdminClient();
   const byteSize = Math.max(0, opts.storedByteSize);
+  const memoryId = String(opts.memoryId || "").trim() || FULL_EXPORT_MEMORY_ID;
+  const kind = String(opts.kind || "pair_memory").trim() || "pair_memory";
+  const version = Math.max(1, Number(opts.version || 1) || 1);
+
+  const quotaUserId = await resolveCloudQuotaUserId(admin, opts.userId);
   const used = await readCloudUsageBytes(opts.userId);
-  assertCloudQuotaHeadroom(used, byteSize);
+
+  const { data: priorRows, error: priorErr } = await admin
+    .from("cloud_memory_backups" as never)
+    .select("upload_id, byte_size")
+    .eq("user_id", quotaUserId)
+    .eq("memory_id", memoryId)
+    .order("backed_up_at", { ascending: false });
+  if (priorErr) throw priorErr;
+  const prior = (priorRows || []) as Array<{ upload_id?: string; byte_size?: number }>;
+  const reclaimedBytes = prior.reduce((sum, row) => sum + Number(row.byte_size || 0), 0);
+  const netDelta = Math.max(0, byteSize - reclaimedBytes);
+  assertCloudQuotaHeadroom(used, netDelta);
 
   const pending = await listPendingChunkPaths(opts.userId, opts.uploadId);
   if (pending.length !== opts.totalChunks) {
@@ -163,8 +195,31 @@ export async function commitCloudUpload(opts: {
 
   await removePaths(pending);
 
-  const nextUsed = used + byteSize;
-  const quotaUserId = await resolveCloudQuotaUserId(admin, opts.userId);
+  if (prior.length) {
+    const oldPaths = prior
+      .map((row) => row.upload_id)
+      .filter(Boolean)
+      .map((uploadId) => backupObjectPath(opts.userId, String(uploadId)));
+    await removePaths(oldPaths);
+    await admin
+      .from("cloud_memory_backups" as never)
+      .delete()
+      .eq("user_id", quotaUserId)
+      .eq("memory_id", memoryId);
+  }
+
+  const { error: insertErr } = await admin.from("cloud_memory_backups" as never).insert({
+    user_id: quotaUserId,
+    memory_id: memoryId,
+    upload_id: opts.uploadId,
+    backed_up_at: new Date().toISOString(),
+    version,
+    byte_size: byteSize,
+    kind,
+  } as never);
+  if (insertErr) throw insertErr;
+
+  const nextUsed = Math.max(0, used - reclaimedBytes + byteSize);
   const { error: upsertErr } = await admin.from("cloud_backup_usage" as never).upsert(
     {
       user_id: quotaUserId,
@@ -176,4 +231,45 @@ export async function commitCloudUpload(opts: {
   if (upsertErr) throw upsertErr;
 
   return buildQuotaSnapshot(nextUsed);
+}
+
+export async function listLatestCloudMemoryBackups(
+  userId: string,
+  memoryId?: string | null
+): Promise<CloudMemoryBackupRow[]> {
+  const admin = getSupabaseAdminClient();
+  const quotaUserId = await resolveCloudQuotaUserId(admin, userId);
+  let query = admin
+    .from("cloud_memory_backups" as never)
+    .select("id, user_id, memory_id, upload_id, backed_up_at, version, byte_size, kind")
+    .eq("user_id", quotaUserId)
+    .order("backed_up_at", { ascending: false })
+    .limit(200);
+  const filterMemoryId = String(memoryId || "").trim();
+  if (filterMemoryId) {
+    query = query.eq("memory_id", filterMemoryId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data || []) as CloudMemoryBackupRow[];
+  if (filterMemoryId) return rows.slice(0, 1);
+
+  const latestByMemory = new Map<string, CloudMemoryBackupRow>();
+  for (const row of rows) {
+    if (!latestByMemory.has(row.memory_id)) {
+      latestByMemory.set(row.memory_id, row);
+    }
+  }
+  return [...latestByMemory.values()];
+}
+
+export async function downloadCloudBackupObject(
+  userId: string,
+  uploadId: string
+): Promise<Buffer> {
+  const admin = getSupabaseAdminClient();
+  const path = backupObjectPath(userId, uploadId);
+  const { data, error } = await admin.storage.from(CLOUD_BACKUP_BUCKET).download(path);
+  if (error || !data) throw new Error("CLOUD_BACKUP_NOT_FOUND");
+  return Buffer.from(await data.arrayBuffer());
 }

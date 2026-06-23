@@ -24,6 +24,9 @@ type UploadBody = {
   data_b64?: unknown;
   byte_size?: unknown;
   compressed?: unknown;
+  memory_id?: unknown;
+  kind?: unknown;
+  version?: unknown;
 };
 
 export async function POST(req: NextRequest) {
@@ -80,6 +83,9 @@ export async function POST(req: NextRequest) {
           uploadId,
           totalChunks,
           storedByteSize: byteSize,
+          memoryId: typeof body.memory_id === "string" ? body.memory_id : null,
+          kind: typeof body.kind === "string" ? body.kind : null,
+          version: Number(body.version || 1) || 1,
         });
         return NextResponse.json({ ok: true, ...snapshot });
       } catch (error) {

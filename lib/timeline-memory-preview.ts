@@ -1,4 +1,5 @@
 import { getTimelineStoryPreviewMaxChars } from "@/lib/timeline-ios-guard";
+import { mergeSupplements } from "@/lib/memory-supplements";
 import type { TimelineMemorySummary } from "@/lib/timeline-memory-types";
 import type { MemorySupplement } from "@/src/features/memories/localMemoryStore";
 
@@ -62,9 +63,7 @@ export function memoryPayloadToTimelinePreview(
     haven_id: payload.haven_id ?? existing?.haven_id ?? null,
     createdByUserId: payload.createdByUserId ?? existing?.createdByUserId ?? null,
     fromPartner: Boolean(payload.fromPartner ?? existing?.fromPartner),
-    supplements: Array.isArray(payload.supplements)
-      ? payload.supplements
-      : existing?.supplements ?? [],
+    supplements: mergeSupplements(existing?.supplements, payload.supplements),
     hasPhotos,
   };
 }

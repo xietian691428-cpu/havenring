@@ -18,6 +18,7 @@ import { classifySyncFailure } from "@/lib/sync-failure";
 import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
+import { restoreCloudBackupsQuietly } from "../services/cloudBackupService";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import {
@@ -420,6 +421,7 @@ export function useMemories(options = {}) {
         includePairSync,
         fullPairSync,
       });
+      void restoreCloudBackupsQuietly().catch(() => null);
       setIntegrityWarning("");
       setCloudPlaceholders((prev) => {
         const keep = prev.filter((row) => row.uidKey !== targetUidKey);

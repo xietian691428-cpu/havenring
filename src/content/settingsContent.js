@@ -26,7 +26,9 @@ const EN = {
     "Remove this device trust? It will require password or recovery code next time.",
   deviceRevoked: "Device access revoked.",
   cloudSectionTitle: "Cloud backup (Haven Plus)",
-  cloudQuotaNote: "50 GB hard cap per account. Uploads are compressed and chunked.",
+  cloudQuotaNote: "50 GB hard cap per account. Uploads are encrypted, compressed, and chunked.",
+  cloudSupplementsNote:
+    "Notes stay on this device. With Haven Plus, memories and notes sync across your signed-in devices.",
   cloudStorageFull: "Storage full. Upgrade or delete old memories.",
   cloudToggleLabel:
     "Enable encrypted cloud backup (Plus, 50 GB cap). You can turn this off anytime.",
@@ -96,14 +98,15 @@ const EN = {
   signingIn: "Linking Apple sign-in...",
   signInDone: "Apple backup account linked.",
   signInFailed: "Could not complete Apple sign-in.",
-  confirmBackup: "Run cloud backup now? This may upload a snapshot of your local data where that feature is available.",
+  confirmBackup:
+    "Back up now? Haven Plus encrypts your backup before upload (memories and notes).",
   backingUp: "Running cloud backup...",
   backupDone: "Cloud backup completed.",
   backupFailed: "Cloud backup failed.",
   confirmRestore:
-    "Restore from cloud backup now? This action may overwrite local expectations.",
+    "Restore from cloud? New notes from your other devices will merge in. Sealed content on this device stays as-is.",
   restoring: "Checking cloud backup...",
-  restoreDone: "Cloud restore completed.",
+  restoreDone: "Cloud restore finished.",
   restoreFailed: "Cloud restore failed.",
   confirmUnlink: "Unlink cloud backup account from this device?",
   unlinkDone: "Cloud backup account unlinked.",

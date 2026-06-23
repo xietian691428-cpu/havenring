@@ -3,14 +3,23 @@ import {
   CLOUD_STORAGE_FULL_MESSAGE,
   CLOUD_UPLOAD_CHUNK_BYTES,
 } from "../../lib/cloud-storage-config";
+import {
+  decryptCloudBackupEnvelope,
+  encryptCloudBackupPlaintext,
+} from "../../lib/cloud-backup-crypto";
+import {
+  applyCloudMemoryToLocal,
+  extractMemoryFromCloudPlaintext,
+} from "../../lib/cloud-backup-merge";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 
 /**
  * Haven Plus cloud backup — local-first, optional, 50 GB hard quota.
- * Uploads: gzip compress → chunked POST /api/cloud-backup/upload.
+ * Uploads: client encrypt → gzip → chunked POST /api/cloud-backup/upload.
  */
 
 const PREF_KEY = "haven.cloud-backup.settings.v1";
+const FULL_EXPORT_MEMORY_ID = "00000000-0000-0000-0000-000000000000";
 
 export { CLOUD_STORAGE_FULL_CODE, CLOUD_STORAGE_FULL_MESSAGE };
 
@@ -119,6 +128,16 @@ async function resolveAccessToken() {
   return token;
 }
 
+async function resolveCloudUserId() {
+  const settings = readBackupSettings();
+  if (settings.user?.id) return String(settings.user.id);
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase.auth.getSession();
+  const id = data.session?.user?.id || "";
+  if (!id) throw new Error("Sign in to use cloud backup.");
+  return id;
+}
+
 function authHeaders(accessToken) {
   return {
     "Content-Type": "application/json",
@@ -132,6 +151,15 @@ function bytesToBase64(bytes) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /** Split a Blob for resumable Plus uploads. */
@@ -174,13 +202,25 @@ export function slimPayloadForCloud(payload) {
   return next;
 }
 
-export async function compressPayloadForCloud(payload) {
-  const slimmed = slimPayloadForCloud(payload);
-  const json = JSON.stringify({
-    version: 1,
-    backedUpAt: Date.now(),
-    payload: slimmed,
-  });
+async function buildEncryptedBackupBlob(payload, opts = {}) {
+  const userId = await resolveCloudUserId();
+  const backedUpAt = Date.now();
+  const kind = String(opts.kind || payload?.kind || "pair_memory");
+  const memoryId =
+    opts.memoryId != null
+      ? String(opts.memoryId)
+      : String(payload?.memoryId || payload?.id || FULL_EXPORT_MEMORY_ID);
+  const slimmed = slimPayloadForCloud(payload?.payload ?? payload);
+  const envelope = await encryptCloudBackupPlaintext(
+    {
+      backedUpAt,
+      kind,
+      memoryId: memoryId === FULL_EXPORT_MEMORY_ID ? null : memoryId,
+      payload: slimmed,
+    },
+    userId
+  );
+  const json = JSON.stringify({ version: 2, encrypted: envelope, compressed: true });
   const raw = new Blob([json], { type: "application/json" });
   if (typeof CompressionStream !== "undefined") {
     const compressed = await new Response(
@@ -189,6 +229,24 @@ export async function compressPayloadForCloud(payload) {
     return { blob: compressed, originalBytes: raw.size, compressed: true };
   }
   return { blob: raw, originalBytes: raw.size, compressed: false };
+}
+
+export async function compressPayloadForCloud(payload, opts = {}) {
+  return buildEncryptedBackupBlob(payload, opts);
+}
+
+async function decompressBackupBytes(bytes, compressed) {
+  if (!compressed) {
+    return typeof bytes === "string" ? bytes : new TextDecoder().decode(bytes);
+  }
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("This browser cannot decompress cloud backups.");
+  }
+  const blob = new Blob([bytes]);
+  const decompressed = await new Response(
+    blob.stream().pipeThrough(new DecompressionStream("gzip"))
+  ).arrayBuffer();
+  return new TextDecoder().decode(decompressed);
 }
 
 export async function fetchCloudStorageQuota(accessToken, additionalBytes = 0) {
@@ -235,7 +293,7 @@ async function precheckCloudUpload(accessToken, byteSize) {
   return json;
 }
 
-async function uploadCompressedBlobChunked(accessToken, blob, compressed) {
+async function uploadCompressedBlobChunked(accessToken, blob, compressed, manifest = {}) {
   const uploadId =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -273,6 +331,9 @@ async function uploadCompressedBlobChunked(accessToken, blob, compressed) {
       total_chunks: chunks.length,
       byte_size: blob.size,
       compressed,
+      memory_id: manifest.memoryId || null,
+      kind: manifest.kind || "pair_memory",
+      version: manifest.version || 1,
     }),
   });
   const commitJson = await commitRes.json().catch(() => ({}));
@@ -286,30 +347,162 @@ async function uploadCompressedBlobChunked(accessToken, blob, compressed) {
         : "Cloud backup could not finish."
     );
   }
-  return commitJson;
+  return { ...commitJson, upload_id: uploadId };
 }
 
 /**
- * Backup local payload to cloud (compress + chunk + quota).
+ * Backup local payload to cloud (encrypt + compress + chunk + quota + manifest).
  */
-export async function backupToCloud(payload) {
+export async function backupToCloud(payload, opts = {}) {
   ensureReady();
   const accessToken = await resolveAccessToken();
-  const { blob, compressed } = await compressPayloadForCloud(payload);
+  const kind = String(opts.kind || payload?.kind || "full_export");
+  const memoryId =
+    opts.memoryId != null
+      ? String(opts.memoryId)
+      : String(payload?.memoryId || payload?.id || FULL_EXPORT_MEMORY_ID);
+  const { blob, compressed } = await buildEncryptedBackupBlob(payload, {
+    kind,
+    memoryId,
+  });
   await precheckCloudUpload(accessToken, blob.size);
-  const result = await uploadCompressedBlobChunked(accessToken, blob, compressed);
-  return { ok: true, quota: result };
+  const result = await uploadCompressedBlobChunked(accessToken, blob, compressed, {
+    memoryId,
+    kind,
+    version: 1,
+  });
+  return { ok: true, quota: result, upload_id: result.upload_id };
+}
+
+/** Backup one sealed memory (includes supplements) with per-memory manifest. */
+export async function backupMemoryToCloud(memory) {
+  if (!memory?.id) return { ok: false, reason: "missing_memory" };
+  return backupToCloud(
+    {
+      kind: "pair_memory",
+      memoryId: memory.id,
+      payload: memory,
+    },
+    { kind: "pair_memory", memoryId: memory.id }
+  );
+}
+
+async function fetchLatestBackups(accessToken, memoryId = "") {
+  const qs = memoryId ? `?memory_id=${encodeURIComponent(memoryId)}` : "";
+  const res = await fetch(`/api/cloud-backup/latest${qs}`, {
+    method: "GET",
+    headers: authHeaders(accessToken),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof json?.error === "string" && json.error.trim()
+        ? json.error.trim()
+        : "Could not list cloud backups."
+    );
+  }
+  return Array.isArray(json.backups) ? json.backups : [];
+}
+
+async function downloadBackupBlob(accessToken, uploadId) {
+  const res = await fetch(
+    `/api/cloud-backup/latest?upload_id=${encodeURIComponent(uploadId)}&include_data=1`,
+    {
+      method: "GET",
+      headers: authHeaders(accessToken),
+    }
+  );
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.data_b64) {
+    throw new Error(
+      typeof json?.error === "string" && json.error.trim()
+        ? json.error.trim()
+        : "Cloud backup download failed."
+    );
+  }
+  return base64ToBytes(json.data_b64);
+}
+
+async function decodeCloudBackupBlob(bytes) {
+  let text = "";
+  try {
+    text = await decompressBackupBytes(bytes, true);
+  } catch {
+    text = await decompressBackupBytes(bytes, false);
+  }
+  const wrapper = JSON.parse(text);
+  if (wrapper?.encrypted?.v === 1) {
+    const userId = await resolveCloudUserId();
+    return decryptCloudBackupEnvelope(wrapper.encrypted, userId);
+  }
+  if (wrapper?.version === 1 && wrapper?.payload) {
+    return wrapper.payload;
+  }
+  throw new Error("Unsupported cloud backup format.");
+}
+
+async function mergeBackupRowIntoLocal(uploadId, accessToken) {
+  const bytes = await downloadBackupBlob(accessToken, uploadId);
+  const plaintext = await decodeCloudBackupBlob(bytes);
+  if (plaintext?.kind === "full_export") {
+    const rows = Array.isArray(plaintext.payload) ? plaintext.payload : [];
+    let merged = 0;
+    for (const row of rows) {
+      const result = await applyCloudMemoryToLocal(extractMemoryFromCloudPlaintext({ payload: row }));
+      if (result.merged) merged += 1;
+    }
+    return { merged, kind: "full_export" };
+  }
+  const memory = extractMemoryFromCloudPlaintext(plaintext);
+  const result = await applyCloudMemoryToLocal(memory);
+  return { merged: result.merged ? 1 : 0, kind: plaintext?.kind || "pair_memory" };
 }
 
 /**
- * Restore framework — latest snapshot not yet wired.
+ * Restore cloud backups and merge supplements into local memories (local core wins).
  */
-export async function restoreFromCloud() {
-  const settings = ensureReady();
+export async function restoreFromCloud(memoryId = "") {
+  ensureReady();
+  const accessToken = await resolveAccessToken();
+  const backups = await fetchLatestBackups(accessToken, memoryId);
+  if (!backups.length) {
+    return {
+      ok: true,
+      merged: 0,
+      message: "No cloud backup found yet.",
+    };
+  }
+
+  let merged = 0;
+  for (const row of backups) {
+    if (!row?.upload_id) continue;
+    if (row.kind === "full_export") {
+      const outcome = await mergeBackupRowIntoLocal(row.upload_id, accessToken);
+      merged += outcome.merged;
+      continue;
+    }
+    if (memoryId && row.memory_id && row.memory_id !== memoryId) continue;
+    const outcome = await mergeBackupRowIntoLocal(row.upload_id, accessToken);
+    merged += outcome.merged;
+  }
+
   return {
     ok: true,
-    provider: settings.provider,
-    payload: null,
-    message: "No cloud snapshot yet.",
+    merged,
+    message:
+      merged > 0
+        ? `Merged notes from ${merged} cloud backup${merged === 1 ? "" : "s"}.`
+        : "Cloud backup checked — your local notes are already up to date.",
   };
+}
+
+/** Background restore — never throws; used after login / pull-refresh / sync. */
+export async function restoreCloudBackupsQuietly(memoryId = "") {
+  if (!isCloudBackupReady()) return { ok: true, merged: 0, skipped: true };
+  try {
+    return await restoreFromCloud(memoryId);
+  } catch (error) {
+    console.warn("[haven-ring] cloud restore skipped:", error);
+    return { ok: false, merged: 0 };
+  }
 }

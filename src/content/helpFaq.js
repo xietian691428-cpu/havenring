@@ -22,7 +22,11 @@ export const HELP_FAQ = {
     },
     {
       q: "Can I use Haven on multiple devices?",
-      a: "Sign in on each device. Memories stay on that device unless you use Plus cloud backup.",
+      a: "Sign in on each device. Notes stay on each device unless you use Haven Plus cloud backup to sync memories and notes.",
+    },
+    {
+      q: "Do post-seal notes sync?",
+      a: "Notes stay on this device. With Haven Plus, they sync across your signed-in devices via encrypted cloud backup.",
     },
     {
       q: "Where are my memories stored?",
