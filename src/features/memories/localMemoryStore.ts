@@ -392,16 +392,26 @@ async function decryptSummariesForTimeline(
 
 async function scheduleTimelineThumbWarm(
   memoryId: string,
-  _memoryUpdatedAt: number,
+  memoryUpdatedAt: number,
   photo: unknown
 ): Promise<void> {
-  if (isIosWebKit()) return;
   const ref = firstPhotoRef(photo);
-  if (ref) return;
+  if (ref?.id) {
+    try {
+      const thumb = await getPhotoBlob(ref.id, "thumb");
+      if (!thumb) return;
+      const medium = (await getPhotoBlob(ref.id, "medium")) ?? thumb;
+      await writePersistedTimelineMedia(memoryId, memoryUpdatedAt, thumb, medium);
+    } catch {
+      /* best-effort blob-ref warm */
+    }
+    return;
+  }
   const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
   if (!dataUrl) return;
+  if (isIosWebKit()) return;
   try {
-    await warmTimelineMediaFromDataUrl(memoryId, _memoryUpdatedAt, dataUrl);
+    await warmTimelineMediaFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
   } catch {
     /* best-effort legacy inline warm */
   }
@@ -462,7 +472,6 @@ export async function getTimelineMemorySummaries(opts: {
 /** Lazy media — thumb JPEG blob from photoBlobs store (legacy inline fallback). */
 export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
-  if (isIosWebKit()) return null;
   return runTimelineDecodeTask(async () => {
     const db = await openDb();
     try {
@@ -486,8 +495,14 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
       const ref = firstPhotoRef(photo);
       if (ref?.id) {
         const blob = await getPhotoBlob(ref.id, "thumb");
-        if (blob) return blob;
+        if (blob) {
+          const medium = (await getPhotoBlob(ref.id, "medium")) ?? blob;
+          void writePersistedTimelineMedia(memoryId, updatedAt, blob, medium);
+          return blob;
+        }
       }
+
+      if (isIosWebKit()) return null;
 
       const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
       if (!dataUrl) return null;
@@ -665,14 +680,24 @@ export async function saveMemory(
   opts: MemorySaveOptions = {}
 ): Promise<MemorySavedMeta> {
   let merged = input;
-  if (input.id && !opts.allowCoreEdit) {
+  if (input.id) {
     const existing = await getMemoryById(input.id);
-    if (existing?.coreLocked) {
-      merged = {
-        ...existing,
-        supplements: input.supplements ?? existing.supplements,
-        updatedAt: Date.now(),
-      };
+    if (existing) {
+      if (!opts.allowCoreEdit && existing.coreLocked) {
+        merged = {
+          ...existing,
+          supplements: input.supplements ?? existing.supplements,
+          updatedAt: Date.now(),
+        };
+      } else if (opts.allowCoreEdit) {
+        merged = {
+          ...input,
+          supplements:
+            input.supplements !== undefined
+              ? input.supplements
+              : (existing.supplements ?? []),
+        };
+      }
     }
   }
   const memory = normalizeMemoryInput(merged);

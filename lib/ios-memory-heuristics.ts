@@ -116,10 +116,9 @@ export function getOomRiskSaveBlockMessage(): string {
   return "This device is low on memory — remove some photos or restart Safari, then try again.";
 }
 
-/** Session-scoped: medium/high disables timeline thumb decode on iOS. */
+/** Session-scoped: only high OOM risk disables timeline thumb decode. */
 export function shouldDisableTimelineThumbsForOomRisk(): boolean {
-  if (!isIosWebKit()) return estimateOomRisk() === "high";
-  return estimateOomRisk() !== "low";
+  return estimateOomRisk() === "high";
 }
 
 /** Extend iOS boot sync quiet window when memory pressure is elevated. */

@@ -325,7 +325,6 @@ async function persistSealedDraftsLocally(
       pairShared: true,
       ring_id: ring?.cloudRingId ?? null,
       haven_id: ring?.havenId ?? null,
-      supplements: [],
     };
     const existing = await getMemoryById(id);
     let saved;
