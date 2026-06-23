@@ -876,7 +876,13 @@ function AppRouterInner({
               /* useMemories surfaces delete errors via `error` if needed */
             }
           }}
-          onMemoryUpdated={async () => {
+          onMemoryUpdated={async (updated) => {
+            if (updated) {
+              setDetailMemory(updated);
+            } else if (route.memoryId) {
+              const row = await getMemoryById(String(route.memoryId));
+              setDetailMemory(row);
+            }
             await refresh().catch(() => null);
           }}
         />

@@ -68,7 +68,7 @@ function formatStoryRichText(text) {
   });
 }
 
-function MemoryDetailPhoto({ photo, style }) {
+function MemoryDetailPhoto({ photo, style, onOpen, viewFullSizeLabel }) {
   const url = useMemoryPhotoDisplayUrl(photo);
   if (!url) {
     const placeholder =
@@ -86,8 +86,170 @@ function MemoryDetailPhoto({ photo, style }) {
       />
     );
   }
-  return <img src={url} alt="" style={style} />;
+  if (!onOpen) {
+    return <img src={url} alt="" style={style} />;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        border: "none",
+        padding: 0,
+        margin: 0,
+        background: "transparent",
+        cursor: "zoom-in",
+        width: "100%",
+        display: "block",
+      }}
+      aria-label={viewFullSizeLabel}
+    >
+      <img src={url} alt="" style={style} />
+    </button>
+  );
 }
+
+function MemoryDetailPhotoLightbox({ photos, index, onClose, onIndexChange, labels }) {
+  const photo = photos[index] || null;
+  const url = useMemoryPhotoDisplayUrl(photo);
+  const hasMany = photos.length > 1;
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasMany) onIndexChange((index - 1 + photos.length) % photos.length);
+      if (e.key === "ArrowRight" && hasMany) onIndexChange((index + 1) % photos.length);
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose, onIndexChange, index, photos.length, hasMany]);
+
+  if (!url) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={labels.lightboxLabel}
+      style={lightboxStyles.backdrop}
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        style={lightboxStyles.closeBtn}
+        aria-label={labels.close}
+      >
+        ×
+      </button>
+      {hasMany ? (
+        <button
+          type="button"
+          style={{ ...lightboxStyles.navBtn, ...lightboxStyles.navPrev }}
+          aria-label={labels.previous}
+          onClick={(e) => {
+            e.stopPropagation();
+            onIndexChange((index - 1 + photos.length) % photos.length);
+          }}
+        >
+          ‹
+        </button>
+      ) : null}
+      <img
+        src={url}
+        alt=""
+        style={lightboxStyles.image}
+        onClick={(e) => e.stopPropagation()}
+      />
+      {hasMany ? (
+        <button
+          type="button"
+          style={{ ...lightboxStyles.navBtn, ...lightboxStyles.navNext }}
+          aria-label={labels.next}
+          onClick={(e) => {
+            e.stopPropagation();
+            onIndexChange((index + 1) % photos.length);
+          }}
+        >
+          ›
+        </button>
+      ) : null}
+      {hasMany ? (
+        <p style={lightboxStyles.count} aria-live="polite">
+          {index + 1} / {photos.length}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const lightboxStyles = {
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 10000,
+    background: "rgba(0, 0, 0, 0.94)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "48px 16px 32px",
+    boxSizing: "border-box",
+  },
+  image: {
+    maxWidth: "100%",
+    maxHeight: "100%",
+    objectFit: "contain",
+    borderRadius: 4,
+    userSelect: "none",
+    WebkitUserSelect: "none",
+  },
+  closeBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(0,0,0,0.45)",
+    color: "#fff",
+    fontSize: 28,
+    lineHeight: 1,
+    cursor: "pointer",
+    zIndex: 1,
+  },
+  navBtn: {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(0,0,0,0.45)",
+    color: "#fff",
+    fontSize: 28,
+    lineHeight: 1,
+    cursor: "pointer",
+    zIndex: 1,
+  },
+  navPrev: { left: 12 },
+  navNext: { right: 12 },
+  count: {
+    position: "absolute",
+    bottom: 16,
+    left: "50%",
+    transform: "translateX(-50%)",
+    margin: 0,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 14,
+  },
+};
 
 function MemoryDetailThumb({ photo, selected, onSelect, styles }) {
   const url = useMemoryPhotoDisplayUrl(photo, "medium");
@@ -153,7 +315,14 @@ export function MemoryDetailPage({
   const [exportMemoryFormat, setExportMemoryFormat] = useState("full");
   const [supplementDraft, setSupplementDraft] = useState("");
   const [supplementBusy, setSupplementBusy] = useState(false);
+  const [displaySupplements, setDisplaySupplements] = useState([]);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    setDisplaySupplements(Array.isArray(memory?.supplements) ? memory.supplements : []);
+  }, [memory?.id, memory?.supplements]);
 
   const photos = useMemo(() => {
     if (!memory?.photo) return [];
@@ -191,7 +360,7 @@ export function MemoryDetailPage({
   const isCapsuleLocked = releaseAt > now;
   const sealed = memory && !isCapsuleLocked ? isSealedMemory(memory) : false;
   const coreLocked = memory && !isCapsuleLocked ? isCoreLocked(memory) : false;
-  const supplements = Array.isArray(memory?.supplements) ? memory.supplements : [];
+  const supplements = displaySupplements;
 
   const sealTs = memory
     ? Number(memory.timelineAt || memory.updatedAt || memory.createdAt || 0) || 0
@@ -332,21 +501,30 @@ export function MemoryDetailPage({
     if (!memory?.id || supplementBusy) return;
     setSupplementBusy(true);
     try {
-      const { appendMemorySupplement } = await import("../services/localStorageService");
+      const { appendMemorySupplement, getMemoryById } = await import("../services/localStorageService");
       await appendMemorySupplement(memory.id, supplementDraft);
       setSupplementDraft("");
-      setToast(t.supplementSaved);
-      await onMemoryUpdated?.();
-      const { getMemoryById } = await import("../services/localStorageService");
-      const { backupPairMemoryToCloud } = await import("../services/pairSharingService");
       const updated = await getMemoryById(memory.id);
-      if (updated) void backupPairMemoryToCloud(updated);
+      if (updated?.supplements) {
+        setDisplaySupplements(updated.supplements);
+      }
+      setToast(t.supplementSaved);
+      await onMemoryUpdated?.(updated ?? undefined);
+      if (updated) {
+        const { backupPairMemoryToCloud } = await import("../services/pairSharingService");
+        void backupPairMemoryToCloud(updated);
+      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : t.verifyActionFailed);
     } finally {
       setSupplementBusy(false);
     }
   }
+
+  const openPhotoLightbox = useCallback((photoIndex = index) => {
+    setLightboxIndex(photoIndex);
+    setLightboxOpen(true);
+  }, [index]);
 
   function handleTitleEditTap() {
     if (isCapsuleLocked || coreLocked) return;
@@ -496,7 +674,12 @@ export function MemoryDetailPage({
                       {t.photosHeading}
                     </h2>
                     <div style={styles.carousel}>
-                      <MemoryDetailPhoto photo={currentPhotoRow} style={styles.photo} />
+                      <MemoryDetailPhoto
+                        photo={currentPhotoRow}
+                        style={styles.photo}
+                        viewFullSizeLabel={t.photoViewFullSize}
+                        onOpen={() => openPhotoLightbox(index)}
+                      />
                       {photos.length > 1 ? (
                         <>
                           <div style={styles.thumbStrip} role="tablist" aria-label={t.photosHeading}>
@@ -758,6 +941,24 @@ export function MemoryDetailPage({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {lightboxOpen && photos.length ? (
+        <MemoryDetailPhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onIndexChange={(nextIndex) => {
+            setLightboxIndex(nextIndex);
+            setIndex(nextIndex);
+          }}
+          labels={{
+            close: t.photoLightboxClose,
+            previous: t.previous,
+            next: t.next,
+            lightboxLabel: t.photoLightboxLabel,
+          }}
+        />
       ) : null}
     </main>
   );

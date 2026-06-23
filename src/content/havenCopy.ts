@@ -971,6 +971,9 @@ export const HAVEN_MEMORY_DETAIL_EN = {
   menuOpenAria: "More actions",
   storyHeading: "Story",
   photosHeading: "Photos",
+  photoViewFullSize: "View full-size photo",
+  photoLightboxClose: "Close",
+  photoLightboxLabel: "Full-size photo",
   mediaHeading: "Media & files",
   metaHeading: "Details",
   metaToggleShow: "Show details",
@@ -1041,6 +1044,9 @@ export type MemoryDetailPageCopy = {
   menuOpenAria: string;
   storyHeading: string;
   photosHeading: string;
+  photoViewFullSize: string;
+  photoLightboxClose: string;
+  photoLightboxLabel: string;
   mediaHeading: string;
   metaHeading: string;
   metaToggleShow: string;
@@ -1116,6 +1122,9 @@ export function getMemoryDetailPageCopy(platform: HavenPlatform): MemoryDetailPa
     menuOpenAria: m.menuOpenAria,
     storyHeading: m.storyHeading,
     photosHeading: m.photosHeading,
+    photoViewFullSize: m.photoViewFullSize,
+    photoLightboxClose: m.photoLightboxClose,
+    photoLightboxLabel: m.photoLightboxLabel,
     mediaHeading: m.mediaHeading,
     metaHeading: m.metaHeading,
     metaToggleShow: m.metaToggleShow,
