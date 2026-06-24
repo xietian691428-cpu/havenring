@@ -13,9 +13,10 @@ import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
+import { useTimelineViewportIds } from "../hooks/useTimelineViewportIds";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
-import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
+import { isIosAppBootQuiet, shouldAllowIosTimelineThumbs } from "@/lib/ios-app-boot";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -191,14 +192,32 @@ export function TimelinePage({
   }, [syncing, pullRefreshing]);
 
   const visibleMemories = orderedFiltered;
-  const visibleThumbKey = useMemo(
-    () =>
-      visibleMemories
-        .map((row) => `${row?.id}:${row?.hasPhotos === false ? 0 : 1}:${Number(row?.updatedAt || 0)}`)
-        .join("|"),
+  const memoryIds = useMemo(
+    () => visibleMemories.map((row) => row?.id).filter(Boolean),
     [visibleMemories]
   );
-  const thumbPaused = loading || syncing || pullSyncActive || pullRefreshing;
+  const { viewportIds, setRowRef, viewportLimited } = useTimelineViewportIds(
+    memoryIds,
+    !loading && !searchQuery.trim()
+  );
+  const thumbMemories = useMemo(() => {
+    if (!viewportLimited) return visibleMemories;
+    if (viewportIds.size === 0) return [];
+    return visibleMemories.filter((row) => viewportIds.has(row.id));
+  }, [visibleMemories, viewportIds, viewportLimited]);
+  const visibleThumbKey = useMemo(
+    () =>
+      thumbMemories
+        .map((row) => `${row?.id}:${row?.hasPhotos === false ? 0 : 1}:${Number(row?.updatedAt || 0)}`)
+        .join("|"),
+    [thumbMemories]
+  );
+  const thumbPaused =
+    loading ||
+    syncing ||
+    pullSyncActive ||
+    pullRefreshing ||
+    !shouldAllowIosTimelineThumbs();
   const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused, memoryTextFirst);
 
   useEffect(() => {
@@ -383,7 +402,11 @@ export function TimelinePage({
                 return (
                   <li
                     key={memory.id}
-                    ref={isLast ? loadMoreRef : undefined}
+                    ref={(node) => {
+                      setRowRef(memory.id)(node);
+                      if (isLast) loadMoreRef.current = node;
+                    }}
+                    data-memory-id={memory.id}
                     style={styles.listItem}
                   >
                     <TimelineMemoryCard

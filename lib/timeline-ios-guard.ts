@@ -13,6 +13,7 @@ export { isMobileMemorySensitive, isIosWebKit };
 
 /** Timeline list page size (infinite scroll chunk). */
 export function getTimelinePageSize(): number {
+  if (isIosWebKit()) return 10;
   return isMobileMemorySensitive() ? 15 : 30;
 }
 
@@ -28,7 +29,7 @@ export function getTimelineMediumMaxDim(): number {
 
 /** In-memory Object URL cap (visible viewport only). */
 export function getTimelineThumbCacheMax(): number {
-  return isIosWebKit() ? 4 : isMobileMemorySensitive() ? 6 : 16;
+  return isIosWebKit() ? 3 : isMobileMemorySensitive() ? 6 : 16;
 }
 
 /** TanStack Virtual overscan rows. */

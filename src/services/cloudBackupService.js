@@ -12,6 +12,11 @@ import {
   extractMemoryFromCloudPlaintext,
 } from "../../lib/cloud-backup-merge";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { isIosWebKit } from "../../lib/composer-platform-limits";
+import {
+  deferIosPostBootWork,
+  shouldAllowIosCloudRestore,
+} from "../../lib/ios-app-boot";
 
 /**
  * Haven Plus cloud backup — local-first, optional, 50 GB hard quota.
@@ -20,6 +25,10 @@ import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 
 const PREF_KEY = "haven.cloud-backup.settings.v1";
 const FULL_EXPORT_MEMORY_ID = "00000000-0000-0000-0000-000000000000";
+const IOS_RESTORE_BATCH_SIZE = 2;
+const IOS_RESTORE_GAP_MS = 900;
+
+let iosRestoreDeferred = false;
 
 export { CLOUD_STORAGE_FULL_CODE, CLOUD_STORAGE_FULL_MESSAGE };
 
@@ -136,6 +145,10 @@ async function resolveCloudUserId() {
   const id = data.session?.user?.id || "";
   if (!id) throw new Error("Sign in to use cloud backup.");
   return id;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function authHeaders(accessToken) {
@@ -474,16 +487,19 @@ export async function restoreFromCloud(memoryId = "") {
   }
 
   let merged = 0;
-  for (const row of backups) {
+  const rows = isIosWebKit() ? backups.slice(0, IOS_RESTORE_BATCH_SIZE) : backups;
+  for (const row of rows) {
     if (!row?.upload_id) continue;
     if (row.kind === "full_export") {
       const outcome = await mergeBackupRowIntoLocal(row.upload_id, accessToken);
       merged += outcome.merged;
+      if (isIosWebKit()) await delay(IOS_RESTORE_GAP_MS);
       continue;
     }
     if (memoryId && row.memory_id && row.memory_id !== memoryId) continue;
     const outcome = await mergeBackupRowIntoLocal(row.upload_id, accessToken);
     merged += outcome.merged;
+    if (isIosWebKit()) await delay(IOS_RESTORE_GAP_MS);
   }
 
   return {
@@ -499,6 +515,20 @@ export async function restoreFromCloud(memoryId = "") {
 /** Background restore — never throws; used after login / pull-refresh / sync. */
 export async function restoreCloudBackupsQuietly(memoryId = "") {
   if (!isCloudBackupReady()) return { ok: true, merged: 0, skipped: true };
+  if (isIosWebKit() && !shouldAllowIosCloudRestore()) {
+    if (!iosRestoreDeferred) {
+      iosRestoreDeferred = true;
+      deferIosPostBootWork(
+        () => {
+          iosRestoreDeferred = false;
+          void restoreCloudBackupsQuietly(memoryId);
+        },
+        16_000,
+        { timeout: 18_000 }
+      );
+    }
+    return { ok: true, merged: 0, deferred: true };
+  }
   try {
     return await restoreFromCloud(memoryId);
   } catch (error) {

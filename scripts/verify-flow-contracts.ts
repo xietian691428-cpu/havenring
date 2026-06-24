@@ -288,12 +288,15 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.doesNotMatch(readRepoFile("src/app-shell/AppRouter.tsx"), /useMemories\(/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /queueBackgroundSync\("session"\)/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /shouldAllowTimelinePullRefresh/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /shouldAllowIosTimelineThumbs/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /shouldAllowIosFullPairSync/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /deferIosPostBootWork/);
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
-    /handleTimelinePullRefresh = useCallback\(async \(\) => \{[\s\S]*?await syncNow\(\{ includePairSync: true, fullPairSync: true \}\)/
+    /handleTimelinePullRefresh = useCallback\(async \(\) => \{[\s\S]*?fullPairSync: shouldAllowIosFullPairSync\(\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v11/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v12/);
   assert.match(readRepoFile("public/sw.js"), /skipWaiting/);
   assert.match(readRepoFile("app/layout.tsx"), /fonts-inter/);
   assert.match(readRepoFile("app/layout.tsx"), /ios-font-minimal/);
@@ -337,7 +340,8 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/composer-memory-guard.ts"), /readMemoryPressure/);
   assert.match(readRepoFile("src/components/ComposerMemoryRecovery.tsx"), /running low on memory/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /compressImageFile/);
-  assert.match(readRepoFile("src/views/TimelinePage.js"), /useWindowVirtualizer/);
+  assert.match(readRepoFile("src/views/TimelinePage.js"), /useTimelineViewportIds/);
+  assert.match(readRepoFile("src/hooks/useTimelineViewportIds.js"), /IntersectionObserver/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemorySummaries/);
   assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /revokeObjectURL/);
   assert.match(readRepoFile("lib/timeline-thumb-store.ts"), /writePersistedTimelineMedia/);
@@ -359,7 +363,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/hooks/useTimelineThumbUrls.js"), /textFirst/);
   assert.match(readRepoFile("src/hooks/useTimelineMemoryMode.js"), /useTimelineMemoryMode/);
   assert.match(readRepoFile("src/hooks/usePullToRefresh.js"), /getTimelinePullRefreshCooldownMs/);
-  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelinePageSize\(\): number \{\n  return isMobileMemorySensitive\(\) \? 15 : 30;/);
+  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelinePageSize\(\): number \{\n  if \(isIosWebKit\(\)\) return 10;/);
   assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelineThumbMaxDim\(\): number \{\n  return isMobileMemorySensitive\(\) \? 300 : 320;/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /estimateComposerSealSizeLight/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
@@ -387,7 +391,10 @@ check("cloud backup 50GB quota compress and chunk upload", () => {
   assert.match(server, /listLatestCloudMemoryBackups/);
   assert.match(backup, /encryptCloudBackupPlaintext/);
   assert.match(backup, /restoreFromCloud/);
-  assert.match(backup, /restoreCloudBackupsQuietly/);
+  assert.match(readRepoFile("lib/photo-blob-migration.ts"), /getAllKeys/);
+  assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /isIosAppBootQuiet/);
+  assert.match(backup, /IOS_RESTORE_BATCH_SIZE/);
+  assert.match(backup, /shouldAllowIosCloudRestore/);
   assert.match(backup, /backupMemoryToCloud/);
   assert.match(quotaRoute, /CLOUD_STORAGE_FULL/);
   assert.match(uploadRoute, /mode === "commit"/);

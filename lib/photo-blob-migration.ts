@@ -18,6 +18,9 @@ import {
   STORE_MEMORIES,
   txDone,
 } from "@/lib/memory-db";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { deferEntryWork } from "@/lib/entry-defer";
+import { shouldAllowIosLegacyMigration } from "@/lib/ios-app-boot";
 
 type EncPayload = {
   alg: string;
@@ -43,6 +46,33 @@ type MemoryDbRecord = {
 
 let migrationCursor = 0;
 let migrationScheduled = false;
+let cachedMemoryIds: string[] | null = null;
+
+const IOS_MIGRATION_CHAIN_GAP_MS = 2_500;
+
+async function listMemoryIdsForMigration(): Promise<string[]> {
+  if (cachedMemoryIds?.length) return cachedMemoryIds;
+  const db = await openMemoryDb();
+  try {
+    cachedMemoryIds = await new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction(STORE_MEMORIES, "readonly");
+      const req = tx.objectStore(STORE_MEMORIES).getAllKeys();
+      req.onsuccess = () => {
+        const keys = (req.result || []) as Array<string | number>;
+        resolve(keys.map((key) => String(key)));
+      };
+      req.onerror = () =>
+        reject(req.error ?? new Error("Failed to read memory ids for migration."));
+    });
+    return cachedMemoryIds;
+  } finally {
+    db.close();
+  }
+}
+
+function invalidateMigrationIdCache(): void {
+  cachedMemoryIds = null;
+}
 
 function yieldToMain(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
@@ -126,20 +156,23 @@ async function rewriteMemoryPhotoEnc(
 }
 
 async function migrateOneLegacyMemoryRecord(): Promise<boolean> {
+  const ids = await listMemoryIdsForMigration();
+  if (!ids.length) return false;
+
   const db = await openMemoryDb();
   try {
-    const records = await new Promise<MemoryDbRecord[]>((resolve, reject) => {
-      const tx = db.transaction(STORE_MEMORIES, "readonly");
-      const req = tx.objectStore(STORE_MEMORIES).getAll();
-      req.onsuccess = () => resolve((req.result || []) as MemoryDbRecord[]);
-      req.onerror = () =>
-        reject(req.error ?? new Error("Failed to read memories for migration."));
-    });
-    if (!records.length) return false;
-    const start = migrationCursor % records.length;
-    for (let offset = 0; offset < records.length; offset += 1) {
-      const record = records[(start + offset) % records.length];
-      migrationCursor = (start + offset + 1) % records.length;
+    const start = migrationCursor % ids.length;
+    for (let offset = 0; offset < ids.length; offset += 1) {
+      const memoryId = ids[(start + offset) % ids.length];
+      migrationCursor = (start + offset + 1) % ids.length;
+      const record = await new Promise<MemoryDbRecord | null>((resolve, reject) => {
+        const tx = db.transaction(STORE_MEMORIES, "readonly");
+        const req = tx.objectStore(STORE_MEMORIES).get(memoryId);
+        req.onsuccess = () => resolve((req.result ?? null) as MemoryDbRecord | null);
+        req.onerror = () =>
+          reject(req.error ?? new Error("Failed to read memory for migration."));
+      });
+      if (!record) continue;
       const photos = await localCrypto.decryptJson(record.photoEnc);
       if (!photosHaveInlineDataUrls(photos)) continue;
       const refs = await migrateInlinePhotosToRefs(record.id, photos);
@@ -152,6 +185,7 @@ async function migrateOneLegacyMemoryRecord(): Promise<boolean> {
       const removed = oldIds.filter((id) => !nextIds.has(id));
       if (removed.length) await deletePhotoBlobsForPhotoIds(removed);
       await rewriteMemoryPhotoEnc(record, refs);
+      invalidateMigrationIdCache();
       return true;
     }
     return false;
@@ -162,18 +196,29 @@ async function migrateOneLegacyMemoryRecord(): Promise<boolean> {
 
 export function scheduleLegacyPhotoBlobMigration(): void {
   if (typeof window === "undefined") return;
+  if (!shouldAllowIosLegacyMigration()) {
+    if (isIosWebKit()) {
+      deferEntryWork(() => scheduleLegacyPhotoBlobMigration(), { timeout: 12_000 });
+    }
+    return;
+  }
   if (migrationScheduled) return;
   migrationScheduled = true;
   const run = () => {
     migrationScheduled = false;
     void migrateOneLegacyMemoryRecord().then((didWork) => {
-      if (didWork) scheduleLegacyPhotoBlobMigration();
+      if (!didWork) return;
+      if (isIosWebKit()) {
+        window.setTimeout(() => scheduleLegacyPhotoBlobMigration(), IOS_MIGRATION_CHAIN_GAP_MS);
+        return;
+      }
+      scheduleLegacyPhotoBlobMigration();
     });
   };
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(run, { timeout: 5000 });
+    requestIdleCallback(run, { timeout: isIosWebKit() ? 8_000 : 5_000 });
   } else {
-    window.setTimeout(run, 1200);
+    window.setTimeout(run, isIosWebKit() ? 2_400 : 1_200);
   }
 }
 

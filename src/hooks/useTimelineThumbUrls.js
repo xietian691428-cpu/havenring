@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 import {
   acquireTimelineThumbUrl,
   releaseAllTimelineThumbUrls,
   retainTimelineThumbUrls,
 } from "@/lib/timeline-thumb-cache";
 import { getTimelineMemoryThumbBlob } from "../services/localStorageService";
+
+const IOS_THUMB_GAP_MS = 140;
 
 function parseVisibleKey(visibleKey = "") {
   return visibleKey
@@ -78,6 +81,9 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
           if (prev[row.id] === url) return prev;
           return { ...prev, [row.id]: url };
         });
+        if (isIosWebKit()) {
+          await new Promise((resolve) => window.setTimeout(resolve, IOS_THUMB_GAP_MS));
+        }
       }
     })();
 

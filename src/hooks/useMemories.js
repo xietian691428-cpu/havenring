@@ -21,8 +21,10 @@ import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { restoreCloudBackupsQuietly } from "../services/cloudBackupService";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 import {
   IOS_BOOT_REFRESH_DELAY_MS,
+  deferIosPostBootWork,
   shouldRunIosBackgroundSync,
 } from "@/lib/ios-app-boot";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
@@ -35,6 +37,23 @@ const SYNC_BACKOFF_MAX_MS = 5 * 60 * 1000;
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function scheduleQuietCloudRestore(onMerged) {
+  const run = () => {
+    void restoreCloudBackupsQuietly()
+      .then((outcome) => {
+        if (outcome?.merged > 0 && typeof onMerged === "function") {
+          onMerged();
+        }
+      })
+      .catch(() => null);
+  };
+  if (isIosWebKit()) {
+    deferIosPostBootWork(run, 16_000, { timeout: 18_000 });
+    return;
+  }
+  run();
 }
 
 function nextBackoffMs(failureStreak) {
@@ -303,6 +322,12 @@ export function useMemories(options = {}) {
         includePairSync,
         fullPairSync,
       });
+      scheduleQuietCloudRestore(() => {
+        const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+        if (refreshSkewMs > 2500) {
+          void refresh();
+        }
+      });
       setIntegrityWarning("");
       setCloudPlaceholders(
         Array.isArray(outcome?.cloudPlaceholders) ? outcome.cloudPlaceholders : []
@@ -312,6 +337,8 @@ export function useMemories(options = {}) {
       const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
       if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
         await refresh();
+      } else if (isIosWebKit()) {
+        await delay(400);
       }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({
@@ -421,7 +448,12 @@ export function useMemories(options = {}) {
         includePairSync,
         fullPairSync,
       });
-      void restoreCloudBackupsQuietly().catch(() => null);
+      scheduleQuietCloudRestore(() => {
+        const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+        if (refreshSkewMs > 2500) {
+          void refresh();
+        }
+      });
       setIntegrityWarning("");
       setCloudPlaceholders((prev) => {
         const keep = prev.filter((row) => row.uidKey !== targetUidKey);
@@ -435,6 +467,8 @@ export function useMemories(options = {}) {
       const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
       if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
         await refresh();
+      } else if (isIosWebKit()) {
+        await delay(400);
       }
       if (outcome?.ok && !issues.length) {
         setSyncMeta((prev) => ({

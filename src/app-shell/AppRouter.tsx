@@ -35,7 +35,7 @@ import {
   TEMP_DEVICE_MODE_EVENT,
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
-import { shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
+import { shouldAllowIosFullPairSync, shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
 
 function RoutePageSkeleton({ label }: { label: string }) {
   return (
@@ -278,7 +278,10 @@ function AppRouterInner({
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
   const handleTimelinePullRefresh = useCallback(async () => {
     if (!shouldAllowTimelinePullRefresh()) return;
-    await syncNow({ includePairSync: true, fullPairSync: true });
+    await syncNow({
+      includePairSync: true,
+      fullPairSync: shouldAllowIosFullPairSync(),
+    });
   }, [syncNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
 

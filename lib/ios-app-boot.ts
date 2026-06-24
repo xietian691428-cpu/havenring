@@ -1,5 +1,6 @@
-import { isLowMemoryEntryDevice } from "@/lib/entry-defer";
+import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { getOomRiskSyncDelayMs } from "@/lib/ios-memory-heuristics";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 
 const BOOT_SESSION_KEY = "haven.ios.boot.v1";
 
@@ -80,9 +81,58 @@ export const IOS_BOOT_QUIET_MS = 14_000;
 /** Min ms after /app boot before pull-to-refresh is allowed (iOS). */
 export const IOS_PULL_REFRESH_MIN_BOOT_MS = 20_000;
 
+/** Min ms before timeline thumb decode (iOS). */
+export const IOS_THUMB_MIN_BOOT_MS = 10_000;
+
+/** Min ms before legacy inline-photo migration (iOS). */
+export const IOS_LEGACY_MIGRATION_MIN_BOOT_MS = 12_000;
+
+/** Min ms before background cloud restore (iOS). */
+export const IOS_CLOUD_RESTORE_MIN_BOOT_MS = 16_000;
+
+/** Min ms before pull-refresh may run a full pair re-import (iOS). */
+export const IOS_FULL_PAIR_SYNC_MIN_BOOT_MS = 45_000;
+
 export function shouldAllowTimelinePullRefresh(): boolean {
   if (!isLowMemoryEntryDevice()) return true;
   return getIosAppBootAgeMs() >= IOS_PULL_REFRESH_MIN_BOOT_MS;
+}
+
+export function shouldAllowIosTimelineThumbs(): boolean {
+  if (!isIosWebKit()) return true;
+  return getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_THUMB_MIN_BOOT_MS);
+}
+
+export function shouldAllowIosLegacyMigration(): boolean {
+  if (!isIosWebKit()) return true;
+  return getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_LEGACY_MIGRATION_MIN_BOOT_MS);
+}
+
+export function shouldAllowIosCloudRestore(): boolean {
+  if (!isIosWebKit()) return true;
+  return getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_CLOUD_RESTORE_MIN_BOOT_MS);
+}
+
+/** Full pair bundle re-import is heavy — only after boot settles on iOS. */
+export function shouldAllowIosFullPairSync(): boolean {
+  if (!isIosWebKit()) return true;
+  return getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_FULL_PAIR_SYNC_MIN_BOOT_MS);
+}
+
+/** Defer work until iOS boot quiet window passes (no-op on other platforms). */
+export function deferIosPostBootWork(
+  fn: () => void,
+  minBootMs: number,
+  opts: { timeout?: number } = {}
+): void {
+  if (!isIosWebKit()) {
+    fn();
+    return;
+  }
+  const required = getOomRiskSyncDelayMs(minBootMs);
+  const age = getIosAppBootAgeMs();
+  const wait = Math.max(0, required - age);
+  deferEntryWork(fn, { timeout: opts.timeout ?? wait + 400 });
 }
 
 /** Strip `?from=start` after SPA entry; returns whether the marker was present. */
