@@ -99,11 +99,13 @@ export async function buildPhotoBlobVariants(source: Blob): Promise<{
   const blobs = {} as Record<PhotoBlobType, Blob>;
 
   if (sequential) {
-    blobs.thumb = await compressVariant(buffer, mimeType, "thumb");
-    await yieldToMain();
-    blobs.medium = await compressVariant(buffer, mimeType, "medium");
-    await yieldToMain();
     blobs.full = await compressVariant(buffer, mimeType, "full");
+    await yieldToMain();
+    const mediumBuf = await blobs.full.arrayBuffer();
+    blobs.medium = await compressVariant(mediumBuf, mimeType, "medium");
+    await yieldToMain();
+    const thumbBuf = await blobs.medium.arrayBuffer();
+    blobs.thumb = await compressVariant(thumbBuf, mimeType, "thumb");
   } else {
     const [thumb, medium, full] = await Promise.all([
       compressVariant(buffer, mimeType, "thumb"),

@@ -136,6 +136,10 @@ const EN = {
   feedbackMaxPhotosPrefix: "Max ",
   feedbackMaxPhotosSuffix: " photos allowed.",
   feedbackPhotoError: "Could not process photos. Please try again.",
+  feedbackPhotoTooLarge:
+    "That photo is too large for this device — try a smaller image or use one photo at a time.",
+  feedbackMemoryTight:
+    "This draft is getting large — fewer or smaller photos will keep editing stable on iPhone.",
   feedbackAttachmentTooLargePrefix: "File too large: ",
   feedbackAttachmentTooLargeSuffix: ". Max size is 10 MB.",
   feedbackAttachmentTooLargeManyPrefix: "Skipped ",

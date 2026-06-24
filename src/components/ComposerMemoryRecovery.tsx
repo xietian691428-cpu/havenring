@@ -4,15 +4,22 @@ import { useEffect, useState } from "react";
 import { consumeComposerMemoryStressFlag } from "@/lib/composer-memory-guard";
 
 const COPY = {
-  message: "App is running low on memory. Restarting…",
-  reload: "Reload",
+  title: "Safari needs a moment",
+  message:
+    "Haven hit a memory limit. You can keep editing with fewer photos, or reload to free space.",
+  keepEditing: "Keep editing",
+  reload: "Reload Haven",
 };
 
 type ComposerMemoryRecoveryProps = {
   open?: boolean;
+  onDismiss?: () => void;
 };
 
-export function ComposerMemoryRecovery({ open = false }: ComposerMemoryRecoveryProps) {
+export function ComposerMemoryRecovery({
+  open = false,
+  onDismiss,
+}: ComposerMemoryRecoveryProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -26,6 +33,11 @@ export function ComposerMemoryRecovery({ open = false }: ComposerMemoryRecoveryP
   }, [open]);
 
   if (!visible) return null;
+
+  function handleDismiss() {
+    setVisible(false);
+    onDismiss?.();
+  }
 
   function handleReload() {
     if (typeof window !== "undefined") {
@@ -62,23 +74,41 @@ export function ComposerMemoryRecovery({ open = false }: ComposerMemoryRecoveryP
       >
         <p
           id="haven-composer-memory-title"
-          style={{ margin: "0 0 16px", fontSize: 17, lineHeight: 1.45, fontWeight: 600 }}
+          style={{ margin: "0 0 10px", fontSize: 17, lineHeight: 1.45, fontWeight: 600 }}
         >
-          {COPY.message}
+          {COPY.title}
         </p>
-        <p id="haven-composer-memory-body" style={{ margin: 0, display: "none" }}>
+        <p
+          id="haven-composer-memory-body"
+          style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.55, color: "rgba(248,239,231,0.78)" }}
+        >
           {COPY.message}
         </p>
         <div style={{ display: "grid", gap: 10 }}>
           <button
             type="button"
-            onClick={handleReload}
+            onClick={handleDismiss}
             style={{
               borderRadius: 999,
               border: "1px solid #d9a67a",
               background: "linear-gradient(180deg, #e6b48d, #d9a67a)",
               color: "#1b1411",
               padding: "12px 16px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {COPY.keepEditing}
+          </button>
+          <button
+            type="button"
+            onClick={handleReload}
+            style={{
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "transparent",
+              color: "rgba(248,239,231,0.85)",
+              padding: "10px 16px",
               fontWeight: 600,
               cursor: "pointer",
             }}

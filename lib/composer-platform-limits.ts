@@ -31,9 +31,9 @@ export function getComposerSaveLimits(): {
 } {
   if (isIosWebKit()) {
     return {
-      imageMaxDim: 1024,
-      jpegQuality: 0.68,
-      recompressAboveBytes: 280_000,
+      imageMaxDim: 896,
+      jpegQuality: 0.64,
+      recompressAboveBytes: 180_000,
     };
   }
   return {
@@ -47,8 +47,8 @@ export function getComposerPlatformLimits(): ComposerPlatformLimits {
   if (isIosWebKit()) {
     return {
       maxPhotos: 8,
-      imageMaxDim: 1280,
-      jpegQuality: 0.72,
+      imageMaxDim: 1024,
+      jpegQuality: 0.66,
       compressSequentially: true,
       useWorkerCompression: true,
       lightSealSizeEstimate: true,

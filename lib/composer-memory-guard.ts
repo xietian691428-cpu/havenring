@@ -2,7 +2,9 @@ import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 import {
   estimateOomRisk,
+  getFlag,
   oomRiskToMemoryPressure,
+  shouldBlockSaveForOomRisk,
 } from "@/lib/ios-memory-heuristics";
 
 export type MemoryPressure = "normal" | "elevated" | "critical";
@@ -14,6 +16,14 @@ type PerfMemory = {
 
 const ESTIMATED_CRITICAL_BYTES = 80 * 1024 * 1024;
 const ESTIMATED_ELEVATED_BYTES = 48 * 1024 * 1024;
+
+/** iOS composer — bytes in the current draft, not library size. */
+const IOS_COMPOSER_ELEVATED_BYTES = 14 * 1024 * 1024;
+const IOS_COMPOSER_CRITICAL_BYTES = 28 * 1024 * 1024;
+const IOS_COMPOSER_SAVE_BLOCK_BYTES = 42 * 1024 * 1024;
+
+/** Reject camera-roll picks above this before decode (iOS). */
+export const IOS_MAX_SOURCE_PHOTO_BYTES = 12 * 1024 * 1024;
 
 export function readPerformanceMemory(): PerfMemory | null {
   if (typeof performance === "undefined") return null;
@@ -61,6 +71,39 @@ export function readMemoryPressure(estimatedComposerBytes = 0): MemoryPressure {
   if (estimatedComposerBytes >= ESTIMATED_CRITICAL_BYTES) return "critical";
   if (estimatedComposerBytes >= ESTIMATED_ELEVATED_BYTES) return "elevated";
   return "normal";
+}
+
+/**
+ * Composer-only pressure — library size must not block adding one photo while editing.
+ */
+export function readComposerMemoryPressure(estimatedComposerBytes = 0): MemoryPressure {
+  if (!isIosWebKit()) {
+    return readMemoryPressure(estimatedComposerBytes);
+  }
+  if (estimatedComposerBytes >= IOS_COMPOSER_CRITICAL_BYTES) return "critical";
+  if (estimatedComposerBytes >= IOS_COMPOSER_ELEVATED_BYTES) return "elevated";
+  const libraryRisk = estimateOomRisk();
+  if (libraryRisk === "high" && estimatedComposerBytes > 5 * 1024 * 1024) {
+    return "elevated";
+  }
+  if (libraryRisk === "medium" && estimatedComposerBytes > 9 * 1024 * 1024) {
+    return "elevated";
+  }
+  return "normal";
+}
+
+export function shouldPauseComposerPhotoAdd(estimatedComposerBytes: number): boolean {
+  const pressure = readComposerMemoryPressure(estimatedComposerBytes);
+  return pressure === "critical" && estimatedComposerBytes >= IOS_COMPOSER_ELEVATED_BYTES;
+}
+
+/** Block save only when this draft is huge or a prior save OOM was recorded. */
+export function shouldBlockComposerSave(estimatedComposerBytes = 0): boolean {
+  if (!isIosWebKit()) {
+    return shouldBlockSaveForOomRisk();
+  }
+  if (getFlag("last_save_oom")) return true;
+  return estimatedComposerBytes >= IOS_COMPOSER_SAVE_BLOCK_BYTES;
 }
 
 export function shouldPauseForMemoryPressure(pressure: MemoryPressure): boolean {

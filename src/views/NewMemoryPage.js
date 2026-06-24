@@ -43,21 +43,22 @@ import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { getBoundRingCount } from "../services/ringRegistryService";
 import { SealPwaHintCard } from "../components/SealPwaHintCard";
-import { getComposerPlatformLimits } from "@/lib/composer-platform-limits";
+import { getComposerPlatformLimits, isIosWebKit } from "@/lib/composer-platform-limits";
 import { compressImageFile } from "@/lib/image-compressor-client";
 import {
   estimateComposerMediaBytes,
   getCompressionProfileForPressure,
-  markComposerMemoryStress,
-  readMemoryPressure,
-  shouldPauseForMemoryPressure,
+  IOS_MAX_SOURCE_PHOTO_BYTES,
   isLikelyMemoryCrashError,
+  markComposerMemoryStress,
+  readComposerMemoryPressure,
+  shouldBlockComposerSave,
+  shouldPauseComposerPhotoAdd,
 } from "@/lib/composer-memory-guard";
 import {
   clearLastSaveOom,
   markLastSaveOom,
   refreshOomRiskSnapshot,
-  shouldBlockSaveForOomRisk,
 } from "@/lib/ios-memory-heuristics";
 import { getMemoryCount } from "../services/localStorageService";
 import {
@@ -361,16 +362,21 @@ export function NewMemoryPage({
     if (!photos.length && !attachments.length) return undefined;
     const tick = () => {
       const estimated = estimateComposerMediaBytes(photos, attachments);
-      const pressure = readMemoryPressure(estimated);
-      if (shouldPauseForMemoryPressure(pressure)) {
-        markComposerMemoryStress();
-        setMemoryRecoveryOpen(true);
+      const pressure = readComposerMemoryPressure(estimated);
+      if (shouldPauseComposerPhotoAdd(estimated)) {
+        setFeedback(t.feedbackMemoryTight);
+        return;
+      }
+      if (pressure === "elevated") {
+        setFeedback((prev) =>
+          prev && !prev.includes(t.feedbackMemoryTight) ? prev : t.feedbackMemoryTight
+        );
       }
     };
     tick();
-    const id = window.setInterval(tick, 2500);
+    const id = window.setInterval(tick, 4000);
     return () => window.clearInterval(id);
-  }, [photos, attachments]);
+  }, [photos, attachments, t.feedbackMemoryTight]);
 
   useEffect(() => {
     const onUnhandled = (event) => {
@@ -593,19 +599,21 @@ export function NewMemoryPage({
     try {
       const newPhotos = [];
       const estimatedBytes = estimateComposerMediaBytes(photos, attachments);
-      const pressure = readMemoryPressure(estimatedBytes);
+      const pressure = readComposerMemoryPressure(estimatedBytes);
       const compressProfile = getCompressionProfileForPressure(pressure, {
         imageMaxDim: PLATFORM_LIMITS.imageMaxDim,
         jpegQuality: PLATFORM_LIMITS.jpegQuality,
       });
 
       const compressOne = async (file, index) => {
-        const nextPressure = readMemoryPressure(
-          estimatedBytes + estimateComposerMediaBytes(newPhotos, [])
-        );
-        if (shouldPauseForMemoryPressure(nextPressure)) {
-          markComposerMemoryStress();
-          setMemoryRecoveryOpen(true);
+        if (isIosWebKit() && file.size > IOS_MAX_SOURCE_PHOTO_BYTES) {
+          setFeedback(t.feedbackPhotoTooLarge);
+          return null;
+        }
+        const nextEstimated =
+          estimatedBytes + estimateComposerMediaBytes(newPhotos, []);
+        if (shouldPauseComposerPhotoAdd(nextEstimated)) {
+          setFeedback(t.feedbackMemoryTight);
           return null;
         }
         const blob = await compressImageFile(file, {
@@ -769,7 +777,8 @@ export function NewMemoryPage({
       return;
     }
 
-    if (shouldBlockSaveForOomRisk()) {
+    const draftBytes = estimateComposerMediaBytes(photos, attachments);
+    if (shouldBlockComposerSave(draftBytes)) {
       const message = t.feedbackOomSaveBlocked;
       setFeedback(message);
       setSaveDialog({
@@ -1539,7 +1548,10 @@ export function NewMemoryPage({
         />
       ) : null}
 
-      <ComposerMemoryRecovery open={memoryRecoveryOpen} />
+      <ComposerMemoryRecovery
+        open={memoryRecoveryOpen}
+        onDismiss={() => setMemoryRecoveryOpen(false)}
+      />
     </main>
   );
 }

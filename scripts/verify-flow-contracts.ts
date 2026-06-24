@@ -340,7 +340,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/workers/imageCompressor.worker.ts"), /OffscreenCanvas/);
   assert.match(readRepoFile("lib/image-compressor-client.ts"), /compressImageFile/);
   assert.match(readRepoFile("lib/composer-memory-guard.ts"), /readMemoryPressure/);
-  assert.match(readRepoFile("src/components/ComposerMemoryRecovery.tsx"), /running low on memory/);
+  assert.match(readRepoFile("src/components/ComposerMemoryRecovery.tsx"), /Keep editing/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /compressImageFile/);
   assert.match(readRepoFile("src/views/TimelinePage.js"), /useVirtualizer/);
   assert.match(readRepoFile("src/services/lightSyncService.js"), /runLightManifestSync/);
@@ -358,7 +358,11 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/ios-memory-heuristics.ts"), /shouldBlockSaveForOomRisk/);
   assert.match(readRepoFile("lib/ios-memory-heuristics.ts"), /shouldDisableTimelineThumbsForOomRisk/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /getOomRiskSyncDelayMs/);
-  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockSaveForOomRisk/);
+  assert.match(readRepoFile("lib/composer-memory-guard.ts"), /readComposerMemoryPressure/);
+  assert.match(readRepoFile("lib/composer-memory-guard.ts"), /shouldBlockComposerSave/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockComposerSave/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /readComposerMemoryPressure/);
+  assert.doesNotMatch(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockSaveForOomRisk/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /markLastSaveOom/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getMemoryCount/);
   assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /shouldUseTextFirstTimeline/);
