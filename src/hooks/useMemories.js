@@ -31,6 +31,7 @@ import {
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { wasSealRecentlyCompleted } from "../features/seal/sealCrossTab";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -65,7 +66,7 @@ function nextBackoffMs(failureStreak) {
 export function useMemories(options = {}) {
   const timelineLifecycleActive = Boolean(options.timelineLifecycleActive);
   const [memories, setMemories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
@@ -83,6 +84,7 @@ export function useMemories(options = {}) {
     lastRecoveryCount: 0,
   });
   const syncInFlightRef = useRef(null);
+  const refreshInFlightRef = useRef(null);
   const autoSyncQueuedRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const timelineCursorRef = useRef(null);
@@ -90,19 +92,32 @@ export function useMemories(options = {}) {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    releaseAllTimelineThumbUrls();
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+    const runner = (async () => {
+      setLoading(true);
+      setError(null);
+      releaseAllTimelineThumbUrls();
+      try {
+        const page = await getTimelineMemorySummaries({ limit: getTimelinePageSize() });
+        timelineCursorRef.current = page.nextBeforeTimelineAt;
+        setTimelineHasMore(page.hasMore);
+        setMemories(page.items);
+        lastRefreshAtRef.current = Date.now();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load memories.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    refreshInFlightRef.current = runner;
     try {
-      const page = await getTimelineMemorySummaries({ limit: getTimelinePageSize() });
-      timelineCursorRef.current = page.nextBeforeTimelineAt;
-      setTimelineHasMore(page.hasMore);
-      setMemories(page.items);
-      lastRefreshAtRef.current = Date.now();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load memories.");
+      return await runner;
     } finally {
-      setLoading(false);
+      if (refreshInFlightRef.current === runner) {
+        refreshInFlightRef.current = null;
+      }
     }
   }, []);
 
@@ -599,13 +614,17 @@ export function useMemories(options = {}) {
     const run = () => {
       void refresh();
     };
+    const afterSeal = wasSealRecentlyCompleted();
     deferEntryWork(run, {
-      timeout: isLowMemoryEntryDevice() ? IOS_BOOT_REFRESH_DELAY_MS : 500,
+      timeout: afterSeal
+        ? 0
+        : isLowMemoryEntryDevice()
+          ? IOS_BOOT_REFRESH_DELAY_MS
+          : 500,
     });
   }, [timelineLifecycleActive, refresh]);
 
   useEffect(() => {
-    if (!timelineLifecycleActive) return undefined;
     if (typeof window === "undefined") return undefined;
     const onStorage = (event) => {
       if (event.key === STORAGE_KEYS.sealCompleteRelay) {
@@ -625,7 +644,7 @@ export function useMemories(options = {}) {
       window.removeEventListener("storage", onStorage);
       unsubBroadcast();
     };
-  }, [timelineLifecycleActive, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
     if (!timelineLifecycleActive) return undefined;

@@ -306,7 +306,14 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /MemoryDetailPage = dynamic/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /SettingsPage = dynamic/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /ExplorePage = dynamic/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /refreshInFlightRef/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /wasSealRecentlyCompleted/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /syncInFlightRef/);
+  assert.match(
+    readRepoFile("src/app-shell/AppRouter.tsx"),
+    /onTabTimeline: \(\) => \{[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\)/
+  );
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /tabTimelineBusyRef/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /autoSyncQueuedRef/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /queueBackgroundSync/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_PULL_REFRESH_MIN_BOOT_MS = 20_000/);

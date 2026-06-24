@@ -234,6 +234,7 @@ function AppRouterInner({
   };
   const loginSyncDoneForSessionRef = useRef("");
   const tempWipeStartedRef = useRef(false);
+  const tabTimelineBusyRef = useRef(false);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -343,8 +344,8 @@ function AppRouterInner({
       openRingSetup();
       return;
     }
-    void refresh();
     navigateTo({ name: "timeline", memoryId: null }, "forward");
+    void refresh();
   }
 
   const activeTab = useMemo((): ActiveTab => {
@@ -366,9 +367,13 @@ function AppRouterInner({
       showTopChrome,
       chromeResetKey,
       activeTab,
-      onTabTimeline: async () => {
-        await refresh();
+      onTabTimeline: () => {
+        if (tabTimelineBusyRef.current) return;
+        tabTimelineBusyRef.current = true;
         navigateTo({ name: "timeline", memoryId: null }, "back");
+        void refresh().finally(() => {
+          tabTimelineBusyRef.current = false;
+        });
       },
       onTabExplore: () => navigateTo({ name: "explore", memoryId: null }, "forward"),
       onTabSeal: () => navigateTo({ name: "new", memoryId: null }, "forward"),
@@ -961,9 +966,13 @@ function AppRouterInner({
           onQuickSignIn={handleQuickSignIn}
           onAfterOnboarding={handleAfterOnboarding}
           onOpenRingSetup={openRingSetup}
-          onOpenTimeline={async () => {
-            await refresh();
+          onOpenTimeline={() => {
+            if (tabTimelineBusyRef.current) return;
+            tabTimelineBusyRef.current = true;
             navigateTo({ name: "timeline", memoryId: null }, "forward");
+            void refresh().finally(() => {
+              tabTimelineBusyRef.current = false;
+            });
           }}
           onCreateMemory={() =>
             navigateTo({ name: "new", memoryId: null }, "forward")
