@@ -25,8 +25,8 @@ import {
 
 const PREF_KEY = "haven.cloud-backup.settings.v1";
 const FULL_EXPORT_MEMORY_ID = "00000000-0000-0000-0000-000000000000";
-const IOS_RESTORE_BATCH_SIZE = 2;
-const IOS_RESTORE_GAP_MS = 900;
+const IOS_RESTORE_BATCH_SIZE = 1;
+const IOS_RESTORE_GAP_MS = 4_000;
 
 let iosRestoreDeferred = false;
 
@@ -473,8 +473,10 @@ async function mergeBackupRowIntoLocal(uploadId, accessToken) {
 
 /**
  * Restore cloud backups and merge supplements into local memories (local core wins).
+ * @param {string} memoryId
+ * @param {{ full?: boolean }} opts — full=true processes every manifest row (deep sync).
  */
-export async function restoreFromCloud(memoryId = "") {
+export async function restoreFromCloud(memoryId = "", opts = {}) {
   ensureReady();
   const accessToken = await resolveAccessToken();
   const backups = await fetchLatestBackups(accessToken, memoryId);
@@ -487,7 +489,9 @@ export async function restoreFromCloud(memoryId = "") {
   }
 
   let merged = 0;
-  const rows = isIosWebKit() ? backups.slice(0, IOS_RESTORE_BATCH_SIZE) : backups;
+  const full = Boolean(opts.full);
+  const rows =
+    isIosWebKit() && !full ? backups.slice(0, IOS_RESTORE_BATCH_SIZE) : backups;
   for (const row of rows) {
     if (!row?.upload_id) continue;
     if (row.kind === "full_export") {
@@ -510,6 +514,24 @@ export async function restoreFromCloud(memoryId = "") {
         ? `Merged notes from ${merged} cloud backup${merged === 1 ? "" : "s"}.`
         : "Cloud backup checked — your local notes are already up to date.",
   };
+}
+
+/** Deep restore — all manifest rows (Settings). */
+export async function restoreFromCloudDeep(memoryId = "") {
+  return restoreFromCloud(memoryId, { full: true });
+}
+
+/** Manifest-only peek — no blob download. */
+export async function peekCloudBackupManifest() {
+  if (!isCloudBackupReady()) return { ok: true, backups: [], skipped: true };
+  try {
+    const accessToken = await resolveAccessToken();
+    const backups = await fetchLatestBackups(accessToken);
+    return { ok: true, backups, count: backups.length };
+  } catch (error) {
+    console.warn("[haven-ring] cloud manifest peek skipped:", error);
+    return { ok: false, backups: [], count: 0 };
+  }
 }
 
 /** Background restore — never throws; used after login / pull-refresh / sync. */

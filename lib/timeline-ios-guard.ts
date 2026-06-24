@@ -13,7 +13,7 @@ export { isMobileMemorySensitive, isIosWebKit };
 
 /** Timeline list page size (infinite scroll chunk). */
 export function getTimelinePageSize(): number {
-  if (isIosWebKit()) return 10;
+  if (isIosWebKit()) return 6;
   return isMobileMemorySensitive() ? 15 : 30;
 }
 

@@ -19,6 +19,7 @@ import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { restoreCloudBackupsQuietly } from "../services/cloudBackupService";
+import { runDeepManifestSync, runLightManifestSync } from "../services/lightSyncService";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
@@ -302,6 +303,7 @@ export function useMemories(options = {}) {
     }
     const includePairSync = Boolean(opts.includePairSync);
     const fullPairSync = Boolean(opts.fullPairSync);
+    const fullCloud = Boolean(opts.fullCloud);
     const runner = (async () => {
     const startedAt = Date.now();
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
@@ -322,12 +324,21 @@ export function useMemories(options = {}) {
         includePairSync,
         fullPairSync,
       });
-      scheduleQuietCloudRestore(() => {
-        const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-        if (refreshSkewMs > 2500) {
-          void refresh();
+      if (fullCloud) {
+        try {
+          const { restoreFromCloudDeep } = await import("../services/cloudBackupService");
+          await restoreFromCloudDeep();
+        } catch {
+          /* deep cloud optional */
         }
-      });
+      } else {
+        scheduleQuietCloudRestore(() => {
+          const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+          if (refreshSkewMs > 2500) {
+            void refresh();
+          }
+        });
+      }
       setIntegrityWarning("");
       setCloudPlaceholders(
         Array.isArray(outcome?.cloudPlaceholders) ? outcome.cloudPlaceholders : []
@@ -423,6 +434,7 @@ export function useMemories(options = {}) {
     }
     const includePairSync = Boolean(opts.includePairSync);
     const fullPairSync = Boolean(opts.fullPairSync);
+    const fullCloud = Boolean(opts.fullCloud);
     const targetUidKey = getActiveRingUidKey();
     if (!targetUidKey) {
       return runSync(opts);
@@ -448,12 +460,21 @@ export function useMemories(options = {}) {
         includePairSync,
         fullPairSync,
       });
-      scheduleQuietCloudRestore(() => {
-        const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-        if (refreshSkewMs > 2500) {
-          void refresh();
+      if (fullCloud) {
+        try {
+          const { restoreFromCloudDeep } = await import("../services/cloudBackupService");
+          await restoreFromCloudDeep();
+        } catch {
+          /* deep cloud optional */
         }
-      });
+      } else {
+        scheduleQuietCloudRestore(() => {
+          const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
+          if (refreshSkewMs > 2500) {
+            void refresh();
+          }
+        });
+      }
       setIntegrityWarning("");
       setCloudPlaceholders((prev) => {
         const keep = prev.filter((row) => row.uidKey !== targetUidKey);
@@ -520,6 +541,45 @@ export function useMemories(options = {}) {
     syncInFlightRef.current = runner;
     return runner;
   }, [runSync, refresh]);
+
+  const runLightSync = useCallback(async () => {
+    if (syncInFlightRef.current) {
+      return syncInFlightRef.current;
+    }
+    const runner = (async () => {
+      setSyncing(true);
+      setSyncMeta((prev) => ({ ...prev, lastAttemptAt: Date.now(), nextRetryAt: 0 }));
+      try {
+        releaseAllTimelineThumbUrls();
+        const outcome = await runLightManifestSync();
+        setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
+        await refresh();
+        if (outcome?.ok && !(outcome?.issues || []).length) {
+          setSyncMeta((prev) => ({
+            ...prev,
+            lastSuccessAt: Date.now(),
+            lastFailureCode: "",
+            failureStreak: 0,
+            nextRetryAt: 0,
+          }));
+        }
+        return outcome;
+      } catch {
+        const issue = classifySyncFailure({});
+        setSyncIssues([issue]);
+        throw new Error("sync_failed");
+      } finally {
+        setSyncing(false);
+        syncInFlightRef.current = null;
+      }
+    })();
+    syncInFlightRef.current = runner;
+    return runner;
+  }, [refresh]);
+
+  const runDeepSync = useCallback(async () => {
+    return runSync({ includePairSync: true, fullPairSync: true, fullCloud: true });
+  }, [runSync]);
 
   const remove = useCallback(async (id) => {
     setError(null);
@@ -636,6 +696,8 @@ export function useMemories(options = {}) {
       loadingMore,
       searchMemories,
       syncNow: runSync,
+      syncLightNow: runLightSync,
+      syncDeepNow: runDeepSync,
       syncActiveRingNow: runSyncForActiveRing,
       queueBackgroundSync,
       createMemory: create,
@@ -658,6 +720,8 @@ export function useMemories(options = {}) {
       loadingMore,
       searchMemories,
       runSync,
+      runLightSync,
+      runDeepSync,
       runSyncForActiveRing,
       queueBackgroundSync,
       create,

@@ -47,6 +47,14 @@ const EN = {
   signInAppleOAuth: "Sign in with Apple",
   backupNow: "Backup Now",
   restore: "Restore",
+  deepSync: "Deep sync",
+  deepSyncHint:
+    "Full pair import and cloud note restore — use when switching devices or after a crash.",
+  confirmDeepSync:
+    "Run a deep sync? This may take longer and uses more memory than pull-to-refresh.",
+  deepSyncRunning: "Running deep sync...",
+  deepSyncDone: "Deep sync finished.",
+  deepSyncFailed: "Deep sync could not finish.",
   unlink: "Unlink Account",
   feedbackSectionTitle: "Sounds & haptics",
   feedbackSoundsLabel: "Success sounds",

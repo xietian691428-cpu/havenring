@@ -9,6 +9,7 @@ import {
   CLOUD_STORAGE_FULL_MESSAGE,
   getCloudBackupSettings,
   restoreFromCloud,
+  restoreFromCloudDeep,
   restoreCloudBackupsQuietly,
   setCloudBackupEnabled,
   signOutCloudBackup,
@@ -51,6 +52,7 @@ export function SettingsPage({
   onOpenPricing,
   onOpenRings,
   onLocalDataCleared,
+  onDeepSync,
   locale = "en",
   userEntitlements = getFreeEntitlements(),
 }) {
@@ -324,13 +326,30 @@ export function SettingsPage({
     }
   }
 
+  async function handleDeepSync() {
+    if (typeof onDeepSync !== "function") return;
+    const confirmed = window.confirm(localeCopy.confirmDeepSync);
+    if (!confirmed) return;
+    setBusy(true);
+    setStatus(localeCopy.deepSyncRunning);
+    try {
+      await onDeepSync();
+      await refreshLocalStats();
+      setStatus(localeCopy.deepSyncDone);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : localeCopy.deepSyncFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCloudRestore() {
     const confirmed = window.confirm(localeCopy.confirmRestore);
     if (!confirmed) return;
     setBusy(true);
     setStatus(localeCopy.restoring);
     try {
-      const result = await restoreFromCloud();
+      const result = await restoreFromCloudDeep();
       setStatus(result.message || localeCopy.restoreDone);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : localeCopy.restoreFailed);
@@ -628,6 +647,7 @@ export function SettingsPage({
           ) : null}
           <p style={styles.copyMuted}>{localeCopy.cloudQuotaNote}</p>
           <p style={styles.copyMuted}>{localeCopy.cloudSupplementsNote}</p>
+          <p style={styles.copyMuted}>{localeCopy.deepSyncHint}</p>
           <div style={styles.actions}>
             {havenPlus?.pairActive && !havenPlus?.isBillingAccount ? (
               <button
@@ -659,6 +679,14 @@ export function SettingsPage({
               style={buttonStyle(busy || !cloud.enabled || !cloud.user || !canUseCloudBackup)}
             >
               {localeCopy.backupNow}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeepSync()}
+              disabled={busy || !canUseCloudBackup}
+              style={buttonStyle(busy || !canUseCloudBackup)}
+            >
+              {localeCopy.deepSync}
             </button>
             <button
               type="button"

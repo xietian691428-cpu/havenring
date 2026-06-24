@@ -7,7 +7,7 @@ import {
 } from "@/lib/timeline-thumb-cache";
 import { getTimelineMemoryThumbBlob } from "../services/localStorageService";
 
-const IOS_THUMB_GAP_MS = 140;
+const IOS_THUMB_GAP_MS = 200;
 
 function parseVisibleKey(visibleKey = "") {
   return visibleKey

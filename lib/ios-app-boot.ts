@@ -1,5 +1,6 @@
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { getOomRiskSyncDelayMs } from "@/lib/ios-memory-heuristics";
+import { isIosReloadMinimalMode } from "@/lib/ios-reload-guard";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 
 const BOOT_SESSION_KEY = "haven.ios.boot.v1";
@@ -93,6 +94,29 @@ export const IOS_CLOUD_RESTORE_MIN_BOOT_MS = 16_000;
 /** Min ms before pull-refresh may run a full pair re-import (iOS). */
 export const IOS_FULL_PAIR_SYNC_MIN_BOOT_MS = 45_000;
 
+let iosTimelineScrolled = false;
+const iosTimelineScrollListeners = new Set<() => void>();
+
+/** First scroll on timeline unlocks thumb decode (iOS). */
+export function markIosTimelineScrolled(): void {
+  if (!isIosWebKit() || iosTimelineScrolled) return;
+  iosTimelineScrolled = true;
+  for (const listener of iosTimelineScrollListeners) {
+    listener();
+  }
+}
+
+export function hasIosTimelineScrolled(): boolean {
+  return iosTimelineScrolled;
+}
+
+export function subscribeIosTimelineScroll(listener: () => void): () => void {
+  iosTimelineScrollListeners.add(listener);
+  return () => {
+    iosTimelineScrollListeners.delete(listener);
+  };
+}
+
 export function shouldAllowTimelinePullRefresh(): boolean {
   if (!isLowMemoryEntryDevice()) return true;
   return getIosAppBootAgeMs() >= IOS_PULL_REFRESH_MIN_BOOT_MS;
@@ -100,7 +124,10 @@ export function shouldAllowTimelinePullRefresh(): boolean {
 
 export function shouldAllowIosTimelineThumbs(): boolean {
   if (!isIosWebKit()) return true;
-  return getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_THUMB_MIN_BOOT_MS);
+  if (isIosReloadMinimalMode()) return false;
+  if (isIosAppBootQuiet()) return false;
+  const ageOk = getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_THUMB_MIN_BOOT_MS);
+  return ageOk || iosTimelineScrolled;
 }
 
 export function shouldAllowIosLegacyMigration(): boolean {

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   isFirstMemoryCompleted,
   ONBOARDING_DONE_KEY,
@@ -13,10 +14,10 @@ import { APP_PAGE_PADDING } from "../theme/pageLayout";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
-import { useTimelineViewportIds } from "../hooks/useTimelineViewportIds";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
-import { isIosAppBootQuiet, shouldAllowIosTimelineThumbs } from "@/lib/ios-app-boot";
+import { getTimelineVirtualOverscan } from "@/lib/timeline-ios-guard";
+import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -44,7 +45,7 @@ export function TimelinePage({
   locale = "en",
 }) {
   const t = TIMELINE_PAGE_CONTENT[locale] || TIMELINE_PAGE_CONTENT.en;
-  const { textFirst: memoryTextFirst } = useTimelineMemoryMode();
+  const { textFirst: memoryTextFirst, thumbsAllowed } = useTimelineMemoryMode();
   const [networkOnline, setNetworkOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine
   );
@@ -160,8 +161,39 @@ export function TimelinePage({
   }, [searchQuery, onSearchMemories]);
 
   const orderedFiltered = useMemo(() => ordered, [ordered]);
+  const listAnchorRef = useRef(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  const useVirtualList = orderedFiltered.length > 0 && !searchQuery.trim();
 
-  const loadMoreRef = useRef(null);
+  useLayoutEffect(() => {
+    if (!useVirtualList || typeof window === "undefined") return undefined;
+    const root = document.querySelector(".haven-app-main-scroll");
+    const anchor = listAnchorRef.current;
+    if (!root || !anchor) return undefined;
+    const measure = () => {
+      setScrollMargin(root.scrollTop + anchor.offsetTop);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    observer.observe(anchor);
+    root.addEventListener("scroll", measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      root.removeEventListener("scroll", measure);
+    };
+  }, [useVirtualList, orderedFiltered.length, loading, memoryTextFirst, syncing]);
+
+  const virtualizer = useVirtualizer({
+    count: useVirtualList ? orderedFiltered.length : 0,
+    getScrollElement: () => document.querySelector(".haven-app-main-scroll"),
+    estimateSize: () => 400,
+    overscan: getTimelineVirtualOverscan(),
+    scrollMargin,
+    enabled: useVirtualList,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+
   const [pullSyncActive, setPullSyncActive] = useState(false);
 
   const handlePullRefresh = useCallback(async () => {
@@ -192,19 +224,10 @@ export function TimelinePage({
   }, [syncing, pullRefreshing]);
 
   const visibleMemories = orderedFiltered;
-  const memoryIds = useMemo(
-    () => visibleMemories.map((row) => row?.id).filter(Boolean),
-    [visibleMemories]
-  );
-  const { viewportIds, setRowRef, viewportLimited } = useTimelineViewportIds(
-    memoryIds,
-    !loading && !searchQuery.trim()
-  );
   const thumbMemories = useMemo(() => {
-    if (!viewportLimited) return visibleMemories;
-    if (viewportIds.size === 0) return [];
-    return visibleMemories.filter((row) => viewportIds.has(row.id));
-  }, [visibleMemories, viewportIds, viewportLimited]);
+    if (!useVirtualList) return visibleMemories;
+    return virtualItems.map((row) => orderedFiltered[row.index]).filter(Boolean);
+  }, [useVirtualList, virtualItems, orderedFiltered, visibleMemories]);
   const visibleThumbKey = useMemo(
     () =>
       thumbMemories
@@ -217,25 +240,19 @@ export function TimelinePage({
     syncing ||
     pullSyncActive ||
     pullRefreshing ||
-    !shouldAllowIosTimelineThumbs();
+    !thumbsAllowed;
   const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused, memoryTextFirst);
 
   useEffect(() => {
-    if (!hasMoreMemories || loadingMore || searchQuery.trim()) return undefined;
-    const root = document.querySelector(".haven-app-main-scroll");
-    const target = loadMoreRef.current;
-    if (!root || !target) return undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void onLoadMore?.();
-        }
-      },
-      { root, rootMargin: "240px" }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
+    if (!useVirtualList || !hasMoreMemories || loadingMore || searchQuery.trim()) return undefined;
+    const last = virtualItems[virtualItems.length - 1];
+    if (last && last.index >= orderedFiltered.length - 2) {
+      void onLoadMore?.();
+    }
+    return undefined;
   }, [
+    useVirtualList,
+    virtualItems,
     hasMoreMemories,
     loadingMore,
     orderedFiltered.length,
@@ -392,38 +409,72 @@ export function TimelinePage({
           </section>
         ) : null}
 
-        <div>
+        <div ref={listAnchorRef}>
           {orderedFiltered.length ? (
-            <ol style={styles.list}>
-              {orderedFiltered.map((memory, index) => {
-                const pinned = pinnedId === memory.id;
-                const locked = Number(memory?.releaseAt || 0) > viewerNow;
-                const isLast = index === orderedFiltered.length - 1;
-                return (
-                  <li
-                    key={memory.id}
-                    ref={(node) => {
-                      setRowRef(memory.id)(node);
-                      if (isLast) loadMoreRef.current = node;
-                    }}
-                    data-memory-id={memory.id}
-                    style={styles.listItem}
-                  >
-                    <TimelineMemoryCard
-                      memory={memory}
-                      thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
-                      textFirst={memoryTextFirst}
-                      pinned={pinned}
-                      locked={locked}
-                      viewerNow={viewerNow}
-                      t={t}
-                      onTogglePin={togglePin}
-                      onOpen={onOpenMemory}
-                    />
-                  </li>
-                );
-              })}
-            </ol>
+            useVirtualList ? (
+              <div
+                style={{
+                  height: virtualizer.getTotalSize(),
+                  width: "100%",
+                  position: "relative",
+                }}
+              >
+                <ol style={styles.virtualList}>
+                  {virtualItems.map((virtualRow) => {
+                    const memory = orderedFiltered[virtualRow.index];
+                    if (!memory) return null;
+                    const pinned = pinnedId === memory.id;
+                    const locked = Number(memory?.releaseAt || 0) > viewerNow;
+                    return (
+                      <li
+                        key={memory.id}
+                        data-index={virtualRow.index}
+                        data-memory-id={memory.id}
+                        ref={virtualizer.measureElement}
+                        style={{
+                          ...styles.virtualItem,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <TimelineMemoryCard
+                          memory={memory}
+                          thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
+                          textFirst={memoryTextFirst}
+                          pinned={pinned}
+                          locked={locked}
+                          viewerNow={viewerNow}
+                          t={t}
+                          onTogglePin={togglePin}
+                          onOpen={onOpenMemory}
+                        />
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ) : (
+              <ol style={styles.list}>
+                {orderedFiltered.map((memory) => {
+                  const pinned = pinnedId === memory.id;
+                  const locked = Number(memory?.releaseAt || 0) > viewerNow;
+                  return (
+                    <li key={memory.id} data-memory-id={memory.id} style={styles.listItem}>
+                      <TimelineMemoryCard
+                        memory={memory}
+                        thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
+                        textFirst={memoryTextFirst}
+                        pinned={pinned}
+                        locked={locked}
+                        viewerNow={viewerNow}
+                        t={t}
+                        onTogglePin={togglePin}
+                        onOpen={onOpenMemory}
+                      />
+                    </li>
+                  );
+                })}
+              </ol>
+            )
           ) : null}
         </div>
 

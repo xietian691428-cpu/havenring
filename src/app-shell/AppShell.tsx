@@ -8,6 +8,7 @@ import {
   markIosAppBootStarted,
 } from "@/lib/ios-app-boot";
 import { refreshOomRiskSnapshot } from "@/lib/ios-memory-heuristics";
+import { recordIosPageReload } from "@/lib/ios-reload-guard";
 import { getMemoryCount } from "../features/memories/localMemoryStore";
 import { RingProvider } from "../providers/RingProvider";
 import { SessionProvider, useSessionContext } from "../providers/SessionProvider";
@@ -88,6 +89,7 @@ export default function AppShell() {
   useEffect(() => {
     consumeIosBootFromStartQuery();
     markIosAppBootStarted();
+    recordIosPageReload();
     void refreshOomRiskSnapshot(getMemoryCount);
     if (!isLowMemoryEntryDevice()) return undefined;
     let active = true;

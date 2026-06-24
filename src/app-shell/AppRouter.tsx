@@ -35,7 +35,7 @@ import {
   TEMP_DEVICE_MODE_EVENT,
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
-import { shouldAllowIosFullPairSync, shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
+import { shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
 
 function RoutePageSkeleton({ label }: { label: string }) {
   return (
@@ -212,6 +212,8 @@ function AppRouterInner({
     loadingMore,
     searchMemories,
     syncNow,
+    syncLightNow,
+    syncDeepNow,
     syncActiveRingNow,
     persistComposerMemory,
     deleteMemory,
@@ -278,11 +280,8 @@ function AppRouterInner({
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
   const handleTimelinePullRefresh = useCallback(async () => {
     if (!shouldAllowTimelinePullRefresh()) return;
-    await syncNow({
-      includePairSync: true,
-      fullPairSync: shouldAllowIosFullPairSync(),
-    });
-  }, [syncNow]);
+    await syncLightNow();
+  }, [syncLightNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
 
   const flowPrimaryAction = useCallback(
@@ -908,6 +907,10 @@ function AppRouterInner({
             navigateTo({ name: "rings", memoryId: null }, "forward")
           }
           onLocalDataCleared={async () => {
+            await refresh().catch(() => null);
+          }}
+          onDeepSync={async () => {
+            await syncDeepNow();
             await refresh().catch(() => null);
           }}
         />
