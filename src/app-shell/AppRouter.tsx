@@ -36,6 +36,7 @@ import {
   wipeTemporaryDevice,
 } from "../services/temporaryDeviceService";
 import { shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
+import { markTabTimelineRefreshClaimed } from "@/lib/timeline-refresh-guard";
 
 function RoutePageSkeleton({ label }: { label: string }) {
   return (
@@ -345,6 +346,7 @@ function AppRouterInner({
       return;
     }
     navigateTo({ name: "timeline", memoryId: null }, "forward");
+    markTabTimelineRefreshClaimed();
     void refresh();
   }
 
@@ -368,8 +370,10 @@ function AppRouterInner({
       chromeResetKey,
       activeTab,
       onTabTimeline: () => {
+        if (route.name === "timeline") return;
         if (tabTimelineBusyRef.current) return;
         tabTimelineBusyRef.current = true;
+        markTabTimelineRefreshClaimed();
         navigateTo({ name: "timeline", memoryId: null }, "back");
         void refresh().finally(() => {
           tabTimelineBusyRef.current = false;
@@ -396,6 +400,7 @@ function AppRouterInner({
       showTopChrome,
       chromeResetKey,
       activeTab,
+      route.name,
       refresh,
       temporaryModeBanner,
       supabaseSession,
@@ -466,7 +471,7 @@ function AppRouterInner({
 
   async function openMemoryFromRingParams(memoryId: string | null | undefined) {
     if (!memoryId) return;
-    await refresh();
+    await refresh({ force: true });
     navigateTo({ name: "detail", memoryId }, "forward");
   }
 
@@ -848,7 +853,7 @@ function AppRouterInner({
             onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
             onSaveMemory={persistComposerMemory}
             onSaved={async () => {
-              await refresh();
+              await refresh({ force: true });
             }}
             onOpenHelp={() =>
               navigateTo({ name: "help", memoryId: null }, "forward")
@@ -877,7 +882,7 @@ function AppRouterInner({
           onDeleteMemory={async (id: string) => {
             try {
               await deleteMemory(id);
-              await refresh().catch(() => null);
+              await refresh({ force: true }).catch(() => null);
               navigateTo({ name: "timeline", memoryId: null }, "back");
             } catch {
               /* useMemories surfaces delete errors via `error` if needed */
@@ -890,7 +895,7 @@ function AppRouterInner({
               const row = await getMemoryById(String(route.memoryId));
               setDetailMemory(row);
             }
-            await refresh().catch(() => null);
+            await refresh({ force: true }).catch(() => null);
           }}
         />
       </FadePage>
@@ -912,11 +917,11 @@ function AppRouterInner({
             navigateTo({ name: "rings", memoryId: null }, "forward")
           }
           onLocalDataCleared={async () => {
-            await refresh().catch(() => null);
+            await refresh({ force: true }).catch(() => null);
           }}
           onDeepSync={async () => {
             await syncDeepNow();
-            await refresh().catch(() => null);
+            await refresh({ force: true }).catch(() => null);
           }}
         />
       </FadePage>
@@ -969,6 +974,7 @@ function AppRouterInner({
           onOpenTimeline={() => {
             if (tabTimelineBusyRef.current) return;
             tabTimelineBusyRef.current = true;
+            markTabTimelineRefreshClaimed();
             navigateTo({ name: "timeline", memoryId: null }, "forward");
             void refresh().finally(() => {
               tabTimelineBusyRef.current = false;

@@ -309,9 +309,18 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/hooks/useMemories.js"), /refreshInFlightRef/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /wasSealRecentlyCompleted/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /syncInFlightRef/);
+  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /shouldAllowTimelineRefresh/);
+  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /shouldSkipMountTimelineRefresh/);
+  assert.match(readRepoFile("lib/timeline-heavy-lock.ts"), /runTimelineHeavyTask/);
+  assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_SEAL_THUMB_QUIET_MS/);
+  assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /getSealCompletedAgeMs/);
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
-    /onTabTimeline: \(\) => \{[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\)/
+    /onTabTimeline:[\s\S]*?route\.name === "timeline"[\s\S]*?return;/
+  );
+  assert.match(
+    readRepoFile("src/app-shell/AppRouter.tsx"),
+    /onTabTimeline:[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\)/
   );
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /tabTimelineBusyRef/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /autoSyncQueuedRef/);

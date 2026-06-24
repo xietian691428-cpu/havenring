@@ -99,16 +99,28 @@ export function broadcastSealComplete() {
   postSealBroadcast({ type: "seal_complete", ts });
 }
 
-export function wasSealRecentlyCompleted(maxAgeMs = COMPLETE_TTL_MS): boolean {
-  if (typeof window === "undefined") return false;
+function readSealCompleteTs(): number | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.sealCompleteRelay);
-    if (!raw) return false;
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SealCompleteRelay>;
-    return typeof parsed.ts === "number" && Date.now() - parsed.ts <= maxAgeMs;
+    return typeof parsed.ts === "number" ? parsed.ts : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function getSealCompletedAgeMs(): number | null {
+  const ts = readSealCompleteTs();
+  if (ts === null) return null;
+  return Math.max(0, Date.now() - ts);
+}
+
+export function wasSealRecentlyCompleted(maxAgeMs = COMPLETE_TTL_MS): boolean {
+  const age = getSealCompletedAgeMs();
+  if (age === null) return false;
+  return age <= maxAgeMs;
 }
 
 export const SEAL_COMPLETE_STORAGE_KEY = STORAGE_KEYS.sealCompleteRelay;

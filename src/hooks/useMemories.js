@@ -31,6 +31,12 @@ import {
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { runTimelineHeavyTask } from "@/lib/timeline-heavy-lock";
+import {
+  markTimelineRefreshCompleted,
+  shouldAllowTimelineRefresh,
+  shouldSkipMountTimelineRefresh,
+} from "@/lib/timeline-refresh-guard";
 import { wasSealRecentlyCompleted } from "../features/seal/sealCrossTab";
 
 const SAVE_RETRY_LIMIT = 2;
@@ -91,11 +97,16 @@ export function useMemories(options = {}) {
   const [timelineHasMore, setTimelineHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts = {}) => {
+    const force = Boolean(opts.force);
+    if (!force && !shouldAllowTimelineRefresh()) {
+      if (refreshInFlightRef.current) return refreshInFlightRef.current;
+      return undefined;
+    }
     if (refreshInFlightRef.current) {
       return refreshInFlightRef.current;
     }
-    const runner = (async () => {
+    const runner = runTimelineHeavyTask(async () => {
       setLoading(true);
       setError(null);
       releaseAllTimelineThumbUrls();
@@ -105,12 +116,13 @@ export function useMemories(options = {}) {
         setTimelineHasMore(page.hasMore);
         setMemories(page.items);
         lastRefreshAtRef.current = Date.now();
+        markTimelineRefreshCompleted();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load memories.");
       } finally {
         setLoading(false);
       }
-    })();
+    });
     refreshInFlightRef.current = runner;
     try {
       return await runner;
@@ -146,7 +158,7 @@ export function useMemories(options = {}) {
   const searchMemories = useCallback(async (query) => {
     const q = String(query || "").trim();
     if (!q) {
-      await refresh();
+      await refresh({ force: true });
       return;
     }
     setLoading(true);
@@ -319,7 +331,7 @@ export function useMemories(options = {}) {
     const includePairSync = Boolean(opts.includePairSync);
     const fullPairSync = Boolean(opts.fullPairSync);
     const fullCloud = Boolean(opts.fullCloud);
-    const runner = (async () => {
+    const runner = runTimelineHeavyTask(async () => {
     const startedAt = Date.now();
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
     setSyncing(true);
@@ -350,7 +362,7 @@ export function useMemories(options = {}) {
         scheduleQuietCloudRestore(() => {
           const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
           if (refreshSkewMs > 2500) {
-            void refresh();
+            void refresh({ force: true });
           }
         });
       }
@@ -362,7 +374,7 @@ export function useMemories(options = {}) {
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
       const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
       if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
-        await refresh();
+        await refresh({ force: true });
       } else if (isIosWebKit()) {
         await delay(400);
       }
@@ -412,7 +424,7 @@ export function useMemories(options = {}) {
         setSyncing(false);
         syncInFlightRef.current = null;
       }
-    })();
+    });
     syncInFlightRef.current = runner;
     return runner;
   }, [refresh]);
@@ -454,7 +466,7 @@ export function useMemories(options = {}) {
     if (!targetUidKey) {
       return runSync(opts);
     }
-    const runner = (async () => {
+    const runner = runTimelineHeavyTask(async () => {
     const startedAt = Date.now();
     setSyncMeta((prev) => ({ ...prev, lastAttemptAt: startedAt, nextRetryAt: 0 }));
     setSyncing(true);
@@ -486,7 +498,7 @@ export function useMemories(options = {}) {
         scheduleQuietCloudRestore(() => {
           const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
           if (refreshSkewMs > 2500) {
-            void refresh();
+            void refresh({ force: true });
           }
         });
       }
@@ -502,7 +514,7 @@ export function useMemories(options = {}) {
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
       const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
       if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
-        await refresh();
+        await refresh({ force: true });
       } else if (isIosWebKit()) {
         await delay(400);
       }
@@ -552,7 +564,7 @@ export function useMemories(options = {}) {
         setSyncing(false);
         syncInFlightRef.current = null;
       }
-    })();
+    });
     syncInFlightRef.current = runner;
     return runner;
   }, [runSync, refresh]);
@@ -561,14 +573,14 @@ export function useMemories(options = {}) {
     if (syncInFlightRef.current) {
       return syncInFlightRef.current;
     }
-    const runner = (async () => {
+    const runner = runTimelineHeavyTask(async () => {
       setSyncing(true);
       setSyncMeta((prev) => ({ ...prev, lastAttemptAt: Date.now(), nextRetryAt: 0 }));
       try {
         releaseAllTimelineThumbUrls();
         const outcome = await runLightManifestSync();
         setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
-        await refresh();
+        await refresh({ force: true });
         if (outcome?.ok && !(outcome?.issues || []).length) {
           setSyncMeta((prev) => ({
             ...prev,
@@ -587,7 +599,7 @@ export function useMemories(options = {}) {
         setSyncing(false);
         syncInFlightRef.current = null;
       }
-    })();
+    });
     syncInFlightRef.current = runner;
     return runner;
   }, [refresh]);
@@ -611,6 +623,7 @@ export function useMemories(options = {}) {
 
   useEffect(() => {
     if (!timelineLifecycleActive) return undefined;
+    if (shouldSkipMountTimelineRefresh()) return undefined;
     const run = () => {
       void refresh();
     };
@@ -628,7 +641,7 @@ export function useMemories(options = {}) {
     if (typeof window === "undefined") return undefined;
     const onStorage = (event) => {
       if (event.key === STORAGE_KEYS.sealCompleteRelay) {
-        void refresh();
+        void refresh({ force: true });
       }
     };
     window.addEventListener("storage", onStorage);
@@ -636,7 +649,7 @@ export function useMemories(options = {}) {
     void import("../features/seal/sealBroadcast").then((mod) => {
       unsubBroadcast = mod.subscribeSealBroadcast((message) => {
         if (message.type === "seal_complete") {
-          void refresh();
+          void refresh({ force: true });
         }
       });
     });

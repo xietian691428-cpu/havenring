@@ -47,8 +47,11 @@ type MemoryDbRecord = {
 let migrationCursor = 0;
 let migrationScheduled = false;
 let cachedMemoryIds: string[] | null = null;
+let lastMigrationScheduleAt = 0;
 
 const IOS_MIGRATION_CHAIN_GAP_MS = 2_500;
+/** Min ms between migration schedule attempts (refresh spam). */
+const MIGRATION_SCHEDULE_COOLDOWN_MS = 5_000;
 
 async function listMemoryIdsForMigration(): Promise<string[]> {
   if (cachedMemoryIds?.length) return cachedMemoryIds;
@@ -203,6 +206,9 @@ export function scheduleLegacyPhotoBlobMigration(): void {
     return;
   }
   if (migrationScheduled) return;
+  const now = Date.now();
+  if (now - lastMigrationScheduleAt < MIGRATION_SCHEDULE_COOLDOWN_MS) return;
+  lastMigrationScheduleAt = now;
   migrationScheduled = true;
   const run = () => {
     migrationScheduled = false;

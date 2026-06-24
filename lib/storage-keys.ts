@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   lastSaveOom: "haven.composer.last_save_oom.v1",
   /** Cached memory count for iOS OOM heuristics (session-scoped). */
   oomRiskSnapshot: "haven.ios.oom_risk_snapshot.v1",
+  /** Last timeline list refresh (session-scoped cooldown). */
+  timelineLastRefresh: "haven.timeline.last_refresh.v1",
   sealNfcTapRelay: "haven.seal.last_nfc_tap.v1",
   sealResolveLock: "haven.seal.resolve.lock.v1",
   sealCompleteRelay: "haven.seal.complete.v1",
