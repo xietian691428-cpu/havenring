@@ -307,10 +307,12 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /SettingsPage = dynamic/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /ExplorePage = dynamic/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /refreshInFlightRef/);
-  assert.match(readRepoFile("src/hooks/useMemories.js"), /wasSealRecentlyCompleted/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /claimBootTimelineRefresh/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /shouldSyncTriggerRefresh/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /claimBootBackgroundSync/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /syncInFlightRef/);
-  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /shouldAllowTimelineRefresh/);
-  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /shouldSkipMountTimelineRefresh/);
+  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /claimBootTimelineRefresh/);
+  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /claimBootBackgroundSync/);
   assert.match(readRepoFile("lib/timeline-heavy-lock.ts"), /runTimelineHeavyTask/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_SEAL_THUMB_QUIET_MS/);
   assert.match(readRepoFile("src/features/seal/sealCrossTab.ts"), /getSealCompletedAgeMs/);

@@ -17,6 +17,38 @@ export function shouldSkipMountTimelineRefresh(): boolean {
   return Date.now() - tabRefreshClaimedAt < TIMELINE_TAB_MOUNT_SKIP_MS;
 }
 
+function readSessionFlag(key: string): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionFlag(key: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(key, "1");
+  } catch {
+    /* quota */
+  }
+}
+
+/** First automatic mount refresh only — prevents re-entry refresh loops on iOS. */
+export function claimBootTimelineRefresh(): boolean {
+  if (readSessionFlag(STORAGE_KEYS.timelineBootRefresh)) return false;
+  writeSessionFlag(STORAGE_KEYS.timelineBootRefresh);
+  return true;
+}
+
+/** First automatic background sync only — merges session + mount-sync triggers. */
+export function claimBootBackgroundSync(): boolean {
+  if (readSessionFlag(STORAGE_KEYS.timelineBootSync)) return false;
+  writeSessionFlag(STORAGE_KEYS.timelineBootSync);
+  return true;
+}
+
 function readLastRefreshAt(): number {
   if (typeof sessionStorage === "undefined") return 0;
   try {
@@ -37,6 +69,12 @@ export function markTimelineRefreshCompleted(): void {
   } catch {
     /* quota */
   }
+}
+
+export function getTimelineRefreshAgeMs(): number {
+  const last = readLastRefreshAt();
+  if (!last) return Number.POSITIVE_INFINITY;
+  return Math.max(0, Date.now() - last);
 }
 
 export function shouldAllowTimelineRefresh(opts: { force?: boolean } = {}): boolean {

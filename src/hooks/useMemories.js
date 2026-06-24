@@ -26,6 +26,7 @@ import { isIosWebKit } from "@/lib/composer-platform-limits";
 import {
   IOS_BOOT_REFRESH_DELAY_MS,
   deferIosPostBootWork,
+  isIosAppBootQuiet,
   shouldRunIosBackgroundSync,
 } from "@/lib/ios-app-boot";
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
@@ -33,15 +34,19 @@ import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 import { runTimelineHeavyTask } from "@/lib/timeline-heavy-lock";
 import {
+  claimBootBackgroundSync,
+  claimBootTimelineRefresh,
+  getTimelineRefreshAgeMs,
   markTimelineRefreshCompleted,
   shouldAllowTimelineRefresh,
   shouldSkipMountTimelineRefresh,
 } from "@/lib/timeline-refresh-guard";
-import { wasSealRecentlyCompleted } from "../features/seal/sealCrossTab";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
 const SYNC_BACKOFF_MAX_MS = 5 * 60 * 1000;
+/** Min ms since last refresh before sync may trigger another (iOS). */
+const IOS_SYNC_REFRESH_SKEW_MS = 8_000;
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -69,6 +74,13 @@ function nextBackoffMs(failureStreak) {
   return Math.min(SYNC_BACKOFF_MAX_MS, SYNC_BACKOFF_BASE_MS * 2 ** exp);
 }
 
+function shouldSyncTriggerRefresh(lastRefreshAt) {
+  if (isLowMemoryEntryDevice() && isIosAppBootQuiet()) return false;
+  const skewMs = Date.now() - lastRefreshAt;
+  if (!isLowMemoryEntryDevice()) return skewMs > 2500;
+  return getTimelineRefreshAgeMs() >= IOS_SYNC_REFRESH_SKEW_MS && skewMs > IOS_SYNC_REFRESH_SKEW_MS;
+}
+
 export function useMemories(options = {}) {
   const timelineLifecycleActive = Boolean(options.timelineLifecycleActive);
   const [memories, setMemories] = useState([]);
@@ -93,6 +105,7 @@ export function useMemories(options = {}) {
   const refreshInFlightRef = useRef(null);
   const autoSyncQueuedRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
+  const lastSealDrivenRefreshAtRef = useRef(0);
   const timelineCursorRef = useRef(null);
   const [timelineHasMore, setTimelineHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -360,10 +373,8 @@ export function useMemories(options = {}) {
         }
       } else {
         scheduleQuietCloudRestore(() => {
-          const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-          if (refreshSkewMs > 2500) {
-            void refresh({ force: true });
-          }
+          if (!shouldSyncTriggerRefresh(lastRefreshAtRef.current)) return;
+          void refresh({ force: true });
         });
       }
       setIntegrityWarning("");
@@ -372,8 +383,7 @@ export function useMemories(options = {}) {
       );
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-      if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
+      if (shouldSyncTriggerRefresh(lastRefreshAtRef.current)) {
         await refresh({ force: true });
       } else if (isIosWebKit()) {
         await delay(400);
@@ -435,6 +445,7 @@ export function useMemories(options = {}) {
       if (syncInFlightRef.current) return syncInFlightRef.current;
       if (autoSyncQueuedRef.current) return null;
       if (!shouldRunIosBackgroundSync(trigger)) return null;
+      if (!claimBootBackgroundSync()) return null;
       autoSyncQueuedRef.current = true;
       const timeout =
         trigger === "session"
@@ -496,10 +507,8 @@ export function useMemories(options = {}) {
         }
       } else {
         scheduleQuietCloudRestore(() => {
-          const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-          if (refreshSkewMs > 2500) {
-            void refresh({ force: true });
-          }
+          if (!shouldSyncTriggerRefresh(lastRefreshAtRef.current)) return;
+          void refresh({ force: true });
         });
       }
       setIntegrityWarning("");
@@ -512,8 +521,7 @@ export function useMemories(options = {}) {
       });
       setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
       const issues = Array.isArray(outcome?.issues) ? outcome.issues : [];
-      const refreshSkewMs = Date.now() - lastRefreshAtRef.current;
-      if (!isLowMemoryEntryDevice() || refreshSkewMs > 2500) {
+      if (shouldSyncTriggerRefresh(lastRefreshAtRef.current)) {
         await refresh({ force: true });
       } else if (isIosWebKit()) {
         await delay(400);
@@ -624,24 +632,27 @@ export function useMemories(options = {}) {
   useEffect(() => {
     if (!timelineLifecycleActive) return undefined;
     if (shouldSkipMountTimelineRefresh()) return undefined;
+    if (!claimBootTimelineRefresh()) return undefined;
     const run = () => {
       void refresh();
     };
-    const afterSeal = wasSealRecentlyCompleted();
     deferEntryWork(run, {
-      timeout: afterSeal
-        ? 0
-        : isLowMemoryEntryDevice()
-          ? IOS_BOOT_REFRESH_DELAY_MS
-          : 500,
+      timeout: isLowMemoryEntryDevice() ? IOS_BOOT_REFRESH_DELAY_MS : 500,
     });
   }, [timelineLifecycleActive, refresh]);
+
+  const requestSealDrivenRefresh = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSealDrivenRefreshAtRef.current < 5_000) return;
+    lastSealDrivenRefreshAtRef.current = now;
+    void refresh({ force: true });
+  }, [refresh]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onStorage = (event) => {
       if (event.key === STORAGE_KEYS.sealCompleteRelay) {
-        void refresh({ force: true });
+        requestSealDrivenRefresh();
       }
     };
     window.addEventListener("storage", onStorage);
@@ -649,7 +660,7 @@ export function useMemories(options = {}) {
     void import("../features/seal/sealBroadcast").then((mod) => {
       unsubBroadcast = mod.subscribeSealBroadcast((message) => {
         if (message.type === "seal_complete") {
-          void refresh({ force: true });
+          requestSealDrivenRefresh();
         }
       });
     });
@@ -657,7 +668,7 @@ export function useMemories(options = {}) {
       window.removeEventListener("storage", onStorage);
       unsubBroadcast();
     };
-  }, [refresh]);
+  }, [requestSealDrivenRefresh]);
 
   useEffect(() => {
     if (!timelineLifecycleActive) return undefined;
