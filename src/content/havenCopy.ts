@@ -14,7 +14,7 @@ export const HAVEN_EN_LAYERED_CORE_LINE =
 
 /** Product model one-liner (landing, pricing, Help). */
 export const HAVEN_PRODUCT_MODEL_EN =
-  "Your private memory sanctuary. Local-first. Optional Pair (2 people): sealed memories shared. Plus: cloud sync for your Pair.";
+  "Your private memory sanctuary. Sealed on device first. Plus: optional encrypted cloud backup when you choose.";
 
 /** Sealed memories are immutable after the ritual. */
 export const HAVEN_SEAL_IMMUTABLE_EN =
@@ -77,18 +77,18 @@ export const HAVEN_EN_QUICK_GUIDE_ONE_LINE =
 
 /** Short compliance note for Pricing, Settings, upgrade modal, and in-app footers. */
 export const HAVEN_CLOUD_STORAGE_DISCLAIMER_EN =
-  "Free: memories stay on this device only. Haven Plus adds optional encrypted cloud backup (50 GB hard cap per account; uploads compressed and chunked) and explicit sharing. See Privacy Policy and Help.";
+  "Memories are sealed on your device first. Haven Plus adds optional encrypted cloud backup in the background (50 GB cap). See Privacy Policy and Help.";
 
 /** Where we explain local vs cloud storage (settings, upgrade, seal success). */
 export const HAVEN_STORAGE_MODE_EN = {
   freeLocal:
-    "Free plan: your sealed memories stay on this device only (encrypted local storage).",
+    "Your sealed memories stay on this device — encrypted and available immediately after you seal.",
   plusDual:
-    "Haven Plus: optional encrypted cloud backup and explicit sharing when you choose.",
+    "Haven Plus: optional encrypted cloud backup runs in the background when you choose.",
   cancelPlus:
     "If you cancel Plus, you can download cloud backups for 30 days; after that, cloud copies are removed automatically. Memories on your device are not deleted.",
   sealSuccess:
-    "Saved on this device. Plus adds optional encrypted backup.",
+    "Sealed on this device.",
 } as const;
 
 export const BIND_SUCCESS_EN = {

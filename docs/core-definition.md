@@ -1,21 +1,28 @@
 # Haven — Core Definition
 
-> **Single source of truth for product intent.** Every file, decision, and line of code
-> must defer to this document. If shipping code disagrees with **Current direction** below,
-> treat the code as **legacy to migrate** (Phase 1+), not as permission to extend old UX.
+> **Single source of truth for product intent** (together with **`CORE-PRINCIPLES.md`** at repo root).  
+> Every file, decision, and line of code must defer to these documents.  
+> **Priority:** `CORE-PRINCIPLES.md` (June 2026 local-first consensus) **overrides** older real-time sync /
+> implicit pair-vault language in this file until sections below are fully reconciled.
 
 ---
 
 ## 当前生效产品方向（2026-06 更新）
 
-**This section overrides all older text in this file and in other docs.**
+**Read `CORE-PRINCIPLES.md` first.** This section summarizes; the living principles file is authoritative for local-first vs cloud.
 
 ### What Haven is
 
-**Haven is a personal private Memory Sanctuary** — local-first, end-to-end encrypted,
-with an optional NFC ring for a **Seal ritual only**. Optional **Pair mode** (max 2 people,
-2 rings, 2 accounts) shares **sealed** memories automatically; drafts stay private until seal.
-Not a shared-login device and not a “tap ring to open the app” product.
+**Haven is a personal private Memory Sanctuary** — **local-first source of truth**, end-to-end encrypted,
+with an optional NFC ring for a **Seal ritual only**. Optional **Plus** adds **async cloud backup** and
+**explicit per-memory sharing** (not real-time sync). Not a shared-login device and not a “tap ring to open the app” product.
+
+### Local-first (source of truth)
+
+- **Write → Seal → store → Timeline → supplements** complete on device; local IndexedDB + sidecar dual-write is canonical.
+- **Seal success is local and immediate** — user gets “sealed” feedback at ring tap without waiting on the network.
+- Server finalize / cloud backup may run **after** local success (queue + retry); failures do not revoke local seal.
+- **Supplements (comments)** must never be lost — preserve `mergeSupplements` and sidecar merge behavior.
 
 ### Login and unlock
 
@@ -31,19 +38,19 @@ Not a shared-login device and not a “tap ring to open the app” product.
 | **First bind** — associate this physical ring with the **current** logged-in account | Open Timeline or vault for daily browsing |
 | Prove a fresh, server-verifiable tap (SDM) during Seal | Grant access to another person’s account or memories |
 
-**Canonical daily loop:** write memory in app → **Seal with Ring** → touch **your** ring → encrypted local save (optional Plus cloud).
+**Canonical daily loop:** write memory in app → **Seal with Ring** → touch **your** ring → **local encrypt + immediate sealed feedback** → optional async Plus backup/share later.
 
 ### Account and sharing model
 
 - **Default:** one person, one account, one ring (binding is per account).
-- **Pair mode (lightweight):** invite a partner (separate OAuth account) → max **2** `haven_members`.
-  - **Drafts** stay private on each device until sealed.
-  - **Sealed** memories are visible to both Pair members (imported via `GET /api/sync/pair-bundles`).
-  - Core sealed content is **immutable**; either partner may **append notes** only.
-- **Plus cloud backup** keeps Pair sealed content in sync across devices (primary paid sync path).
-- No multi-person groups, no complex permissions, no shared login.
+- **Sharing (target):** user **explicitly** marks sealed memories as **Shared** (Plus) or exports — recipient gets a **local encrypted copy** on their own account.
+- **Cloud (Plus):** **optional async backup** and selective share — incremental, background, retried; **never blocks** local read/write.
+- **Legacy Pair / haven_members / pair-bundles auto-import:** may exist in code until Phase 1 migration — **do not extend** as primary product story; prefer explicit Shared per memory.
 
-### Pair join — foolproof UX (shipping target)
+### Pair join — legacy UX (migrate away)
+
+<details>
+<summary>Pre–local-first-consensus Pair flows (code may remain; do not deepen)</summary>
 
 Users never choose Join vs Bind, Retire, or invite types. The app picks the path.
 
@@ -67,17 +74,20 @@ Users never choose Join vs Bind, Retire, or invite types. The app picks the path
 - Pair complete → **Linked with Partner** status; sharing on by default.
 - Retire / lost ring → **Settings → Session → Advanced** only.
 
-**APIs (unchanged):** `POST /api/haven/invite`, `GET /api/haven/invite/preview`, `POST /api/nfc/bind` + `joinExistingRingToInviteHaven`.
+**APIs (legacy):** `POST /api/haven/invite`, `GET /api/haven/invite/preview`, `POST /api/nfc/bind` + `joinExistingRingToInviteHaven`.
+
+</details>
 
 ### Background fault tolerance (shipping target)
 
 Users never see technical errors, manual Retry buttons, or blocking recovery gates for normal network/cache issues.
+**Local memories remain fully usable** when cloud or background jobs lag or fail.
 
-**Automatic (background only):**
+**Automatic (background only — best effort, not real-time sync):**
 
-- **Pair / ring sync** — `resolvePairState()` on app open and foreground; stale local rings pruned; auto-retry with backoff.
-- **Seal offline queue** — finalize failures enqueue in `offlineSyncQueue`; flushed on reconnect and lifecycle hooks.
-- **Pair import queue** — failed pair bundle import re-queued and retried silently.
+- **Optional cloud backup / share queues** — flush on reconnect; retry with backoff; never block Seal or Timeline.
+- **Seal offline queue** — server finalize failures enqueue in `offlineSyncQueue`; local seal already succeeded.
+- **Legacy pair / ring sync** — `resolvePairState()` etc. until removed; calm status only.
 - **Hash / integrity drift** — reconciled in background; Timeline shows **Syncing in the background.** at most.
 - **Multi-tab Seal** — other tab finishing shows **Finishing…**; cross-tab lock handled internally.
 
@@ -85,7 +95,7 @@ Users never see technical errors, manual Retry buttons, or blocking recovery gat
 
 | Situation | Copy |
 |-----------|------|
-| Seal saved locally, network down | Saved on this device — we'll sync when you're back online. |
+| Seal saved locally, network down | Sealed on this device. |
 | NFC / tap retry | Hold your ring near your phone once more. |
 | Cross-tab Seal in progress | Finishing… |
 | Background sync | Syncing in the background. |
@@ -101,9 +111,9 @@ Users never see technical errors, manual Retry buttons, or blocking recovery gat
 
 ### Storage
 
-- **Local-first:** encrypted memories in IndexedDB (`localMemoryStore`); primary read path is Timeline after OAuth.
+- **Local-first:** encrypted memories in IndexedDB (`localMemoryStore`); **Timeline reads local only** — cloud never required to browse.
 - **Target limits:** generous local media (goal **20MB+ per attachment** on device); avoid arbitrary small caps in product design.
-- **Plus cloud:** optional E2E backup/sync and larger payloads (implementation backlog).
+- **Plus cloud:** optional **async** E2E backup and explicit Shared memories (incremental, background, retried).
 - **Note:** shipping code may still enforce smaller staging caps (e.g. seal staging ~2MB) until Phase 1 refactors land — do not treat those as the long-term product ceiling.
 
 ### Privacy invariant (unchanged)
@@ -120,10 +130,12 @@ Users never see technical errors, manual Retry buttons, or blocking recovery gat
 | `daily_access` = “Opening Haven…” / ring unlocks app | OAuth → `/app` Timeline; idle ring tap → short hint to start Seal in app (Phase 1) |
 | Vault / memories **only** via ring tap | Timeline + Memory detail after sign-in |
 | Mandatory **Ring Setup Gate** before using app | Optional bind in Settings / Rings; soft prompt only |
-| Implicit 5-ring family vault | **Pair** (max 2) + personal drafts |
+| Implicit 5-ring family vault | **Explicit Shared** (Plus) per memory + personal drafts |
 | Ring as **access credential** / NFC login JWT | Supabase session only |
 | Long ritual copy on `/start` | One line + Help |
 | “No timeline / no history UI” (old §2.1) | Timeline is the primary memory surface |
+| **Real-time cloud sync** as default product model | **Local source of truth** + async backup/share |
+| **Implicit pair vault** (all sealed auto-visible) | **Explicit Shared** on chosen memories |
 
 ---
 
@@ -159,10 +171,10 @@ I open Haven and see my memories.
 
 I write something that matters.
 I tap Seal with Ring and touch my ring.
-It’s sealed — calm, final, mine.
+It’s sealed on this device — calm, final, mine.
 
 Later I open the app again — no ring needed to read.
-If I share with someone I trust, I mark it Shared (Plus) or export — explicitly.
+If I want, I back up or share specific memories (Plus) — on my schedule.
 ```
 
 ## 4. NFC / SDM flow (target behavior)
@@ -193,8 +205,9 @@ Sign in (OAuth) → New memory (NewMemoryPage)
   └─ arm seal prep (lib/seal-flow, draft ids)
       └─ User taps ring → /start → sdm/resolve (seal_confirmation)
           └─ POST /api/seal/finalize (precheck + commit)
-              └─ Encrypted row in localMemoryStore (+ optional cloud backlog)
-                  └─ /seal-success ceremony → back to Timeline
+              └─ **Local encrypted row first** (localMemoryStore + sidecar) → user sees sealed
+                  └─ Optional async cloud backup / share queue (+ offline retry)
+                      └─ /seal-success ceremony → back to Timeline
 ```
 
 **Save securely** (without ring) may remain as a secondary path until product retires it.
@@ -232,6 +245,8 @@ Before shipping a feature, ask:
 3. Does it expose **another account’s** memories via a ring tap? → **Reject**.
 4. Does it send **plaintext** to the server? → **Reject**.
 5. Does in-flow copy exceed **one necessary sentence** without living in Help? → **Revise**.
+6. Does **Seal success** wait on network or block without cloud? → **Reject**.
+7. Does **sharing** happen without **explicit per-memory** user choice? → **Reject** (target product).
 
 ---
 

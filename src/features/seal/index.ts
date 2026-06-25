@@ -37,6 +37,9 @@ export {
   collectDraftPayloadsForSeal,
   sealPayloadFromDraftItem,
   finalizeSealWithTicket,
+  persistSealedDraftsLocallyFirst,
+  commitServerSealFinalize,
+  finalizeSealWithTicketNetworkFirst,
   getSealSdmContextPayload,
   syncHydrateSealPrepFromStorage,
   syncSealPrepWithSessionArm,
@@ -44,6 +47,7 @@ export {
   finalizeSealChainFromSdmResponse,
   SEAL_STEP_UP_REQUIRED,
 } from "./sealFlowClient";
+export { persistSealLocalRelay } from "./sealLocalRelay";
 export {
   finalizeSealChainFromSdmResponseSafe,
   clearSealFlowAndReturnToApp,

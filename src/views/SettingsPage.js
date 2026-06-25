@@ -39,6 +39,8 @@ import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { canUseFeature } from "../features/subscription";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { markOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
+import { formatBackgroundSyncStatusLine } from "@/lib/background-sync-status-copy";
+import { useBackgroundSyncStatus } from "../hooks/useBackgroundSyncStatus";
 
 /**
  * Settings Page
@@ -82,6 +84,23 @@ export function SettingsPage({
   const { soundEnabled, hapticEnabled, updateFeedbackPrefs } = useFeedbackPrefs();
 
   const canUseCloudBackup = canUseFeature(userEntitlements, "cloud_backup");
+  const backgroundSync = useBackgroundSyncStatus();
+
+  const backgroundSyncLine = useMemo(
+    () =>
+      formatBackgroundSyncStatusLine(
+        {
+          pending: backgroundSync.pendingSealFinalize,
+          online: backgroundSync.networkOnline,
+        },
+        localeCopy
+      ),
+    [
+      backgroundSync.pendingSealFinalize,
+      backgroundSync.networkOnline,
+      localeCopy,
+    ]
+  );
 
   const [havenPlus, setHavenPlus] = useState(null);
 
@@ -521,6 +540,11 @@ export function SettingsPage({
           <p style={styles.copy}>
             {cloud.user ? localeCopy.accountCloudSignedIn : localeCopy.accountCloudOff}
           </p>
+          {backgroundSyncLine ? (
+            <p style={styles.status} role="status" aria-live="polite">
+              {backgroundSyncLine}
+            </p>
+          ) : null}
         </section>
 
         <section style={styles.card}>

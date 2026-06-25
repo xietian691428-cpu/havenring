@@ -9,6 +9,7 @@ import { SEAL_ARM_TTL_MS } from "@/lib/seal-flow";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { readSealPrepRelay } from "./sealPrepBundle";
 import type { SealDraftFinalizePayload } from "./sealTypes";
+import { slimSealRelayPayload } from "@/lib/seal-relay-slim";
 
 const RELAY_KEY = STORAGE_KEYS.sealDraftRelay;
 const TEXT_COOKIE = "haven_seal_text_relay_v1";
@@ -62,23 +63,7 @@ function slimRelayPayload(
   payload: SealDraftFinalizePayload,
   maxBytes: number
 ): SealDraftFinalizePayload {
-  const base = {
-    id: payload.id,
-    title: payload.title,
-    story: payload.story,
-    photo: [] as unknown[],
-    attachments: [] as unknown[],
-    releaseAt: payload.releaseAt,
-  };
-  let budget = maxBytes - JSON.stringify(base).length;
-  const photo: unknown[] = [];
-  for (const row of payload.photo) {
-    const bytes = JSON.stringify(row).length;
-    if (bytes > budget) break;
-    photo.push(row);
-    budget -= bytes;
-  }
-  return { ...base, photo };
+  return slimSealRelayPayload(payload, maxBytes);
 }
 
 function persistRelayStore(store: RelayStore): void {

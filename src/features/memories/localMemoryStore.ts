@@ -79,6 +79,10 @@ export type LocalMemory = {
   is_sealed?: boolean;
   coreLocked?: boolean;
   pairShared?: boolean;
+  /** Local seal ritual completed (source of truth). */
+  locallySealedAt?: number;
+  /** Server finalize ticket consumed (async audit). */
+  serverSealedAt?: number;
   ring_id?: string | null;
   haven_id?: string | null;
   createdByUserId?: string | null;
@@ -221,6 +225,8 @@ function normalizeMemoryInput(input: MemoryUpsertPayload = {}) {
     is_sealed: Boolean(input.is_sealed),
     coreLocked: Boolean(input.coreLocked),
     pairShared: Boolean(input.pairShared),
+    locallySealedAt: Number(input.locallySealedAt || 0) || undefined,
+    serverSealedAt: Number(input.serverSealedAt || 0) || undefined,
     ring_id: input.ring_id ?? null,
     haven_id: input.haven_id ?? null,
     createdByUserId: input.createdByUserId ?? null,
@@ -262,6 +268,8 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
     is_sealed: memory.is_sealed,
     coreLocked: memory.coreLocked,
     pairShared: memory.pairShared,
+    locallySealedAt: memory.locallySealedAt,
+    serverSealedAt: memory.serverSealedAt,
     ring_id: memory.ring_id,
     haven_id: memory.haven_id,
     createdByUserId: memory.createdByUserId,
@@ -647,6 +655,8 @@ async function decryptRecord(record: MemoryDbRecord): Promise<LocalMemory> {
     is_sealed: Boolean(metaObj.is_sealed),
     coreLocked: Boolean(metaObj.coreLocked),
     pairShared: Boolean(metaObj.pairShared),
+    locallySealedAt: Number(metaObj.locallySealedAt || 0) || undefined,
+    serverSealedAt: Number(metaObj.serverSealedAt || 0) || undefined,
     ring_id: (metaObj.ring_id as string | null) ?? null,
     haven_id: (metaObj.haven_id as string | null) ?? null,
     createdByUserId: (metaObj.createdByUserId as string | null) ?? null,

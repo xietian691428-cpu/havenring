@@ -8,7 +8,12 @@ const EN = {
   back: "Back",
   localSectionTitle: "Local data",
   localDefault:
-    "Free plan: memories stay on this device only (encrypted local storage). Cloud is optional with Haven Plus.",
+    "Memories are sealed on this device first. Cloud backup is optional with Haven Plus.",
+  backgroundSyncPendingOne:
+    "1 sealed memory finishing backup in the background.",
+  backgroundSyncPendingMany:
+    "{n} sealed memories finishing backup in the background.",
+  backgroundSyncOffline: "Will continue backup when you're back online.",
   loadingStats: "Loading local stats...",
   storageUnavailable: "Unavailable",
   storedStatsLabel: "Stored memories",
@@ -78,8 +83,8 @@ const EN = {
   riskOpExportMigrate: "Export or migrate protected data",
   riskOpDeleteSealed: "Delete sealed memories",
   riskOpRemoteRevoke: "Retire lost ring credentials",
-  privacyLine1: "All memories are stored locally on your device with encryption.",
-  privacyLine2: "Cloud backup is completely optional.",
+  privacyLine1: "Sealed memories are stored on your device immediately — encrypted, local-first.",
+  privacyLine2: "Cloud backup is optional and runs in the background when you enable Plus.",
   privacyNfcLine:
     "NFC bind/retire: we store only a secure fingerprint of the tag, not a naked UID. You can retire a lost ring from another signed-in device.",
   privacyUnbindLine:
@@ -142,7 +147,8 @@ const EN = {
   temporaryExitDone: "Temporary session ended. Local data has been wiped.",
   temporaryExitFailed: "Could not complete secure wipe. Please retry.",
   accountSectionTitle: "Account",
-  accountLocalLine: "Memories stay on this device unless you enable optional cloud backup.",
+  accountLocalLine:
+    "Sealed memories live on this device first. Optional cloud backup runs in the background.",
   accountCloudSignedIn: "Signed in for optional cloud backup.",
   accountCloudOff: "Not signed in for cloud backup.",
   subscriptionSectionTitle: "Subscription",

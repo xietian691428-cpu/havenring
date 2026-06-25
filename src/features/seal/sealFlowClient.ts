@@ -34,10 +34,8 @@ import {
   type SealSdmContextPayload,
 } from "./sealTypes";
 import {
-  ensureBrowserOnlineForSealFinalize,
   userMessageFromFinalizeResponse,
   type SealFinalizeResponseBody,
-  sealFinalizeFetchFailedMessage,
 } from "./sealFinalizeMessaging";
 import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestStoragePersistence";
 import {
@@ -50,7 +48,6 @@ import { clearComposerSnapshot } from "./composerSnapshotSafe";
 import {
   clearSealDraftRelay,
   readSealDraftRelay,
-  writeSealDraftRelay,
 } from "./sealDraftRelay";
 import {
   deleteSealStaging,
@@ -70,13 +67,14 @@ import {
 import {
   clearSealPrepBundle,
   readSealPrepRelay,
-  writeSealPrepBundle,
 } from "./sealPrepBundle";
+import { persistSealLocalRelay } from "./sealLocalRelay";
 import {
   SEAL_DRAFT_NOT_FOUND,
   SEAL_SESSION_ENDED,
   SEAL_STAGING_UNAVAILABLE,
 } from "./sealUserMessages";
+import { enqueueSealFinalize, dequeueSealFinalize, flushOfflineSyncQueue } from "../../services/offlineSyncQueue";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -253,6 +251,12 @@ export async function collectDraftPayloadsForSeal(
     return local;
   }
 
+  const online =
+    typeof navigator === "undefined" || navigator.onLine !== false;
+  if (!online) {
+    return local;
+  }
+
   const stagingId = getArmedSealStagingId();
   if (stagingId && accessToken) {
     try {
@@ -274,9 +278,12 @@ export async function collectDraftPayloadsForSeal(
 
 async function persistSealedDraftsLocally(
   draftIds: string[],
-  sealedPayloads?: SealDraftFinalizePayload[]
+  sealedPayloads?: SealDraftFinalizePayload[],
+  opts: { locallySealedAt?: number; serverSealedAt?: number } = {}
 ) {
   const now = Date.now();
+  const locallySealedAt = Number(opts.locallySealedAt || now) || now;
+  const serverSealedAt = Number(opts.serverSealedAt || 0) || undefined;
   const ring = getActiveRingOrFirst();
   const byId = new Map(
     (sealedPayloads || []).map((row) => [String(row.id), row])
@@ -323,6 +330,8 @@ async function persistSealedDraftsLocally(
       is_sealed: true,
       coreLocked: true,
       pairShared: true,
+      locallySealedAt,
+      serverSealedAt,
       ring_id: ring?.cloudRingId ?? null,
       haven_id: ring?.havenId ?? null,
     };
@@ -355,15 +364,117 @@ async function persistSealedDraftsLocally(
   }
 }
 
-export async function finalizeSealWithTicket(
+/** Phase 1: local encrypt + IDB (+ sidecar) before any server finalize. */
+export async function persistSealedDraftsLocallyFirst(
+  draftIds: string[],
+  sealedPayloads: SealDraftFinalizePayload[]
+) {
+  const locallySealedAt = Date.now();
+  await persistSealedDraftsLocally(draftIds, sealedPayloads, { locallySealedAt });
+  await Promise.all(draftIds.map((id) => removeDraftItem(id)));
+  clearComposerSnapshot();
+}
+
+async function markMemoriesServerSealed(draftIds: string[]) {
+  const serverSealedAt = Date.now();
+  for (const id of draftIds) {
+    const existing = await getMemoryById(id);
+    if (!existing) continue;
+    await saveMemory(
+      { ...existing, serverSealedAt },
+      { allowCoreEdit: true }
+    );
+  }
+}
+
+export type CommitServerSealFinalizeOptions = FinalizeSealWithTicketOptions & {
+  draftPayloads: SealDraftFinalizePayload[];
+};
+
+/** Server audit only — local memory must already exist. */
+export async function commitServerSealFinalize(
+  opts: CommitServerSealFinalizeOptions
+): Promise<void> {
+  const { sealTicket, draftIds, accessToken, draftPayloads } = opts;
+  if (!sealTicket || !draftIds.length || !accessToken) {
+    throw new Error("Missing seal confirmation data.");
+  }
+  if (draftPayloads.length !== draftIds.length) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  const precheckRes = await fetch("/api/seal/finalize", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      seal_ticket: sealTicket,
+      draft_ids: draftIds,
+      mode: "precheck",
+    }),
+  });
+  const precheckJson =
+    ((await precheckRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
+  if (!precheckRes.ok || precheckJson?.ok !== true) {
+    throw new Error(
+      userMessageFromFinalizeResponse(
+        precheckJson,
+        "Seal verification could not be completed."
+      )
+    );
+  }
+
+  const serverPayloads = draftPayloads.map(toServerSealCommitPayload);
+  const commitRes = await fetch("/api/seal/finalize", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      seal_ticket: sealTicket,
+      draft_ids: draftIds,
+      mode: "commit",
+      draft_payloads: serverPayloads,
+    }),
+  });
+  const commitJson =
+    ((await commitRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
+  if (!commitRes.ok || commitJson?.ok !== true) {
+    throw new Error(
+      userMessageFromFinalizeResponse(commitJson, "Seal could not be completed.")
+    );
+  }
+
+  await markMemoriesServerSealed(draftIds);
+  await dequeueSealFinalize(draftIds);
+}
+
+async function scheduleServerSealFinalize(opts: CommitServerSealFinalizeOptions) {
+  await enqueueSealFinalize({
+    sealTicket: opts.sealTicket,
+    draftIds: opts.draftIds,
+    localCommitted: true,
+    draftPayloads: opts.draftPayloads,
+  });
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  try {
+    await commitServerSealFinalize(opts);
+  } catch (error) {
+    console.warn("[haven-ring] server seal finalize deferred:", error);
+    void flushOfflineSyncQueue(opts.accessToken);
+  }
+}
+
+/** Legacy network-first path for pre-Phase-1 queue items only. */
+export async function finalizeSealWithTicketNetworkFirst(
   opts: FinalizeSealWithTicketOptions
 ): Promise<void> {
   const { sealTicket, draftIds, accessToken } = opts;
   if (!sealTicket || !draftIds.length || !accessToken) {
     throw new Error("Missing seal confirmation data.");
   }
-
-  ensureBrowserOnlineForSealFinalize();
 
   if (!isSealFlowArmed()) {
     throw new Error(SEAL_SESSION_ENDED);
@@ -396,65 +507,31 @@ export async function finalizeSealWithTicket(
     throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
-
-  let precheckRes: Response;
-  try {
-    precheckRes = await fetch("/api/seal/finalize", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        seal_ticket: sealTicket,
-        draft_ids: draftIds,
-        mode: "precheck",
-      }),
-    });
-  } catch {
-    throw new Error(sealFinalizeFetchFailedMessage());
-  }
-  const precheckJson =
-    ((await precheckRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
-  if (!precheckRes.ok || precheckJson?.ok !== true) {
-    throw new Error(
-      userMessageFromFinalizeResponse(
-        precheckJson,
-        "Seal verification could not be completed."
-      )
-    );
-  }
-
-  const serverPayloads = draftPayloads.map(toServerSealCommitPayload);
-
-  let commitRes: Response;
-  try {
-    commitRes = await fetch("/api/seal/finalize", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        seal_ticket: sealTicket,
-        draft_ids: draftIds,
-        mode: "commit",
-        draft_payloads: serverPayloads,
-      }),
-    });
-  } catch {
-    throw new Error(sealFinalizeFetchFailedMessage());
-  }
-  const commitJson =
-    ((await commitRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
-  if (!commitRes.ok || commitJson?.ok !== true) {
-    throw new Error(
-      userMessageFromFinalizeResponse(commitJson, "Seal could not be completed.")
-    );
-  }
-
-  await persistSealedDraftsLocally(draftIds, draftPayloads);
+  await commitServerSealFinalize({
+    sealTicket,
+    draftIds,
+    accessToken,
+    draftPayloads,
+  });
+  const sealedAt = Date.now();
+  await persistSealedDraftsLocally(draftIds, draftPayloads, {
+    locallySealedAt: sealedAt,
+    serverSealedAt: sealedAt,
+  });
   await Promise.all(draftIds.map((id) => removeDraftItem(id)));
   clearComposerSnapshot();
   scheduleStagingCleanup(getArmedSealStagingId(), accessToken);
+}
+
+/** @deprecated Use local-first `finalizeSealChainFromSdmResponse`. Server commit only. */
+export async function finalizeSealWithTicket(
+  opts: FinalizeSealWithTicketOptions
+): Promise<void> {
+  const payloads = await collectDraftPayloadsForSeal(opts.draftIds, opts.accessToken);
+  if (payloads.length !== opts.draftIds.length) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
+  await commitServerSealFinalize({ ...opts, draftPayloads: payloads });
 }
 
 export const SEAL_STEP_UP_REQUIRED = "SEAL_STEP_UP_REQUIRED";
@@ -510,6 +587,10 @@ export async function prepareSealForRingTap(opts: {
     throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
 
+  writePendingSealDraftIds(ids);
+  armSealFlowWithPersistence(ids);
+  persistSealLocalRelay(ids, payload);
+
   let stagingId: string | undefined;
   if (strategy.stagingOnPrep) {
     if (!strategy.stagingApiEnabled) {
@@ -521,13 +602,8 @@ export async function prepareSealForRingTap(opts: {
       accessToken: opts.accessToken,
       isPlus,
     });
+    armSealFlowWithPersistence(ids, { stagingId });
   }
-
-  const relayPayload = strategy.stagingOnPrep ? stagingPayload : payload;
-  writePendingSealDraftIds(ids);
-  armSealFlowWithPersistence(ids, { stagingId });
-  writeSealDraftRelay(relayPayload);
-  writeSealPrepBundle({ draftIds: ids, relay: relayPayload });
 
   return { mode: strategy.transport, stagingId };
 }
@@ -548,8 +624,7 @@ export async function primeSealPrepAfterDraftPersisted(
     armSealFlowWithPersistence(ids);
     const payload = await sealPayloadFromDraftItem(await getDraftItem(id));
     if (payload) {
-      writeSealDraftRelay(payload);
-      writeSealPrepBundle({ draftIds: ids, relay: payload });
+      persistSealLocalRelay(ids, payload);
     }
     return;
   }
@@ -582,15 +657,62 @@ export function abandonInProgressSealOnStartPage() {
 export async function finalizeSealChainFromSdmResponse(
   opts: FinalizeSealWithTicketOptions
 ): Promise<void> {
-  await finalizeSealWithTicket(opts);
-  requestStoragePersistenceFromUserGesture();
+  const { sealTicket, draftIds, accessToken } = opts;
+  if (!sealTicket || !draftIds.length || !accessToken) {
+    throw new Error("Missing seal confirmation data.");
+  }
+
+  if (!isSealFlowArmed()) {
+    throw new Error(SEAL_SESSION_ENDED);
+  }
+
+  let draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+
+  const platform = resolvePlatformTarget();
+  const strategy = getSealStrategy(platform);
+  const online = typeof navigator === "undefined" || navigator.onLine !== false;
+
+  if (
+    online &&
+    draftPayloads.length !== draftIds.length &&
+    strategy.stagingFallbackOnFinalize &&
+    strategy.stagingApiEnabled
+  ) {
+    const item = await getDraftItem(draftIds[0]);
+    const payload = await sealPayloadFromDraftItem(item, { forStaging: true });
+    if (payload) {
+      const stagingId = await uploadSealStaging({
+        draftIds,
+        payloads: [payload],
+        accessToken,
+      });
+      armSealFlowWithPersistence(draftIds, { stagingId });
+      draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+    }
+  }
+
+  if (draftPayloads.length !== draftIds.length) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
+
+  await persistSealedDraftsLocallyFirst(draftIds, draftPayloads);
+
   const stagingId = getArmedSealStagingId();
-  clearSealPrepState(opts.accessToken);
-  if (stagingId && opts.accessToken) {
-    scheduleStagingCleanup(stagingId, opts.accessToken);
+  requestStoragePersistenceFromUserGesture();
+  clearSealPrepState(accessToken);
+  if (stagingId && accessToken) {
+    scheduleStagingCleanup(stagingId, accessToken);
   }
   clearSealWaitTabActive();
   broadcastSealComplete();
+
+  void scheduleServerSealFinalize({
+    sealTicket,
+    draftIds,
+    accessToken,
+    draftPayloads,
+  });
+
   if (typeof window !== "undefined") {
     window.location.assign(SEAL_SUCCESS_PATH);
   }

@@ -3,6 +3,7 @@
  * Flushed automatically on reconnect and app lifecycle hooks.
  */
 import { createStore, get, set } from "idb-keyval";
+import type { SealDraftFinalizePayload } from "@/src/features/seal/sealTypes";
 
 const store = createStore("haven-offline-sync-v1", "queue");
 const QUEUE_KEY = "global";
@@ -13,6 +14,9 @@ export type OfflineSealItem = {
   id: string;
   sealTicket: string;
   draftIds: string[];
+  /** Phase 1: local IDB write already succeeded before enqueue. */
+  localCommitted?: boolean;
+  draftPayloads?: SealDraftFinalizePayload[];
   queuedAt: number;
   attempts: number;
 };
@@ -40,6 +44,8 @@ export { shouldQueueSealFailure } from "@/lib/user-facing-errors";
 export async function enqueueSealFinalize(args: {
   sealTicket: string;
   draftIds: string[];
+  localCommitted?: boolean;
+  draftPayloads?: SealDraftFinalizePayload[];
 }): Promise<boolean> {
   const sealTicket = String(args.sealTicket || "").trim();
   const draftIds = (args.draftIds || []).map((id) => String(id || "").trim()).filter(Boolean);
@@ -54,12 +60,25 @@ export async function enqueueSealFinalize(args: {
       id,
       sealTicket,
       draftIds,
+      localCommitted: Boolean(args.localCommitted),
+      draftPayloads: Array.isArray(args.draftPayloads) ? args.draftPayloads : undefined,
       queuedAt: Date.now(),
       attempts: 0,
     },
   ];
   await writeQueue(next);
   return true;
+}
+
+export async function dequeueSealFinalize(draftIds: string[]): Promise<void> {
+  const normalized = draftIds.map((id) => String(id || "").trim()).filter(Boolean);
+  if (!normalized.length) return;
+  const id = `seal:${normalized.join(",")}`;
+  const queue = await readQueue();
+  const next = queue.filter((row) => row.id !== id);
+  if (next.length !== queue.length) {
+    await writeQueue(next);
+  }
 }
 
 export async function enqueuePairSyncRetry(): Promise<boolean> {
@@ -71,6 +90,11 @@ export async function enqueuePairSyncRetry(): Promise<boolean> {
     { kind: "pair_sync", id, queuedAt: Date.now(), attempts: 0 },
   ]);
   return true;
+}
+
+export async function countPendingSealFinalize(): Promise<number> {
+  const queue = await readQueue();
+  return queue.filter((row) => row.kind === "seal_finalize").length;
 }
 
 export async function readOfflineSyncQueue(): Promise<OfflineQueueItem[]> {
@@ -96,8 +120,10 @@ export async function flushOfflineSyncQueue(
     return { flushed: 0, remaining: 0 };
   }
 
-  const { finalizeSealWithTicket } = await import("@/src/features/seal/sealFlowClient");
-  const { clearSealPrepState } = await import("@/src/features/seal/sealFlowClient");
+  const {
+    commitServerSealFinalize,
+    finalizeSealWithTicketNetworkFirst,
+  } = await import("@/src/features/seal/sealFlowClient");
   const { broadcastSealComplete } = await import("@/src/features/seal/sealCrossTab");
 
   let flushed = 0;
@@ -112,13 +138,23 @@ export async function flushOfflineSyncQueue(
 
     try {
       if (item.kind === "seal_finalize") {
-        await finalizeSealWithTicket({
-          sealTicket: item.sealTicket,
-          draftIds: item.draftIds,
-          accessToken: token,
-        });
-        clearSealPrepState(token);
-        broadcastSealComplete();
+        if (item.localCommitted) {
+          await commitServerSealFinalize({
+            sealTicket: item.sealTicket,
+            draftIds: item.draftIds,
+            accessToken: token,
+            draftPayloads: item.draftPayloads || [],
+          });
+        } else {
+          await finalizeSealWithTicketNetworkFirst({
+            sealTicket: item.sealTicket,
+            draftIds: item.draftIds,
+            accessToken: token,
+          });
+          const { clearSealPrepState } = await import("@/src/features/seal/sealFlowClient");
+          clearSealPrepState(token);
+          broadcastSealComplete();
+        }
         flushed += 1;
         continue;
       }

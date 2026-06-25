@@ -10,19 +10,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **All agents must follow this before any code, copy, or API design.**
 
+**SSOT (priority order):** `CORE-PRINCIPLES.md` → `docs/core-definition.md` → `docs/architecture-decisions.md`.  
+If your change conflicts, **stop and align with docs** (or update docs first with user approval).
+
 | Rule | Requirement |
 |------|-------------|
 | **Product** | Haven = **personal Memory Sanctuary** (individual-first). |
+| **Local-first** | **Device is source of truth** — write/Seal/view/supplements work offline; Timeline reads local IndexedDB. |
+| **Seal** | **Local success immediately** at ring tap — **no network wait** on success path; async server/cloud after. |
 | **Login** | **Apple / Google / Email** OAuth only — **never** ring-based login. |
 | **Ring** | **Seal ritual + bind only** — not unlock, not “open Haven,” not vault entry. |
 | **Daily use** | User opens **`/app`** (Timeline) signed in; **no ring required to view** own memories. |
-| **Seal loop** | Write memory → Seal with Ring → tap **own** ring → local encrypt (+ optional Plus cloud). |
-| **Sharing** | **Explicit Shared** memories (Plus) or export — **not** implicit couple Haven full read. |
+| **Cloud (Plus)** | **Optional async backup** + **explicit per-memory Shared** — not real-time sync; failure must not block local. |
+| **Sharing** | **Explicit Shared** (Plus) or export — **not** implicit couple Haven full read. |
+| **Supplements** | Comments **never lost** — preserve `mergeSupplements` + sidecar dual-write. |
 | **Copy** | In-flow ≤ **1 sentence**; explanations → Settings / Help. |
 | **`/start`** | NFC **bind + seal confirm** only — do not add daily-access / unlock flows. |
-| **Storage** | Local-first; design for **20MB+** local media; Plus for larger cloud. |
-
-**SSOT:** `docs/core-definition.md` and `docs/architecture-decisions.md`. If your change conflicts, **stop and align with docs** (or update docs first with user approval).
+| **Storage** | Local-first; design for **20MB+** local media; Plus for async cloud. |
 
 ### Deprecated — do not implement or extend
 
@@ -30,6 +34,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `POST /api/auth/nfc-login` or client silent NFC login.
 - Mandatory **Ring Setup Gate** blocking app without a bound ring.
 - **Couple Haven pair** as primary positioning (“one shared Haven, two rings, shared vault”).
+- **Real-time cloud sync** as core dependency for write/Seal/Timeline.
+- **Network wait on Seal success** before showing “sealed.”
 - Ring as **access credential** in copy or gates.
 - Long explanatory strings on `/start` or composer (use Help).
 

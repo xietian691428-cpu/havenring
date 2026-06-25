@@ -261,7 +261,8 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/join-pair-haven.ts"), /joinExistingRingToInviteHaven/);
   assert.match(readRepoFile("src/services/ringRegistryService.js"), /pruneStaleLocalRingsFromCloud/);
   assert.match(readRepoFile("app/api/nfc/bind/route.ts"), /joinExistingRingToInviteHaven/);
-  assert.match(readRepoFile("docs/core-definition.md"), /Pair join — foolproof UX/);
+  assert.match(readRepoFile("CORE-PRINCIPLES.md"), /Local-first — source of truth/);
+  assert.match(readRepoFile("docs/core-definition.md"), /Pair join — legacy UX/);
   assert.match(readRepoFile("lib/user-facing-errors.ts"), /userFacingBindError/);
   assert.match(readRepoFile("lib/nfc-sdm-resolve-client.ts"), /postSdmResolveWithRetry/);
   assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /ensureInviteKeyPackageAuto/);
@@ -401,7 +402,8 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /enqueueSealFinalize/);
-  assert.match(readRepoFile("src/features/seal/sealFinalizeSafe.ts"), /enqueueSealFinalize/);
+  assert.match(readRepoFile("src/features/seal/sealFlowClient.ts"), /enqueueSealFinalize/);
+  assert.match(readRepoFile("src/features/seal/sealFinalizeSafe.ts"), /persistSealedDraftsLocallyFirst|finalizeSealChainFromSdmResponse/);
   assert.match(readRepoFile("docs/core-definition.md"), /Background fault tolerance/);
   assert.match(readRepoFile("src/state/recoveryPolicy.js"), /severity: "soft", reason: "hash_mismatch"/);
   assert.doesNotMatch(readRepoFile("src/views/TimelinePage.js"), /onClick=\{\(\) => void onResyncNow/);
@@ -567,8 +569,15 @@ check("seal session boundary: no background auto-arm; live size meter on compose
 
 check("seal commit persists memories to local timeline", () => {
   const sealFlow = readRepoFile("src/features/seal/sealFlowClient.ts");
-  assert.match(sealFlow, /persistSealedDraftsLocally/);
-  assert.match(sealFlow, /persistSealedDraftsLocally/);
+  assert.match(sealFlow, /persistSealedDraftsLocallyFirst/);
+  assert.match(sealFlow, /commitServerSealFinalize/);
+  assert.match(sealFlow, /persistSealLocalRelay/);
+  assert.match(readRepoFile("src/features/seal/sealLocalRelay.ts"), /persistSealLocalRelay/);
+  assert.match(readRepoFile("src/hooks/useBackgroundSyncStatus.js"), /pendingSealFinalize/);
+  assert.match(readRepoFile("src/views/SettingsPage.js"), /formatBackgroundSyncStatusLine/);
+  assert.match(readRepoFile("lib/seal-relay-slim.ts"), /slimSealRelayPayload/);
+  assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /localCommitted/);
+  assert.doesNotMatch(sealFlow, /ensureBrowserOnlineForSealFinalize/);
   assert.match(sealFlow, /removeDraftItem/);
   assert.match(sealFlow, /clearComposerSnapshot/);
   assert.match(sealFlow, /createMemory/);
