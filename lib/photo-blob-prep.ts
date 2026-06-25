@@ -1,5 +1,6 @@
 import { compressImageBuffer } from "@/lib/image-compressor-client";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { TIMELINE_LARGE_BLOB_BYTES } from "@/lib/timeline-large-media";
 import {
   PHOTO_BLOB_DIMS,
   type MemoryPhotoRef,
@@ -94,11 +95,11 @@ export async function buildPhotoBlobVariants(source: Blob): Promise<{
   placeholder: string;
 }> {
   const mimeType = source.type || "image/jpeg";
-  const buffer = await source.arrayBuffer();
-  const sequential = isIosWebKit();
+  const sequential = isIosWebKit() || source.size >= TIMELINE_LARGE_BLOB_BYTES;
   const blobs = {} as Record<PhotoBlobType, Blob>;
 
   if (sequential) {
+    const buffer = await source.arrayBuffer();
     blobs.full = await compressVariant(buffer, mimeType, "full");
     await yieldToMain();
     const mediumBuf = await blobs.full.arrayBuffer();
@@ -107,6 +108,7 @@ export async function buildPhotoBlobVariants(source: Blob): Promise<{
     const thumbBuf = await blobs.medium.arrayBuffer();
     blobs.thumb = await compressVariant(thumbBuf, mimeType, "thumb");
   } else {
+    const buffer = await source.arrayBuffer();
     const [thumb, medium, full] = await Promise.all([
       compressVariant(buffer, mimeType, "thumb"),
       compressVariant(buffer, mimeType, "medium"),

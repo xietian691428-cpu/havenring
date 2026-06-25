@@ -1,8 +1,8 @@
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { SEAL_LOCAL_MAX_BYTES } from "@/lib/seal-staging-shared";
 import {
   estimateOomRisk,
-  getFlag,
   oomRiskToMemoryPressure,
   shouldBlockSaveForOomRisk,
 } from "@/lib/ios-memory-heuristics";
@@ -18,12 +18,13 @@ const ESTIMATED_CRITICAL_BYTES = 80 * 1024 * 1024;
 const ESTIMATED_ELEVATED_BYTES = 48 * 1024 * 1024;
 
 /** iOS composer — bytes in the current draft, not library size. */
-const IOS_COMPOSER_ELEVATED_BYTES = 14 * 1024 * 1024;
-const IOS_COMPOSER_CRITICAL_BYTES = 28 * 1024 * 1024;
-const IOS_COMPOSER_SAVE_BLOCK_BYTES = 42 * 1024 * 1024;
+const IOS_COMPOSER_ELEVATED_BYTES = 32 * 1024 * 1024;
+const IOS_COMPOSER_CRITICAL_BYTES = 64 * 1024 * 1024;
+/** Hard block only near the local-first persist cap (300MB product budget). */
+const IOS_COMPOSER_SAVE_BLOCK_BYTES = Math.floor(SEAL_LOCAL_MAX_BYTES * 0.95);
 
-/** Reject camera-roll picks above this before decode (iOS). */
-export const IOS_MAX_SOURCE_PHOTO_BYTES = 12 * 1024 * 1024;
+/** Reject camera-roll picks above this before decode (iOS) — compress down after pick. */
+export const IOS_MAX_SOURCE_PHOTO_BYTES = 25 * 1024 * 1024;
 
 export function readPerformanceMemory(): PerfMemory | null {
   if (typeof performance === "undefined") return null;
@@ -97,12 +98,11 @@ export function shouldPauseComposerPhotoAdd(estimatedComposerBytes: number): boo
   return pressure === "critical" && estimatedComposerBytes >= IOS_COMPOSER_ELEVATED_BYTES;
 }
 
-/** Block save only when this draft is huge or a prior save OOM was recorded. */
+/** Block save only when this draft exceeds the local persist cap. */
 export function shouldBlockComposerSave(estimatedComposerBytes = 0): boolean {
   if (!isIosWebKit()) {
     return shouldBlockSaveForOomRisk();
   }
-  if (getFlag("last_save_oom")) return true;
   return estimatedComposerBytes >= IOS_COMPOSER_SAVE_BLOCK_BYTES;
 }
 

@@ -820,6 +820,8 @@ export function NewMemoryPage({
           releaseAt,
           timelineAt: Date.now(),
         });
+        revokeComposerPhotos(photos);
+        setPhotos([]);
         await removeDraftItem(savedDraft.id);
         setEditingDraftId("");
         setFeedback("");

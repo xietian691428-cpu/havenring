@@ -29,7 +29,7 @@ import {
 } from "@/lib/timeline-thumb-store";
 import { warmTimelineMediaFromDataUrl } from "@/lib/timeline-thumb-cache";
 import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
-import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
+import { isPostSealQuietWindow, markPostSealComplete } from "@/lib/post-seal-memory-guard";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { logStorageEstimate } from "@/lib/storage-quota";
 import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
@@ -441,6 +441,7 @@ async function scheduleTimelineThumbWarm(
   photo: unknown
 ): Promise<void> {
   if (isPostSealQuietWindow()) return;
+  if (isIosWebKit() && photoPayloadHasLargeBlob(photo)) return;
   const ref = firstPhotoRef(photo);
   if (ref?.id) {
     try {
@@ -835,6 +836,10 @@ export async function saveMemory(
     void touchOomRiskSnapshot();
     logStorageEstimate("saveMemory");
     void warnIfLocalStorageTight();
+    const savedPhoto = memory.photo;
+    if (photoPayloadHasLargeBlob(savedPhoto)) {
+      markPostSealComplete({ hasLargeMedia: true });
+    }
     return { id: memory.id, updatedAt: memory.updatedAt };
   } finally {
     db.close();

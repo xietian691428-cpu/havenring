@@ -299,7 +299,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v15/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v16/);
   assert.match(readRepoFile("public/sw.js"), /skipWaiting/);
   assert.match(readRepoFile("app/layout.tsx"), /fonts-inter/);
   assert.match(readRepoFile("app/layout.tsx"), /ios-font-minimal/);
@@ -389,7 +389,9 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockComposerSave/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /readComposerMemoryPressure/);
   assert.doesNotMatch(readRepoFile("src/views/NewMemoryPage.js"), /shouldBlockSaveForOomRisk/);
-  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /markLastSaveOom/);
+  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /onSaveMemory=\{persistComposerMemory\}/);
+  assert.match(readRepoFile("lib/composer-memory-guard.ts"), /SEAL_LOCAL_MAX_BYTES/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /markPostSealComplete/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getMemoryCount/);
   assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /shouldUseTextFirstTimeline/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemoryThumbBlob/);

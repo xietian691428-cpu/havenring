@@ -166,7 +166,7 @@ const EN = {
   feedbackSaveMemoryPressure:
     "This memory is too large for this device right now. Remove a photo or try again.",
   feedbackOomSaveBlocked:
-    "This device is low on memory — remove some photos or restart Safari, then try again.",
+    "This memory is over the 300 MB local limit — remove some media or save in smaller parts.",
   sealStagingErrorTitle: "Not enough local storage",
   sealStagingTooLarge:
     "Not enough local storage — try removing older memories or saving in smaller parts.",

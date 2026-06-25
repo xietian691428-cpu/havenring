@@ -36,7 +36,11 @@ import {
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
-import { logPostSealMemoryPressure } from "@/lib/post-seal-memory-guard";
+import {
+  logPostSealMemoryPressure,
+  markPostSealComplete,
+} from "@/lib/post-seal-memory-guard";
+import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
 import { runTimelineHeavyTask } from "@/lib/timeline-heavy-lock";
 import {
   claimBootBackgroundSync,
@@ -274,6 +278,7 @@ export function useMemories(options = {}) {
   const persistComposerMemory = useCallback(async (payload) => {
     setSaving(true);
     setError(null);
+    releaseAllTimelineThumbUrls();
     try {
       const id = String(payload?.id || "").trim();
       if (!id) {
@@ -333,6 +338,9 @@ export function useMemories(options = {}) {
         const filtered = prev.filter((item) => item.id !== id);
         return [preview, ...filtered].sort((a, b) => b.timelineAt - a.timelineAt);
       });
+      if (photoPayloadHasLargeBlob(enrichedPayload.photo)) {
+        markPostSealComplete({ hasLargeMedia: true });
+      }
       return { id, preview };
     } catch (err) {
       const message =

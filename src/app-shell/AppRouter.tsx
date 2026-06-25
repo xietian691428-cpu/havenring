@@ -875,6 +875,7 @@ function AppRouterInner({
             }
             initialDraftId={route.fromDraftId || ""}
             onBack={openTimelineFromComposer}
+            onSaveMemory={persistComposerMemory}
             onSaved={async () => {
               await refresh({ force: true });
             }}

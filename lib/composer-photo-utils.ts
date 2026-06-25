@@ -2,6 +2,7 @@ import { buildPreparedComposerPhoto } from "@/lib/photo-blob-prep";
 import type { MemoryPhotoRef, PreparedComposerPhoto } from "@/lib/memory-photo-types";
 import { compressImageBuffer } from "@/lib/image-compressor-client";
 import { getComposerSaveLimits, isIosWebKit } from "@/lib/composer-platform-limits";
+import { TIMELINE_LARGE_BLOB_BYTES } from "@/lib/timeline-large-media";
 
 export type ComposerPhotoRow = {
   id: string;
@@ -151,6 +152,17 @@ export async function prepareComposerPhotosForSave(
     if (row) {
       prepared.push(row);
       await yieldToMain();
+      if (isIosWebKit()) {
+        const bytes =
+          photo.blob instanceof Blob
+            ? photo.blob.size
+            : Number(photo.size || 0);
+        if (bytes >= TIMELINE_LARGE_BLOB_BYTES) {
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 250);
+          });
+        }
+      }
     }
   }
   return prepared;
