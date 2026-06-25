@@ -322,8 +322,11 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   );
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
-    /onTabTimeline:[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\)/
+    /onTabTimeline:[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\{ force: true \}\)/
   );
+  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /shouldUseTimelineVirtualList/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /SYNC_STUCK_CLEAR_MS/);
+  assert.match(readRepoFile("src/views/TimelinePage.js"), /renderVirtualList/);
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
     /handleTimelinePullRefresh[\s\S]*?await refresh\(\{ force: true \}\)/

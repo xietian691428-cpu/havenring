@@ -37,6 +37,13 @@ export function getTimelineVirtualOverscan(): number {
   return isIosWebKit() ? 0 : isMobileMemorySensitive() ? 1 : 3;
 }
 
+/** iOS WebKit: plain list only — virtualizer often renders 0 visible rows in AppChrome scroll. */
+export function shouldUseTimelineVirtualList(itemCount: number): boolean {
+  if (itemCount <= 0) return false;
+  if (isIosWebKit()) return false;
+  return itemCount > 12;
+}
+
 export function getTimelineStoryPreviewMaxChars(): number {
   return isMobileMemorySensitive() ? 120 : 280;
 }

@@ -48,6 +48,7 @@ const SYNC_BACKOFF_BASE_MS = 5_000;
 const SYNC_BACKOFF_MAX_MS = 5 * 60 * 1000;
 /** Min ms since last refresh before sync may trigger another (iOS). */
 const IOS_SYNC_REFRESH_SKEW_MS = 8_000;
+const SYNC_STUCK_CLEAR_MS = 25_000;
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -634,18 +635,28 @@ export function useMemories(options = {}) {
     if (!timelineLifecycleActive) return undefined;
     if (shouldSkipMountTimelineRefresh()) return undefined;
     const afterSeal = wasSealRecentlyCompleted();
-    if (!shouldRunDeferredMountRefresh() && !afterSeal) return undefined;
+    const needsData = memories.length === 0;
+    if (!shouldRunDeferredMountRefresh() && !afterSeal && !needsData) return undefined;
     const run = () => {
-      void refresh(afterSeal ? { force: true } : undefined);
+      void refresh(afterSeal || needsData ? { force: true } : undefined);
     };
     deferEntryWork(run, {
-      timeout: afterSeal
+      timeout: afterSeal || needsData
         ? 300
         : isLowMemoryEntryDevice()
           ? IOS_BOOT_REFRESH_DELAY_MS
           : 500,
     });
-  }, [timelineLifecycleActive, refresh]);
+  }, [timelineLifecycleActive, refresh, memories.length]);
+
+  useEffect(() => {
+    if (!syncing) return undefined;
+    const timer = window.setTimeout(() => {
+      setSyncing(false);
+      syncInFlightRef.current = null;
+    }, SYNC_STUCK_CLEAR_MS);
+    return () => window.clearTimeout(timer);
+  }, [syncing]);
 
   const requestSealDrivenRefresh = useCallback(() => {
     const now = Date.now();

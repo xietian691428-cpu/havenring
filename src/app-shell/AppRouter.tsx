@@ -380,12 +380,17 @@ function AppRouterInner({
       chromeResetKey,
       activeTab,
       onTabTimeline: () => {
-        if (route.name === "timeline") return;
+        if (route.name === "timeline") {
+          if (memories.length === 0) {
+            void refresh({ force: true });
+          }
+          return;
+        }
         if (tabTimelineBusyRef.current) return;
         tabTimelineBusyRef.current = true;
         markTabTimelineRefreshClaimed();
         navigateTo({ name: "timeline", memoryId: null }, "back");
-        void refresh().finally(() => {
+        void refresh({ force: true }).finally(() => {
           tabTimelineBusyRef.current = false;
         });
       },
@@ -412,6 +417,7 @@ function AppRouterInner({
       activeTab,
       route.name,
       refresh,
+      memories,
       temporaryModeBanner,
       supabaseSession,
       boundRingCount,

@@ -16,7 +16,7 @@ import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
-import { getTimelineVirtualOverscan } from "@/lib/timeline-ios-guard";
+import { getTimelineVirtualOverscan, shouldUseTimelineVirtualList } from "@/lib/timeline-ios-guard";
 import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 
 /**
@@ -163,7 +163,8 @@ export function TimelinePage({
   const orderedFiltered = useMemo(() => ordered, [ordered]);
   const listAnchorRef = useRef(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  const useVirtualList = orderedFiltered.length > 0 && !searchQuery.trim();
+  const useVirtualList =
+    shouldUseTimelineVirtualList(orderedFiltered.length) && !searchQuery.trim();
 
   useLayoutEffect(() => {
     if (!useVirtualList || typeof window === "undefined") return undefined;
@@ -193,6 +194,9 @@ export function TimelinePage({
     enabled: useVirtualList,
   });
   const virtualItems = virtualizer.getVirtualItems();
+  const virtualListBroken =
+    useVirtualList && orderedFiltered.length > 0 && virtualItems.length === 0;
+  const renderVirtualList = useVirtualList && !virtualListBroken;
 
   const [pullSyncActive, setPullSyncActive] = useState(false);
 
@@ -218,7 +222,7 @@ export function TimelinePage({
     pullDistance,
   } = usePullToRefresh({
     onRefresh: handlePullRefresh,
-    disabled: loading || syncing,
+    disabled: loading,
   });
 
   useEffect(() => {
@@ -229,9 +233,9 @@ export function TimelinePage({
 
   const visibleMemories = orderedFiltered;
   const thumbMemories = useMemo(() => {
-    if (!useVirtualList) return visibleMemories;
+    if (!renderVirtualList) return visibleMemories;
     return virtualItems.map((row) => orderedFiltered[row.index]).filter(Boolean);
-  }, [useVirtualList, virtualItems, orderedFiltered, visibleMemories]);
+  }, [renderVirtualList, virtualItems, orderedFiltered, visibleMemories]);
   const visibleThumbKey = useMemo(
     () =>
       thumbMemories
@@ -248,14 +252,14 @@ export function TimelinePage({
   const thumbById = useTimelineThumbUrls(visibleThumbKey, thumbPaused, memoryTextFirst);
 
   useEffect(() => {
-    if (!useVirtualList || !hasMoreMemories || loadingMore || searchQuery.trim()) return undefined;
+    if (!renderVirtualList || !hasMoreMemories || loadingMore || searchQuery.trim()) return undefined;
     const last = virtualItems[virtualItems.length - 1];
     if (last && last.index >= orderedFiltered.length - 2) {
       void onLoadMore?.();
     }
     return undefined;
   }, [
-    useVirtualList,
+    renderVirtualList,
     virtualItems,
     hasMoreMemories,
     loadingMore,
@@ -415,7 +419,7 @@ export function TimelinePage({
 
         <div ref={listAnchorRef}>
           {orderedFiltered.length ? (
-            useVirtualList ? (
+            renderVirtualList ? (
               <div
                 style={{
                   height: virtualizer.getTotalSize(),
