@@ -18,6 +18,7 @@ import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
 import { getTimelineVirtualOverscan, shouldUseTimelineVirtualList } from "@/lib/timeline-ios-guard";
 import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -239,10 +240,18 @@ export function TimelinePage({
   const visibleThumbKey = useMemo(
     () =>
       thumbMemories
-        .map((row) => `${row?.id}:${row?.hasPhotos === false ? 0 : 1}:${Number(row?.updatedAt || 0)}`)
+        .map((row) =>
+          [
+            row?.id,
+            row?.hasPhotos === false ? 0 : 1,
+            row?.hasLargePhotos ? 1 : 0,
+            Number(row?.updatedAt || 0),
+          ].join(":")
+        )
         .join("|"),
     [thumbMemories]
   );
+  const postSealQuiet = isPostSealQuietWindow();
   const thumbPaused =
     loading ||
     syncing ||
@@ -448,6 +457,7 @@ export function TimelinePage({
                           memory={memory}
                           thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
                           textFirst={memoryTextFirst}
+                          deferLargeThumb={postSealQuiet || memory.hasLargePhotos}
                           pinned={pinned}
                           locked={locked}
                           viewerNow={viewerNow}
@@ -471,6 +481,7 @@ export function TimelinePage({
                         memory={memory}
                         thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
                         textFirst={memoryTextFirst}
+                        deferLargeThumb={postSealQuiet || memory.hasLargePhotos}
                         pinned={pinned}
                         locked={locked}
                         viewerNow={viewerNow}

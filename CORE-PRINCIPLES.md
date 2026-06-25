@@ -17,6 +17,7 @@ This file **supersedes** older assumptions about real-time cloud sync, implicit 
 | 2026-06-17 | **Local-first source of truth**; cloud = optional async backup + explicit share only; Seal must succeed locally without network wait. Replaces real-time sync as product default. |
 | 2026-06-17 | **Phase 1 Seal:** `persistSealedDraftsLocallyFirst` → immediate success; `commitServerSealFinalize` async via `offlineSyncQueue`. |
 | 2026-06-17 | **Phase 1.1:** `persistSealLocalRelay` before staging upload; offline `collectDraftPayloadsForSeal`; Settings background backup status line. |
+| 2026-06-17 | **Post-Seal memory guard:** aggressive thumbs, large-photo defer, 200MB local relay/persist caps, quota warning. |
 
 ---
 

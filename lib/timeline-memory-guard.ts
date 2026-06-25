@@ -12,7 +12,9 @@ import {
   estimateOomRisk,
   oomRiskToMemoryPressure,
   shouldDisableTimelineThumbsForOomRisk,
+  type OomRiskLevel,
 } from "@/lib/ios-memory-heuristics";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 
 export type { MemoryPressure };
@@ -32,7 +34,9 @@ export function readTimelineMemoryPressure(): MemoryPressure {
 export function shouldUseTextFirstTimeline(pressure: MemoryPressure): boolean {
   if (isIosReloadMinimalMode()) return true;
   if (isIosAppBootQuiet()) return true;
+  if (isPostSealQuietWindow()) return true;
   if (shouldDisableTimelineThumbsForOomRisk()) return true;
+  if (isIosWebKit() && pressure === "elevated") return true;
   return pressure === "critical";
 }
 

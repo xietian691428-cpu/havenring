@@ -41,6 +41,7 @@ import { getFreeEntitlements } from "../services/subscriptionService";
 import { markOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
 import { formatBackgroundSyncStatusLine } from "@/lib/background-sync-status-copy";
 import { useBackgroundSyncStatus } from "../hooks/useBackgroundSyncStatus";
+import { readLocalStorageQuotaWarnFlag } from "../services/localStorageService";
 
 /**
  * Settings Page
@@ -103,6 +104,7 @@ export function SettingsPage({
   );
 
   const [havenPlus, setHavenPlus] = useState(null);
+  const localStorageTight = readLocalStorageQuotaWarnFlag();
 
   const cloudStateText = useMemo(() => {
     if (!cloud.enabled) return localeCopy.cloudOff;
@@ -582,6 +584,11 @@ export function SettingsPage({
           <h2 style={styles.sectionTitle}>{localeCopy.dataPrivacySectionTitle}</h2>
           <p style={styles.copy}>{ex.exportSectionLead}</p>
           <p style={styles.copy}>{localeCopy.localDefault}</p>
+          {localStorageTight ? (
+            <p style={styles.status} role="status">
+              {localeCopy.localStorageTight}
+            </p>
+          ) : null}
           <p style={styles.copy}>
             {loading
               ? localeCopy.loadingStats

@@ -85,6 +85,7 @@ const EN = {
   pullToRefreshSyncing: "Refreshing…",
   memoryGuardTextFirst: "Tap Open on a memory to view photos — list stays text-only on iPhone.",
   textFirstPhotoHint: "Has photos",
+  largePhotoDeferredHint: "Photo loads when memory allows",
   loadingMore: "Loading more…",
   syncStatusIdle: "Idle",
   syncLastAttempt: "Last attempt: {time}",

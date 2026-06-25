@@ -8,12 +8,16 @@ export function TimelineMemoryCard({
   pinned = false,
   locked = false,
   viewerNow = Date.now(),
+  deferLargeThumb = false,
   t,
   onTogglePin,
   onOpen,
 }) {
   const sealed = Boolean(memory?.is_sealed || memory?.ring_id);
-  const showThumb = !textFirst && (Boolean(thumbUrl) || memory?.hasPhotos !== false);
+  const showThumb =
+    !textFirst &&
+    !deferLargeThumb &&
+    (Boolean(thumbUrl) || memory?.hasPhotos !== false);
 
   return (
     <article style={styles.card}>
@@ -36,6 +40,9 @@ export function TimelineMemoryCard({
       </div>
       {textFirst && memory?.hasPhotos ? (
         <p style={styles.photoHint}>{t.textFirstPhotoHint}</p>
+      ) : null}
+      {deferLargeThumb && memory?.hasPhotos ? (
+        <p style={styles.photoHint}>{t.largePhotoDeferredHint || t.textFirstPhotoHint}</p>
       ) : null}
       {showThumb ? (
         <div style={styles.thumbRow}>

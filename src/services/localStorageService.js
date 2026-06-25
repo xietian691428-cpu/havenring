@@ -19,4 +19,6 @@ export {
   searchTimelineMemorySummaries,
   memoryRepository,
   saveMemory,
+  readLocalStorageQuotaWarnFlag,
+  warnIfLocalStorageTight,
 } from "./localMemoryStore";

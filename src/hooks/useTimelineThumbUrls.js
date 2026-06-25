@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 import {
   acquireTimelineThumbUrl,
   releaseAllTimelineThumbUrls,
@@ -7,17 +8,30 @@ import {
 } from "@/lib/timeline-thumb-cache";
 import { getTimelineMemoryThumbBlob } from "../services/localStorageService";
 
-const IOS_THUMB_GAP_MS = 200;
+function iosThumbGapMs() {
+  return isPostSealQuietWindow() ? 450 : 200;
+}
 
 function parseVisibleKey(visibleKey = "") {
   return visibleKey
     .split("|")
     .filter(Boolean)
     .map((part) => {
-      const [id, hasPhotos, updatedAt] = part.split(":");
+      const bits = part.split(":");
+      if (bits.length >= 4) {
+        const [id, hasPhotos, hasLarge, updatedAt] = bits;
+        return {
+          id,
+          hasPhotos: hasPhotos !== "0",
+          hasLargePhotos: hasLarge === "1",
+          updatedAt: Number(updatedAt || 0),
+        };
+      }
+      const [id, hasPhotos, updatedAt] = bits;
       return {
         id,
         hasPhotos: hasPhotos !== "0",
+        hasLargePhotos: false,
         updatedAt: Number(updatedAt || 0),
       };
     });
@@ -58,7 +72,9 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
 
     const rows = parseVisibleKey(visibleKey);
     const visibleIds = new Set(
-      rows.filter((row) => row.id && row.hasPhotos).map((row) => row.id)
+      rows
+        .filter((row) => row.id && row.hasPhotos && !row.hasLargePhotos)
+        .map((row) => row.id)
     );
     retainTimelineThumbUrls(visibleIds);
     setThumbById((prev) => pruneThumbState(prev, visibleIds));
@@ -67,6 +83,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
     void (async () => {
       for (const row of rows) {
         if (cancelled || !row.id || !row.hasPhotos) continue;
+        if (row.hasLargePhotos || isPostSealQuietWindow()) continue;
         if (!visibleIds.has(row.id)) continue;
 
         const url = await acquireTimelineThumbUrl(
@@ -82,7 +99,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
           return { ...prev, [row.id]: url };
         });
         if (isIosWebKit()) {
-          await new Promise((resolve) => window.setTimeout(resolve, IOS_THUMB_GAP_MS));
+          await new Promise((resolve) => window.setTimeout(resolve, iosThumbGapMs()));
         }
       }
     })();

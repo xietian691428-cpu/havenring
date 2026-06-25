@@ -27,6 +27,9 @@ import {
   writePersistedTimelineMedia,
 } from "@/lib/timeline-thumb-store";
 import { warmTimelineMediaFromDataUrl } from "@/lib/timeline-thumb-cache";
+import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
 import {
   isPreparedComposerPhoto,
@@ -285,6 +288,7 @@ async function encryptMemoryFields(memory: ReturnType<typeof normalizeMemoryInpu
       const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
       return list.length;
     })(),
+    hasLargePhotos: photoPayloadHasLargeBlob(memory.photo),
   };
 
   if (isMobileMemorySensitive()) {
@@ -383,6 +387,7 @@ async function decryptRecordSummary(record: MemoryDbRecord): Promise<TimelineMem
     fromPartner: Boolean(metaObj.fromPartner),
     supplements: await resolveMemorySupplements(record.id, metaSupplements),
     hasPhotos,
+    hasLargePhotos: Boolean(metaObj.hasLargePhotos),
   };
 }
 
@@ -409,6 +414,7 @@ async function scheduleTimelineThumbWarm(
   memoryUpdatedAt: number,
   photo: unknown
 ): Promise<void> {
+  if (isPostSealQuietWindow() || photoPayloadHasLargeBlob(photo)) return;
   const ref = firstPhotoRef(photo);
   if (ref?.id) {
     try {
@@ -483,6 +489,32 @@ export async function getTimelineMemorySummaries(opts: {
   }
 }
 
+/** Gentle warning when device storage is nearly full (local-first). */
+export async function warnIfLocalStorageTight(): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.storage?.estimate) return null;
+  try {
+    const est = await navigator.storage.estimate();
+    const usage = Number(est.usage || 0);
+    const quota = Number(est.quota || 0);
+    if (!quota || usage / quota < 0.82) return null;
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.localStorageQuotaWarn, "1");
+    }
+    return "Local storage is getting full — consider removing older memories.";
+  } catch {
+    return null;
+  }
+}
+
+export function readLocalStorageQuotaWarnFlag(): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  try {
+    return sessionStorage.getItem(STORAGE_KEYS.localStorageQuotaWarn) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Lazy media — thumb JPEG blob from photoBlobs store (legacy inline fallback). */
 export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob | null> {
   if (!memoryId) return null;
@@ -501,9 +533,14 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
       const meta = await localCrypto.decryptJson(record.metaEnc);
       const metaObj = meta as Record<string, unknown>;
       const updatedAt = Number(metaObj.updatedAt ?? record.updatedAt);
+      const hasLargePhotos = Boolean(metaObj.hasLargePhotos);
 
       const cached = await readPersistedTimelineMedia(memoryId, updatedAt, "thumb");
       if (cached) return cached;
+
+      if (hasLargePhotos && (isPostSealQuietWindow() || isIosWebKit())) {
+        return null;
+      }
 
       const photo = await localCrypto.decryptJson(record.photoEnc);
       const ref = firstPhotoRef(photo);
@@ -683,6 +720,7 @@ export async function createMemory(
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
+    void warnIfLocalStorageTight();
     return {
       id: memory.id,
       createdAt: memory.createdAt,
@@ -763,6 +801,7 @@ export async function saveMemory(
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
+    void warnIfLocalStorageTight();
     return { id: memory.id, updatedAt: memory.updatedAt };
   } finally {
     db.close();

@@ -1,6 +1,7 @@
 import {
   getTimelineMediumMaxDim,
   getTimelineThumbMaxDim,
+  getTimelineThumbQuality,
 } from "@/lib/timeline-ios-guard";
 import { resizeImageDataUrlInWorker } from "@/lib/timeline-image-worker-client";
 
@@ -11,7 +12,10 @@ export async function dataUrlToTimelineThumbBlob(
 ): Promise<Blob | null> {
   if (!dataUrl) return null;
 
-  const fromWorker = await resizeImageDataUrlInWorker(dataUrl, { maxDim, quality: 0.72 });
+  const fromWorker = await resizeImageDataUrlInWorker(dataUrl, {
+    maxDim,
+    quality: getTimelineThumbQuality(),
+  });
   if (fromWorker) return fromWorker;
 
   if (typeof document === "undefined") return null;
@@ -43,12 +47,12 @@ export async function dataUrlToTimelineThumbBlob(
         resolve(blob);
       },
       "image/jpeg",
-      0.72
+      getTimelineThumbQuality()
     );
   });
 }
 
-/** Generate thumb (300px) + medium (800px) JPEG blobs for persistence. */
+/** Generate thumb + medium JPEG blobs for persistence. */
 export async function dataUrlToTimelineMediaBlobs(dataUrl: string): Promise<{
   thumb: Blob | null;
   medium: Blob | null;
@@ -56,13 +60,14 @@ export async function dataUrlToTimelineMediaBlobs(dataUrl: string): Promise<{
   if (!dataUrl) return { thumb: null, medium: null };
   const thumbDim = getTimelineThumbMaxDim();
   const mediumDim = getTimelineMediumMaxDim();
+  const thumbQ = getTimelineThumbQuality();
   const thumb = await resizeImageDataUrlInWorker(dataUrl, {
     maxDim: thumbDim,
-    quality: 0.72,
+    quality: thumbQ,
   });
   const medium = await resizeImageDataUrlInWorker(dataUrl, {
     maxDim: mediumDim,
-    quality: 0.78,
+    quality: Math.min(0.78, thumbQ + 0.12),
   });
   if (thumb && medium) return { thumb, medium };
   const thumbFallback = thumb || (await dataUrlToTimelineThumbBlob(dataUrl, thumbDim));

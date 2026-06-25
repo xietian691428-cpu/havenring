@@ -32,6 +32,7 @@ import {
 import { getTimelinePageSize } from "@/lib/timeline-ios-guard";
 import { memoryPayloadToTimelinePreview } from "@/lib/timeline-memory-preview";
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { logPostSealMemoryPressure } from "@/lib/post-seal-memory-guard";
 import { runTimelineHeavyTask } from "@/lib/timeline-heavy-lock";
 import {
   claimBootBackgroundSync,
@@ -662,6 +663,8 @@ export function useMemories(options = {}) {
     const now = Date.now();
     if (now - lastSealDrivenRefreshAtRef.current < 5_000) return;
     lastSealDrivenRefreshAtRef.current = now;
+    releaseAllTimelineThumbUrls();
+    logPostSealMemoryPressure();
     void refresh({ force: true });
   }, [refresh]);
 

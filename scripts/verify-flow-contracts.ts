@@ -397,7 +397,9 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/hooks/useTimelineMemoryMode.js"), /useTimelineMemoryMode/);
   assert.match(readRepoFile("src/hooks/usePullToRefresh.js"), /getTimelinePullRefreshCooldownMs/);
   assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelinePageSize\(\): number \{\n  if \(isIosWebKit\(\)\) return 6;/);
-  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelineThumbMaxDim\(\): number \{\n  return isMobileMemorySensitive\(\) \? 300 : 320;/);
+  assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelineThumbQuality/);
+  assert.match(readRepoFile("lib/post-seal-memory-guard.ts"), /logPostSealMemoryPressure/);
+  assert.match(readRepoFile("lib/seal-local-limits.ts"), /SEAL_LOCAL_RELAY_MAX_BYTES/);
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /estimateComposerSealSizeLight/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);
@@ -502,7 +504,7 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
   const rateLimit = readRepoFile("lib/api-rate-limit.ts");
   assert.match(config, /SEAL_STAGING_MAX_BYTES = 50 \* 1024 \* 1024/);
-  assert.match(config, /SEAL_LOCAL_MAX_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_LOCAL_MAX_BYTES = 200 \* 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_PLUS_MAX_BYTES/);
   assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_INLINE_POST_MAX_BYTES/);

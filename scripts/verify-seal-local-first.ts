@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { formatBackgroundSyncStatusLine } from "../lib/background-sync-status-copy";
 import { slimSealRelayPayload } from "../lib/seal-relay-slim";
-import { SEAL_STAGING_MAX_BYTES } from "../lib/seal-staging-shared";
+import { SEAL_LOCAL_RELAY_MAX_BYTES } from "../lib/seal-local-limits";
 
 const SETTINGS_COPY = {
   backgroundSyncPendingOne:
@@ -61,9 +61,9 @@ check("large photo (3MB) fits default 50MB relay cap — offline seal retains ph
     attachments: [],
     releaseAt: 0,
   };
-  const slimmed = slimSealRelayPayload(payload, SEAL_STAGING_MAX_BYTES);
+  const slimmed = slimSealRelayPayload(payload, SEAL_LOCAL_RELAY_MAX_BYTES);
   assert.equal(slimmed.photo.length, 1);
-  assert.ok(JSON.stringify(slimmed).length < SEAL_STAGING_MAX_BYTES);
+  assert.ok(JSON.stringify(slimmed).length < SEAL_LOCAL_RELAY_MAX_BYTES);
 });
 
 check("relay budget exceeded → text kept, photos trimmed (degraded offline seal)", () => {
@@ -94,7 +94,7 @@ check("moderate photo relay retains at least one photo row", () => {
     attachments: [],
     releaseAt: 0,
   };
-  const slimmed = slimSealRelayPayload(payload, SEAL_STAGING_MAX_BYTES);
+  const slimmed = slimSealRelayPayload(payload, SEAL_LOCAL_RELAY_MAX_BYTES);
   assert.equal(slimmed.photo.length, 1);
 });
 

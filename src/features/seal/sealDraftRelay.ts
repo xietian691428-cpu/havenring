@@ -4,7 +4,7 @@
  * pending draft ids in localStorage still arrive, so we mirror finalize payloads here.
  */
 
-import { SEAL_STAGING_MAX_BYTES } from "@/lib/seal-staging-shared";
+import { SEAL_LOCAL_RELAY_MAX_BYTES } from "@/lib/seal-local-limits";
 import { SEAL_ARM_TTL_MS } from "@/lib/seal-flow";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { readSealPrepRelay } from "./sealPrepBundle";
@@ -13,7 +13,7 @@ import { slimSealRelayPayload } from "@/lib/seal-relay-slim";
 
 const RELAY_KEY = STORAGE_KEYS.sealDraftRelay;
 const TEXT_COOKIE = "haven_seal_text_relay_v1";
-const MAX_RELAY_BYTES = SEAL_STAGING_MAX_BYTES;
+const MAX_RELAY_BYTES = SEAL_LOCAL_RELAY_MAX_BYTES;
 
 type RelayStore = {
   expiresAt: number;

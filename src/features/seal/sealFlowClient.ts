@@ -74,7 +74,17 @@ import {
   SEAL_SESSION_ENDED,
   SEAL_STAGING_UNAVAILABLE,
 } from "./sealUserMessages";
-import { enqueueSealFinalize, dequeueSealFinalize, flushOfflineSyncQueue } from "../../services/offlineSyncQueue";
+import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
+import {
+  logPostSealMemoryPressure,
+  markPostSealComplete,
+} from "@/lib/post-seal-memory-guard";
+import {
+  dequeueSealFinalize,
+  enqueueSealFinalize,
+  flushOfflineSyncQueue,
+} from "../../services/offlineSyncQueue";
 
 const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
 
@@ -696,6 +706,13 @@ export async function finalizeSealChainFromSdmResponse(
   }
 
   await persistSealedDraftsLocallyFirst(draftIds, draftPayloads);
+
+  const hasLargeMedia = draftPayloads.some((row) =>
+    photoPayloadHasLargeBlob(row.photo)
+  );
+  releaseAllTimelineThumbUrls();
+  markPostSealComplete({ hasLargeMedia });
+  logPostSealMemoryPressure();
 
   const stagingId = getArmedSealStagingId();
   requestStoragePersistenceFromUserGesture();

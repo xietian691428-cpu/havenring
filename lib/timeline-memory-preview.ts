@@ -1,5 +1,6 @@
 import { getTimelineStoryPreviewMaxChars } from "@/lib/timeline-ios-guard";
 import { mergeSupplements } from "@/lib/memory-supplements";
+import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
 import type { TimelineMemorySummary } from "@/lib/timeline-memory-types";
 import type { MemorySupplement } from "@/src/features/memories/localMemoryStore";
 
@@ -65,5 +66,6 @@ export function memoryPayloadToTimelinePreview(
     fromPartner: Boolean(payload.fromPartner ?? existing?.fromPartner),
     supplements: mergeSupplements(existing?.supplements, payload.supplements),
     hasPhotos,
+    hasLargePhotos: photoPayloadHasLargeBlob(payload.photo),
   };
 }

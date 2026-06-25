@@ -9,6 +9,8 @@ const EN = {
   localSectionTitle: "Local data",
   localDefault:
     "Memories are sealed on this device first. Cloud backup is optional with Haven Plus.",
+  localStorageTight:
+    "Local storage is getting full — consider removing older memories.",
   backgroundSyncPendingOne:
     "1 sealed memory finishing backup in the background.",
   backgroundSyncPendingMany:

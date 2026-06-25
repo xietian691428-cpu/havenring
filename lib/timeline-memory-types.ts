@@ -11,6 +11,7 @@ export type TimelineMemorySummary = Omit<
   voice: null;
   attachments: [];
   hasPhotos: boolean;
+  hasLargePhotos?: boolean;
   storyPreview: string;
 };
 

@@ -3,6 +3,8 @@
  * Platform splits (iOS / Android / other) live here; locale bundles mirror keys in `newMemoryPageContent.js`.
  */
 
+import { wasPostSealLargeMedia } from "@/lib/post-seal-memory-guard";
+
 export type HavenPlatform = "ios" | "android" | "other";
 
 /** Alias for consumers who prefer the shorter name */
@@ -672,7 +674,9 @@ export const SEAL_FLOW_EN = {
   sealingLabel: "Sealing your memory...",
   sealNotReadyLine: "Open your memory first.",
   successTitle: "Memory sealed",
-  successMessage: "Saved on this device.",
+  successMessage: "Sealed on this device.",
+  successMessageLarge:
+    "Sealed on this device. Large files continue in the background.",
   successViewMemoriesCta: "View Memories",
   successSealAnotherCta: "Seal Another",
   autoSaving: "Saved to Draft Box",
@@ -684,9 +688,10 @@ export const SEAL_FLOW_EN = {
   sealCompletedElsewhere: "Memory sealed",
 } as const;
 
-export type SealFlowCopyEn = typeof SEAL_FLOW_EN & {
+export type SealFlowCopyEn = Omit<typeof SEAL_FLOW_EN, "successMessage"> & {
   readySubtitle: string;
   tapPlacement: string;
+  successMessage: string;
 };
 
 export function getSealFlowCopy(platform: HavenPlatform): SealFlowCopyEn {
@@ -702,7 +707,14 @@ export function getSealFlowCopy(platform: HavenPlatform): SealFlowCopyEn {
       : platform === "android"
         ? SEAL_FLOW_EN.tapPlacementAndroid
         : SEAL_FLOW_EN.tapPlacementOther;
-  return { ...SEAL_FLOW_EN, readySubtitle, tapPlacement };
+  return {
+    ...SEAL_FLOW_EN,
+    readySubtitle,
+    tapPlacement,
+    successMessage: wasPostSealLargeMedia()
+      ? SEAL_FLOW_EN.successMessageLarge
+      : SEAL_FLOW_EN.successMessage,
+  };
 }
 
 /** Post-claim / Plus trial toast copy (used from StartClient and similar) */

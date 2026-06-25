@@ -7,7 +7,7 @@ export const SEAL_STAGING_MAX_BYTES = 50 * 1024 * 1024;
 export const SEAL_STAGING_PLUS_MAX_BYTES = 100 * 1024 * 1024;
 
 /** Local finalize / IDB target (client keeps full media here). */
-export const SEAL_LOCAL_MAX_BYTES = 50 * 1024 * 1024;
+export const SEAL_LOCAL_MAX_BYTES = 200 * 1024 * 1024;
 
 /** Inline DB storage below this size; larger blobs go to Supabase Storage. */
 export const SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 * 1024;

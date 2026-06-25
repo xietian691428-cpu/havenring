@@ -24,6 +24,10 @@ export const STORAGE_KEYS = {
   lastSaveOom: "haven.composer.last_save_oom.v1",
   /** Cached memory count for iOS OOM heuristics (session-scoped). */
   oomRiskSnapshot: "haven.ios.oom_risk_snapshot.v1",
+  /** Post-seal Timeline quiet window (session-scoped). */
+  postSealQuiet: "haven.seal.post_quiet.v1",
+  /** Local IDB quota warning shown once per session. */
+  localStorageQuotaWarn: "haven.local_storage.quota_warn.v1",
   /** Last timeline list refresh (session-scoped cooldown). */
   timelineLastRefresh: "haven.timeline.last_refresh.v1",
   /** One automatic background sync per app session (iOS boot). */

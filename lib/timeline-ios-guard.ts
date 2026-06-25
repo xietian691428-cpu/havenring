@@ -1,4 +1,5 @@
 import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 
 function isAndroidWeb(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -19,7 +20,15 @@ export function getTimelinePageSize(): number {
 
 /** Persisted + list thumbnail max edge (px). */
 export function getTimelineThumbMaxDim(): number {
-  return isMobileMemorySensitive() ? 300 : 320;
+  if (isPostSealQuietWindow()) return 240;
+  if (isMobileMemorySensitive()) return 280;
+  return 320;
+}
+
+/** JPEG quality for timeline thumbs (aggressive on mobile / post-seal). */
+export function getTimelineThumbQuality(): number {
+  if (isPostSealQuietWindow() || isMobileMemorySensitive()) return 0.6;
+  return 0.72;
 }
 
 /** Persisted medium preview max edge (px) — detail warm cache. */
@@ -29,6 +38,7 @@ export function getTimelineMediumMaxDim(): number {
 
 /** In-memory Object URL cap (visible viewport only). */
 export function getTimelineThumbCacheMax(): number {
+  if (isPostSealQuietWindow() && isIosWebKit()) return 2;
   return isIosWebKit() ? 3 : isMobileMemorySensitive() ? 6 : 16;
 }
 
