@@ -11,6 +11,9 @@ export const SEAL_STAGING_OFFLINE =
 /** Sentinel — UI maps to localized copy with `{mb}` limit. */
 export const SEAL_STAGING_TOO_LARGE = "SEAL_STAGING_TOO_LARGE";
 
+/** Device quota exhausted — friendly local-storage copy (not staging cap). */
+export const SEAL_LOCAL_STORAGE_FULL = "SEAL_LOCAL_STORAGE_FULL";
+
 export type SealStagingTooLargeError = Error & { limitMb: number };
 
 export function sealStagingLimitMb(
@@ -25,6 +28,20 @@ export function sealStagingLimitMb(
 
 export function formatSealStagingTooLargeEn(limitMb: number): string {
   return `This memory is too large to seal (limit: ${limitMb} MB). Remove a video, file, or some photos to shrink it, then try again.`;
+}
+
+export function formatSealLocalStorageInsufficientEn(): string {
+  return "Not enough local storage — try removing older memories or saving in smaller parts.";
+}
+
+export type SealLocalStorageFullError = Error & { code: typeof SEAL_LOCAL_STORAGE_FULL };
+
+export function isSealLocalStorageFullError(
+  error: unknown
+): error is SealLocalStorageFullError {
+  return (
+    error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL
+  );
 }
 
 export function isSealStagingTooLargeError(
@@ -44,6 +61,10 @@ export function throwSealStagingTooLarge(
   const err = new Error(SEAL_STAGING_TOO_LARGE) as SealStagingTooLargeError;
   err.limitMb = sealStagingLimitMb(isPlus, forStaging);
   throw err;
+}
+
+export function throwSealLocalStorageFull(): never {
+  throw new Error(SEAL_LOCAL_STORAGE_FULL);
 }
 
 export const SEAL_STAGING_UNAVAILABLE =

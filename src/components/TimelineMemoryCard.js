@@ -41,7 +41,13 @@ export function TimelineMemoryCard({
       {textFirst && memory?.hasPhotos ? (
         <p style={styles.photoHint}>{t.textFirstPhotoHint}</p>
       ) : null}
-      {deferLargeThumb && memory?.hasPhotos ? (
+      {deferLargeThumb && memory?.hasLargePhotos ? (
+        <div style={styles.thumbRow}>
+          <div style={styles.thumbPlaceholder} aria-hidden />
+          <p style={styles.largePhotoLabel}>{t.largePhotoLabel || "Contains large photo"}</p>
+        </div>
+      ) : null}
+      {deferLargeThumb && memory?.hasPhotos && !memory?.hasLargePhotos ? (
         <p style={styles.photoHint}>{t.largePhotoDeferredHint || t.textFirstPhotoHint}</p>
       ) : null}
       {showThumb ? (
@@ -131,6 +137,13 @@ const styles = {
     height: 88,
     borderRadius: 10,
     background: "rgba(255,255,255,0.06)",
+  },
+  largePhotoLabel: {
+    margin: 0,
+    alignSelf: "center",
+    fontSize: 12,
+    opacity: 0.78,
+    fontStyle: "italic",
   },
   preview: {
     margin: 0,

@@ -674,9 +674,8 @@ export const SEAL_FLOW_EN = {
   sealingLabel: "Sealing your memory...",
   sealNotReadyLine: "Open your memory first.",
   successTitle: "Memory sealed",
-  successMessage: "Sealed on this device.",
-  successMessageLarge:
-    "Sealed on this device. Large files continue in the background.",
+  successMessage: "Sealed locally — large files still processing…",
+  successMessageLarge: "Sealed locally — large files still processing…",
   successViewMemoriesCta: "View Memories",
   successSealAnotherCta: "Seal Another",
   autoSaving: "Saved to Draft Box",

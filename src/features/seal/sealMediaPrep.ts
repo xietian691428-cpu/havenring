@@ -4,8 +4,16 @@ import {
   SEAL_STAGING_MAX_BYTES,
   resolveSealStagingPlaintextMaxBytes,
 } from "@/lib/seal-staging-shared";
-import { throwSealStagingTooLarge } from "./sealUserMessages";
+import {
+  throwSealLocalStorageFull,
+  throwSealStagingTooLarge,
+} from "./sealUserMessages";
 import type { SealDraftFinalizePayload } from "./sealTypes";
+import {
+  isDeviceStorageCriticallyLow,
+  readStorageEstimate,
+  resolveLocalPersistMaxBytes,
+} from "@/lib/storage-quota";
 
 type MediaRow = {
   id?: string;
@@ -134,7 +142,7 @@ export async function buildSealPayloadFromDraft(
     attachments?: unknown[];
     releaseAt?: number;
   } | null,
-  opts: { maxBytes?: number; forServerCommit?: boolean } = {}
+  opts: { maxBytes?: number; forServerCommit?: boolean; skipMediaFit?: boolean } = {}
 ): Promise<SealDraftFinalizePayload | null> {
   if (!item?.id) return null;
   const maxBytes = opts.maxBytes ?? SEAL_LOCAL_MAX_BYTES;
@@ -144,6 +152,15 @@ export async function buildSealPayloadFromDraft(
     story: String(item.story || ""),
     releaseAt: Number(item.releaseAt || 0) || 0,
   };
+
+  if (opts.skipMediaFit) {
+    return {
+      ...base,
+      photo: Array.isArray(item.photo) ? item.photo : [],
+      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+    };
+  }
+
   const mediaBudget = Math.max(
     64 * 1024,
     maxBytes - estimateJsonBytes({ ...base, photo: [], attachments: [] })
@@ -398,9 +415,13 @@ export async function assertDraftFitsSealBudget(
   if (!item?.id) return;
   const isPlus = Boolean(opts.isPlus);
   const forStaging = Boolean(opts.forStaging);
-  const maxBytes = forStaging
-    ? resolveSealStagingPlaintextMaxBytes(isPlus)
-    : SEAL_LOCAL_MAX_BYTES;
+
+  if (!forStaging) {
+    await assertDraftFitsLocalPersistBudget(item, isPlus);
+    return;
+  }
+
+  const maxBytes = resolveSealStagingPlaintextMaxBytes(isPlus);
 
   const payload = await buildSealPayloadFromDraft(item, { maxBytes });
   if (!payload) return;
@@ -419,6 +440,30 @@ export async function assertDraftFitsSealBudget(
 
   if (trimmed || overBudget) {
     throwSealStagingTooLarge(isPlus, forStaging);
+  }
+}
+
+/** Local-first persist — light byte estimate; only fail near device quota or hard cap. */
+export async function assertDraftFitsLocalPersistBudget(
+  item: {
+    title?: string;
+    story?: string;
+    photo?: unknown[];
+    attachments?: unknown[];
+    releaseAt?: number;
+  },
+  _isPlus = false
+): Promise<void> {
+  const maxBytes = await resolveLocalPersistMaxBytes();
+  const status = estimateComposerSealSizeLight(item, { forStaging: false });
+  if (maxBytes <= 0 || status.usedBytes > maxBytes) {
+    throwSealLocalStorageFull();
+  }
+  if (await isDeviceStorageCriticallyLow()) {
+    const est = await readStorageEstimate();
+    if (est && status.usedBytes > est.headroom) {
+      throwSealLocalStorageFull();
+    }
   }
 }
 

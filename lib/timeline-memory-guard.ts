@@ -30,13 +30,12 @@ export function readTimelineMemoryPressure(): MemoryPressure {
   return readMemoryPressure(0);
 }
 
-/** Text-first list when OOM risk is medium/high (iOS) or heap is critical. */
+/** Text-first list when OOM risk is high (iOS) or heap is critical — not elevated alone. */
 export function shouldUseTextFirstTimeline(pressure: MemoryPressure): boolean {
   if (isIosReloadMinimalMode()) return true;
   if (isIosAppBootQuiet()) return true;
   if (isPostSealQuietWindow()) return true;
   if (shouldDisableTimelineThumbsForOomRisk()) return true;
-  if (isIosWebKit() && pressure === "elevated") return true;
   return pressure === "critical";
 }
 

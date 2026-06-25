@@ -51,7 +51,7 @@ check("no pending queue → empty Settings line", () => {
   );
 });
 
-check("large photo (3MB) fits default 50MB relay cap — offline seal retains photo", () => {
+check("large photo (3MB) fits 300MB relay cap — offline seal retains photo", () => {
   const dataUrl = `data:image/jpeg;base64,${"A".repeat(3_000_000)}`;
   const payload = {
     id: "mem-3mb",

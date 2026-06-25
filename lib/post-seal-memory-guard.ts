@@ -49,6 +49,21 @@ export function isPostSealQuietWindow(): boolean {
   return readMarker() != null;
 }
 
+export function getPostSealQuietRemainingMs(): number {
+  const marker = readMarker();
+  if (!marker) return 0;
+  return Math.max(0, POST_SEAL_QUIET_MS - (Date.now() - marker.at));
+}
+
+/** Fire once when the post-seal quiet window ends (thumb decode may resume). */
+export function subscribePostSealQuietEnd(onEnd: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const remaining = getPostSealQuietRemainingMs();
+  if (remaining <= 0) return () => {};
+  const id = window.setTimeout(onEnd, remaining + 50);
+  return () => window.clearTimeout(id);
+}
+
 export function wasPostSealLargeMedia(): boolean {
   return Boolean(readMarker()?.hasLargeMedia);
 }

@@ -86,6 +86,7 @@ const EN = {
   memoryGuardTextFirst: "Tap Open on a memory to view photos — list stays text-only on iPhone.",
   textFirstPhotoHint: "Has photos",
   largePhotoDeferredHint: "Photo loads when memory allows",
+  largePhotoLabel: "Contains large photo",
   loadingMore: "Loading more…",
   syncStatusIdle: "Idle",
   syncLastAttempt: "Last attempt: {time}",

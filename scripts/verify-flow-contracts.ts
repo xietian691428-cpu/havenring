@@ -504,7 +504,7 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   const sealPlatform = readRepoFile("src/features/seal/sealPlatform.ts");
   const rateLimit = readRepoFile("lib/api-rate-limit.ts");
   assert.match(config, /SEAL_STAGING_MAX_BYTES = 50 \* 1024 \* 1024/);
-  assert.match(config, /SEAL_LOCAL_MAX_BYTES = 200 \* 1024 \* 1024/);
+  assert.match(config, /SEAL_LOCAL_MAX_BYTES = 300 \* 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_PLUS_MAX_BYTES/);
   assert.match(config, /SEAL_STAGING_DB_INLINE_MAX_BYTES = 1024 \* 1024/);
   assert.match(config, /SEAL_STAGING_INLINE_POST_MAX_BYTES/);
@@ -514,6 +514,10 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /uploadSealStagingChunked/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealPayloadFromDraft/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsSealBudget/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsLocalPersistBudget/);
+  assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /0\.85/);
+  assert.match(readRepoFile("lib/post-seal-memory-guard.ts"), /subscribePostSealQuietEnd/);
+  assert.match(readRepoFile("src/hooks/useTimelineThumbUrls.js"), /IOS_THUMB_GAP_MS = 400/);
   assert.match(readRepoFile("src/features/seal/sealUserMessages.ts"), /throwSealStagingTooLarge/);
   assert.match(readRepoFile("src/features/seal/sealPrepBundle.ts"), /sealPrepBundle/);
   assert.match(readRepoFile("lib/subscription.ts"), /canSealWithRing: true/);

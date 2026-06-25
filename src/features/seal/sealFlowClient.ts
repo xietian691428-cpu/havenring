@@ -60,10 +60,16 @@ import {
   resolveSealStagingPlaintextMaxBytes,
 } from "@/lib/seal-staging-shared";
 import {
-  assertDraftFitsSealBudget,
+  assertDraftFitsLocalPersistBudget,
   buildSealPayloadFromDraft,
   toServerSealCommitPayload,
 } from "./sealMediaPrep";
+import {
+  createComposerPhotoFromBlob,
+  prepareComposerPhotosForSave,
+  type ComposerPhotoRow,
+} from "@/lib/composer-photo-utils";
+import { isMemoryPhotoRef } from "@/lib/memory-photo-types";
 import {
   clearSealPrepBundle,
   readSealPrepRelay,
@@ -227,11 +233,62 @@ export async function sealPayloadFromDraftItem(
   opts: { forStaging?: boolean; isPlus?: boolean } = {}
 ): Promise<SealDraftFinalizePayload | null> {
   if (!item) return null;
+  const forStaging = Boolean(opts.forStaging);
   return buildSealPayloadFromDraft(item, {
-    maxBytes: opts.forStaging
+    maxBytes: forStaging
       ? resolveSealStagingPlaintextMaxBytes(Boolean(opts.isPlus))
       : SEAL_LOCAL_MAX_BYTES,
+    skipMediaFit: !forStaging,
   });
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl);
+  return res.blob();
+}
+
+/** Blob-first persist path — avoids holding full JSON + base64 in heap during seal. */
+async function resolveSealPersistPhotos(photo: unknown): Promise<unknown> {
+  const rows = Array.isArray(photo) ? photo : photo ? [photo] : [];
+  if (!rows.length) return null;
+
+  const hasRefOnly = rows.every(
+    (row) => row && typeof row === "object" && isMemoryPhotoRef(row)
+  );
+  if (hasRefOnly) return photo;
+
+  const composerRows: ComposerPhotoRow[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const typed = row as ComposerPhotoRow & { dataUrl?: string };
+    if (typed.blob instanceof Blob) {
+      composerRows.push({
+        id: String(typed.id || crypto.randomUUID()),
+        name: typed.name,
+        mimeType: typed.mimeType,
+        size: typed.size,
+        blob: typed.blob,
+      });
+      continue;
+    }
+    if (typeof typed.dataUrl === "string" && typed.dataUrl) {
+      const blob = await dataUrlToBlob(typed.dataUrl);
+      composerRows.push(
+        createComposerPhotoFromBlob(blob, String(typed.id || crypto.randomUUID()))
+      );
+      continue;
+    }
+    if (isMemoryPhotoRef(row)) {
+      return photo;
+    }
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
+  }
+
+  if (!composerRows.length) return photo;
+  const prepared = await prepareComposerPhotosForSave(composerRows);
+  return prepared.length ? prepared : photo;
 }
 
 async function payloadsFromLocalSources(
@@ -310,12 +367,16 @@ async function persistSealedDraftsLocally(
     const stagedPhotos = normalizePhotosForStorage(staged?.photo);
     const localPhotos = normalizePhotosForStorage(localItem?.photo);
     const sourcePhotos = normalizePhotosForStorage(source.photo);
-    const photo =
+    const rawPhoto =
       stagedPhotos && countDisplayablePhotos(stagedPhotos) > 0
         ? stagedPhotos
         : localPhotos && countDisplayablePhotos(localPhotos) > 0
           ? localPhotos
           : sourcePhotos;
+    const photo =
+      localItem?.photo && Array.isArray(localItem.photo) && localItem.photo.length
+        ? await resolveSealPersistPhotos(localItem.photo)
+        : await resolveSealPersistPhotos(rawPhoto);
     const payload = {
       id: source.id || id,
       title: String(source.title || "").trim() || "Untitled memory",
@@ -574,6 +635,9 @@ export async function prepareSealForRingTap(opts: {
 
   const ids = [id];
   const item = await getDraftItem(id);
+  if (!item) {
+    throw new Error(SEAL_DRAFT_NOT_FOUND);
+  }
   const payload = await sealPayloadFromDraftItem(item);
   if (!payload) {
     throw new Error(SEAL_DRAFT_NOT_FOUND);
@@ -584,10 +648,7 @@ export async function prepareSealForRingTap(opts: {
     forceStaging: opts.forceStaging,
   });
 
-  await assertDraftFitsSealBudget(item, {
-    forStaging: strategy.stagingOnPrep,
-    isPlus,
-  });
+  await assertDraftFitsLocalPersistBudget(item, isPlus);
 
   const stagingPayload = await sealPayloadFromDraftItem(item, {
     forStaging: true,

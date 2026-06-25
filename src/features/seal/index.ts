@@ -135,11 +135,15 @@ export {
   SEAL_SESSION_ENDED,
   SEAL_STAGING_OFFLINE,
   SEAL_STAGING_TOO_LARGE,
+  SEAL_LOCAL_STORAGE_FULL,
   formatSealStagingTooLargeEn,
+  formatSealLocalStorageInsufficientEn,
   isSealStagingTooLargeError,
+  isSealLocalStorageFullError,
   sealStagingLimitMb,
 } from "./sealUserMessages";
 export {
+  assertDraftFitsLocalPersistBudget,
   assertDraftFitsSealBudget,
   evaluateComposerSealSize,
   estimateComposerSealSizeLight,

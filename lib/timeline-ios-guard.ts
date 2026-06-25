@@ -27,7 +27,8 @@ export function getTimelineThumbMaxDim(): number {
 
 /** JPEG quality for timeline thumbs (aggressive on mobile / post-seal). */
 export function getTimelineThumbQuality(): number {
-  if (isPostSealQuietWindow() || isMobileMemorySensitive()) return 0.6;
+  if (isPostSealQuietWindow()) return 0.55;
+  if (isMobileMemorySensitive()) return 0.58;
   return 0.72;
 }
 

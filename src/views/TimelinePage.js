@@ -17,8 +17,8 @@ import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
 import { getTimelineVirtualOverscan, shouldUseTimelineVirtualList } from "@/lib/timeline-ios-guard";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
-import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 
 /**
  * Timeline — primary “memory space” view; photo-forward cards on warm canvas.
@@ -233,10 +233,49 @@ export function TimelinePage({
   }, [syncing, pullRefreshing]);
 
   const visibleMemories = orderedFiltered;
+  const [intersectingIds, setIntersectingIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (renderVirtualList || typeof window === "undefined") return undefined;
+    const root = document.querySelector(".haven-app-main-scroll");
+    if (!root) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIntersectingIds((prev) => {
+          const next = new Set(prev);
+          for (const entry of entries) {
+            const id = entry.target.getAttribute("data-memory-id");
+            if (!id) continue;
+            if (entry.isIntersecting) next.add(id);
+            else next.delete(id);
+          }
+          return next;
+        });
+      },
+      { root, rootMargin: "96px 0px", threshold: 0.01 }
+    );
+
+    const nodes = root.querySelectorAll("[data-memory-id]");
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [renderVirtualList, orderedFiltered.length, loading, memoryTextFirst]);
+
   const thumbMemories = useMemo(() => {
-    if (!renderVirtualList) return visibleMemories;
+    if (!renderVirtualList) {
+      if (isIosWebKit()) {
+        return visibleMemories.filter((row) => intersectingIds.has(row.id));
+      }
+      return visibleMemories;
+    }
     return virtualItems.map((row) => orderedFiltered[row.index]).filter(Boolean);
-  }, [renderVirtualList, virtualItems, orderedFiltered, visibleMemories]);
+  }, [
+    renderVirtualList,
+    virtualItems,
+    orderedFiltered,
+    visibleMemories,
+    intersectingIds,
+  ]);
   const visibleThumbKey = useMemo(
     () =>
       thumbMemories
@@ -251,7 +290,6 @@ export function TimelinePage({
         .join("|"),
     [thumbMemories]
   );
-  const postSealQuiet = isPostSealQuietWindow();
   const thumbPaused =
     loading ||
     syncing ||
@@ -457,7 +495,7 @@ export function TimelinePage({
                           memory={memory}
                           thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
                           textFirst={memoryTextFirst}
-                          deferLargeThumb={postSealQuiet || memory.hasLargePhotos}
+                          deferLargeThumb={memory.hasLargePhotos}
                           pinned={pinned}
                           locked={locked}
                           viewerNow={viewerNow}
@@ -481,7 +519,7 @@ export function TimelinePage({
                         memory={memory}
                         thumbUrl={memoryTextFirst ? "" : thumbById[memory.id] || ""}
                         textFirst={memoryTextFirst}
-                        deferLargeThumb={postSealQuiet || memory.hasLargePhotos}
+                        deferLargeThumb={memory.hasLargePhotos}
                         pinned={pinned}
                         locked={locked}
                         viewerNow={viewerNow}

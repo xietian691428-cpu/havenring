@@ -6,6 +6,10 @@ import {
   subscribeIosTimelineScroll,
 } from "@/lib/ios-app-boot";
 import {
+  isPostSealQuietWindow,
+  subscribePostSealQuietEnd,
+} from "@/lib/post-seal-memory-guard";
+import {
   isTimelineMemoryGuardActive,
   readTimelineMemoryPressure,
   shouldUseTextFirstTimeline,
@@ -33,6 +37,10 @@ export function useTimelineMemoryMode() {
       setThumbUnlockTick((n) => n + 1);
       sync();
     });
+    const unsubPostSeal = subscribePostSealQuietEnd(() => {
+      setThumbUnlockTick((n) => n + 1);
+      sync();
+    });
     const root = document.querySelector(".haven-app-main-scroll");
     const onScroll = () => markIosTimelineScrolled();
     root?.addEventListener("scroll", onScroll, { passive: true });
@@ -40,8 +48,19 @@ export function useTimelineMemoryMode() {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibility);
       unsubScroll();
+      unsubPostSeal();
       root?.removeEventListener("scroll", onScroll);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!isPostSealQuietWindow()) return undefined;
+    const id = window.setInterval(() => {
+      if (!isPostSealQuietWindow()) {
+        setThumbUnlockTick((n) => n + 1);
+      }
+    }, 2000);
+    return () => window.clearInterval(id);
   }, []);
 
   const textFirst = shouldUseTextFirstTimeline(pressure);

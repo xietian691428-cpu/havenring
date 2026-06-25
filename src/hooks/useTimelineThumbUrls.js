@@ -4,13 +4,12 @@ import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 import {
   acquireTimelineThumbUrl,
   releaseAllTimelineThumbUrls,
+  releaseTimelineThumbUrl,
   retainTimelineThumbUrls,
 } from "@/lib/timeline-thumb-cache";
 import { getTimelineMemoryThumbBlob } from "../services/localStorageService";
 
-function iosThumbGapMs() {
-  return isPostSealQuietWindow() ? 450 : 200;
-}
+const IOS_THUMB_GAP_MS = 400;
 
 function parseVisibleKey(visibleKey = "") {
   return visibleKey
@@ -57,6 +56,7 @@ function pruneThumbState(prev, keepIds) {
 export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst = false) {
   const [thumbById, setThumbById] = useState({});
   const visibleKeyRef = useRef(visibleKey);
+  const prevVisibleIdsRef = useRef(new Set());
 
   useEffect(() => {
     visibleKeyRef.current = visibleKey;
@@ -67,6 +67,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
     if (blocked) {
       releaseAllTimelineThumbUrls();
       setThumbById({});
+      prevVisibleIdsRef.current = new Set();
       return undefined;
     }
 
@@ -76,6 +77,14 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
         .filter((row) => row.id && row.hasPhotos && !row.hasLargePhotos)
         .map((row) => row.id)
     );
+
+    for (const id of prevVisibleIdsRef.current) {
+      if (!visibleIds.has(id)) {
+        releaseTimelineThumbUrl(id);
+      }
+    }
+    prevVisibleIdsRef.current = visibleIds;
+
     retainTimelineThumbUrls(visibleIds);
     setThumbById((prev) => pruneThumbState(prev, visibleIds));
 
@@ -93,13 +102,17 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
         );
         if (cancelled || !url) continue;
         if (visibleKeyRef.current !== visibleKey) continue;
+        if (!visibleIds.has(row.id)) {
+          releaseTimelineThumbUrl(row.id);
+          continue;
+        }
         setThumbById((prev) => {
           if (!visibleIds.has(row.id)) return prev;
           if (prev[row.id] === url) return prev;
           return { ...prev, [row.id]: url };
         });
         if (isIosWebKit()) {
-          await new Promise((resolve) => window.setTimeout(resolve, iosThumbGapMs()));
+          await new Promise((resolve) => window.setTimeout(resolve, IOS_THUMB_GAP_MS));
         }
       }
     })();
@@ -115,6 +128,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
       if (document.visibilityState === "hidden") {
         releaseAllTimelineThumbUrls();
         setThumbById({});
+        prevVisibleIdsRef.current = new Set();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);

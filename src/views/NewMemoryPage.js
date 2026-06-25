@@ -25,11 +25,12 @@ import {
   listenForSealRingTapOnce,
   evaluateComposerSealSize,
   estimateComposerSealSizeLight,
-  getSealStrategy,
   prepareSealForRingTap,
   readComposerSnapshotTextOnly,
   SEAL_STAGING_TOO_LARGE,
+  SEAL_LOCAL_STORAGE_FULL,
   isSealStagingTooLargeError,
+  isSealLocalStorageFullError,
   subscribeSealBroadcast,
   writeComposerSnapshotTextOnly,
 } from "../features/seal";
@@ -455,7 +456,7 @@ export function NewMemoryPage({
     const timer = window.setTimeout(() => {
       void (async () => {
         const isPlus = userEntitlements?.tier === "plus";
-        const forStaging = getSealStrategy(platform).stagingOnPrep;
+        const forStaging = false;
         const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
         const draft = {
           title: title.trim(),
@@ -873,6 +874,12 @@ export function NewMemoryPage({
   }
 
   function resolveSealLimitMessage(error) {
+    if (isSealLocalStorageFullError(error)) {
+      return pageCopy.sealLocalStorageInsufficient || t.sealLocalStorageInsufficient;
+    }
+    if (error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL) {
+      return pageCopy.sealLocalStorageInsufficient || t.sealLocalStorageInsufficient;
+    }
     if (isSealStagingTooLargeError(error)) {
       const template = pageCopy.sealStagingTooLarge || t.sealStagingTooLarge;
       return template.replace("{mb}", String(error.limitMb));
@@ -886,6 +893,12 @@ export function NewMemoryPage({
   }
 
   function resolveSealErrorDialogTitle(error) {
+    if (
+      isSealLocalStorageFullError(error) ||
+      (error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL)
+    ) {
+      return pageCopy.sealLocalStorageErrorTitle || t.sealLocalStorageErrorTitle;
+    }
     if (
       isSealStagingTooLargeError(error) ||
       (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE)

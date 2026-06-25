@@ -30,6 +30,7 @@ import { warmTimelineMediaFromDataUrl } from "@/lib/timeline-thumb-cache";
 import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
 import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { logStorageEstimate } from "@/lib/storage-quota";
 import type { TimelineMemoryPage, TimelineMemorySummary } from "@/lib/timeline-memory-types";
 import {
   isPreparedComposerPhoto,
@@ -496,7 +497,16 @@ export async function warnIfLocalStorageTight(): Promise<string | null> {
     const est = await navigator.storage.estimate();
     const usage = Number(est.usage || 0);
     const quota = Number(est.quota || 0);
-    if (!quota || usage / quota < 0.82) return null;
+    const ratio = quota ? usage / quota : 0;
+    if (!quota || ratio < 0.85) return null;
+    if (typeof console !== "undefined") {
+      console.log("[haven-ring] local storage tight", {
+        usageMb: Math.round(usage / (1024 * 1024)),
+        quotaMb: Math.round(quota / (1024 * 1024)),
+        headroomMb: Math.round((quota - usage) / (1024 * 1024)),
+        usageRatio: Math.round(ratio * 1000) / 1000,
+      });
+    }
     if (typeof sessionStorage !== "undefined") {
       sessionStorage.setItem(STORAGE_KEYS.localStorageQuotaWarn, "1");
     }
@@ -538,7 +548,7 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
       const cached = await readPersistedTimelineMedia(memoryId, updatedAt, "thumb");
       if (cached) return cached;
 
-      if (hasLargePhotos && (isPostSealQuietWindow() || isIosWebKit())) {
+      if (hasLargePhotos && isPostSealQuietWindow()) {
         return null;
       }
 
@@ -720,6 +730,7 @@ export async function createMemory(
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
+    logStorageEstimate("createMemory");
     void warnIfLocalStorageTight();
     return {
       id: memory.id,
@@ -801,6 +812,7 @@ export async function saveMemory(
     void scheduleTimelineThumbWarm(memory.id, memory.updatedAt, memory.photo);
     scheduleLegacyPhotoBlobMigration();
     void touchOomRiskSnapshot();
+    logStorageEstimate("saveMemory");
     void warnIfLocalStorageTight();
     return { id: memory.id, updatedAt: memory.updatedAt };
   } finally {

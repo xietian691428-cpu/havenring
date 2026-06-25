@@ -170,6 +170,9 @@ const EN = {
   sealStagingErrorTitle: "Memory too large to seal",
   sealStagingTooLarge:
     "This memory is too large to seal (limit: {mb} MB). Remove a video, file, or some photos to shrink it, then try again.",
+  sealLocalStorageErrorTitle: "Not enough local storage",
+  sealLocalStorageInsufficient:
+    "Not enough local storage — try removing older memories or saving in smaller parts.",
   sealSizeMeterOk: "About {used} MB of {limit} MB for ring seal.",
   sealSizeMeterOver:
     "About {used} MB — over the {limit} MB ring seal limit. Remove a video, file, or some photos.",
