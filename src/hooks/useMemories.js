@@ -19,7 +19,11 @@ import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
 import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
 import { restoreCloudBackupsQuietly } from "../services/cloudBackupService";
-import { runDeepManifestSync, runLightManifestSync } from "../services/lightSyncService";
+import {
+  runDeepManifestSync,
+  runLightManifestSync,
+  runPullRefreshSync,
+} from "../services/lightSyncService";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
@@ -580,18 +584,24 @@ export function useMemories(options = {}) {
     return runner;
   }, [runSync, refresh]);
 
-  const runLightSync = useCallback(async () => {
+  const runLightSync = useCallback(async (opts = {}) => {
     if (syncInFlightRef.current) {
       return syncInFlightRef.current;
     }
+    const pullRefresh = Boolean(opts.pullRefresh);
     const runner = runTimelineHeavyTask(async () => {
       setSyncing(true);
       setSyncMeta((prev) => ({ ...prev, lastAttemptAt: Date.now(), nextRetryAt: 0 }));
       try {
         releaseAllTimelineThumbUrls();
-        const outcome = await runLightManifestSync();
+        const outcome = pullRefresh
+          ? await runPullRefreshSync()
+          : await runLightManifestSync();
         setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
         await refresh({ force: true });
+        if (isIosWebKit() && pullRefresh) {
+          await delay(500);
+        }
         if (outcome?.ok && !(outcome?.issues || []).length) {
           setSyncMeta((prev) => ({
             ...prev,

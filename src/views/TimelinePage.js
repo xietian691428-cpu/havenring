@@ -223,7 +223,7 @@ export function TimelinePage({
     pullDistance,
   } = usePullToRefresh({
     onRefresh: handlePullRefresh,
-    disabled: loading,
+    disabled: loading || syncing || pullSyncActive,
   });
 
   useEffect(() => {

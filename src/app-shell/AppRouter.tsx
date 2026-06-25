@@ -281,17 +281,19 @@ function AppRouterInner({
   }, [route.name, route.memoryId]);
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
   const handleTimelinePullRefresh = useCallback(async () => {
-    await refresh({ force: true });
-    if (!shouldAllowTimelinePullRefresh()) return;
+    if (!shouldAllowTimelinePullRefresh()) {
+      await refresh({ force: true });
+      return;
+    }
     try {
       await Promise.race([
-        syncLightNow(),
+        syncLightNow({ pullRefresh: true }),
         new Promise((_, reject) => {
           window.setTimeout(() => reject(new Error("pull_sync_timeout")), 12_000);
         }),
       ]);
     } catch {
-      /* local refresh already ran */
+      await refresh({ force: true });
     }
   }, [refresh, syncLightNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);

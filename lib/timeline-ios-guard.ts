@@ -66,7 +66,7 @@ export function getTimelinePersistedThumbMax(): number {
 
 /** Min ms between pull-to-refresh sync on mobile WebKit. */
 export function getTimelinePullRefreshCooldownMs(): number {
-  return isMobileMemorySensitive() ? 5000 : 1500;
+  return isIosWebKit() ? 8000 : isMobileMemorySensitive() ? 5000 : 1500;
 }
 
 /** iOS memory pressure poll interval (ms). */

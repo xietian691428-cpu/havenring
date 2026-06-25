@@ -19,6 +19,7 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
   const busyRef = useRef(false);
   const lastRefreshAtRef = useRef(0);
   const pullDistanceRef = useRef(0);
+  const pendingPullRafRef = useRef(0);
   const onRefreshRef = useRef(onRefresh);
 
   useEffect(() => {
@@ -31,7 +32,20 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
     trackingRef.current = false;
     verticalIntentRef.current = false;
     pullDistanceRef.current = 0;
+    if (pendingPullRafRef.current) {
+      window.cancelAnimationFrame(pendingPullRafRef.current);
+      pendingPullRafRef.current = 0;
+    }
     setPullDistance(0);
+  }, []);
+
+  const schedulePullDistance = useCallback((next) => {
+    pullDistanceRef.current = next;
+    if (pendingPullRafRef.current) return;
+    pendingPullRafRef.current = window.requestAnimationFrame(() => {
+      pendingPullRafRef.current = 0;
+      setPullDistance(pullDistanceRef.current);
+    });
   }, []);
 
   useEffect(() => {
@@ -76,13 +90,10 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
       if (!verticalIntentRef.current) return;
       const delta = deltaY;
       if (delta <= 0) {
-        pullDistanceRef.current = 0;
-        setPullDistance(0);
+        schedulePullDistance(0);
         return;
       }
-      const next = Math.min(delta, MAX_PULL_PX);
-      pullDistanceRef.current = next;
-      setPullDistance(next);
+      schedulePullDistance(Math.min(delta, MAX_PULL_PX));
     }
 
     async function onTouchEnd() {
@@ -119,8 +130,12 @@ export function usePullToRefresh({ onRefresh, disabled = false }) {
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchEnd);
+      if (pendingPullRafRef.current) {
+        window.cancelAnimationFrame(pendingPullRafRef.current);
+        pendingPullRafRef.current = 0;
+      }
     };
-  }, [disabled, reset]);
+  }, [disabled, reset, schedulePullDistance]);
 
   const active = refreshing || pullDistance > 8;
   const progress = Math.min(1, pullDistance / PULL_THRESHOLD_PX);

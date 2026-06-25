@@ -296,10 +296,10 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/ios-reload-guard.ts"), /isIosReloadMinimalMode/);
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
-    /handleTimelinePullRefresh[\s\S]*?await refresh\(\{ force: true \}\)[\s\S]*?syncLightNow/
+    /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v14/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v15/);
   assert.match(readRepoFile("public/sw.js"), /skipWaiting/);
   assert.match(readRepoFile("app/layout.tsx"), /fonts-inter/);
   assert.match(readRepoFile("app/layout.tsx"), /ios-font-minimal/);
@@ -369,7 +369,8 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/views/NewMemoryPage.js"), /compressImageFile/);
   assert.match(readRepoFile("src/views/TimelinePage.js"), /useVirtualizer/);
   assert.match(readRepoFile("src/services/lightSyncService.js"), /runLightManifestSync/);
-  assert.match(readRepoFile("src/hooks/useMemories.js"), /syncLightNow/);
+  assert.match(readRepoFile("src/services/lightSyncService.js"), /runPullRefreshSync/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /runPullRefreshSync/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /syncDeepNow/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /getTimelineMemorySummaries/);
   assert.match(readRepoFile("lib/timeline-thumb-cache.ts"), /revokeObjectURL/);
