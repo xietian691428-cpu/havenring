@@ -20,7 +20,7 @@ export function StartPageSkeleton() {
           Haven
         </p>
         <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.75 }}>
-          Preparing ring flow…
+          Opening Haven…
         </p>
       </div>
     </main>

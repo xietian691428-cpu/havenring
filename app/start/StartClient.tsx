@@ -254,7 +254,29 @@ export default function StartClient() {
     if (claim) return;
     deferEntryWork(
       () => {
-        navigateToApp({ replace: true });
+        void (async () => {
+          const supabase = getSupabaseBrowserClient();
+          try {
+            await withTimeout(
+              supabase.auth.initialize(),
+              NFC_FLOW_TIMING.sdmResolveAuthTimeoutMs,
+              "Sign-in check timed out."
+            );
+          } catch {
+            /* offline */
+          }
+          const { data } = await withTimeout(
+            supabase.auth.getSession(),
+            NFC_FLOW_TIMING.sdmResolveAuthTimeoutMs,
+            "Sign-in check timed out."
+          );
+          if (isPermanentSupabaseSession(data.session ?? null)) {
+            navigateToApp({ replace: true });
+            return;
+          }
+          const next = `${window.location.pathname}${window.location.search}`;
+          window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+        })();
       },
       { timeout: isLowMemoryEntryDevice() ? 900 : 300 }
     );

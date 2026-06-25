@@ -7,7 +7,8 @@
 //   2. Provide an offline fallback for the shell, so the user can still open
 //      the input screen without network — moments simply can't be saved.
 
-const SHELL_CACHE = "haven-shell-v16";
+const SHELL_CACHE = "haven-shell-v17";
+const NETWORK_TIMEOUT_MS = 12_000;
 const SHELL_ASSETS = ["/"];
 
 self.addEventListener("install", (event) => {
@@ -45,20 +46,35 @@ self.addEventListener("fetch", (event) => {
   //   - the NFC seal route (must always hit the server)
   //   - any cross-origin request (Supabase, fonts, etc.)
   //   - the service worker file itself
+  // Never intercept auth / NFC entry — ring taps must not hang behind SW network-first.
   if (
     url.origin !== self.location.origin ||
     url.pathname.startsWith("/seal/") ||
+    url.pathname.startsWith("/start") ||
+    url.pathname.startsWith("/login") ||
+    url.pathname.startsWith("/app") ||
+    url.pathname.startsWith("/api/") ||
     url.pathname === "/sw.js" ||
     url.pathname === "/manifest.webmanifest"
   ) {
     return;
   }
 
-  // Network-first for the app shell, falling back to cache when offline.
+  async function fetchWithTimeout(request) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+    try {
+      return await fetch(request, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Network-first for other shell routes; time out so Safari does not spin forever.
   event.respondWith(
     (async () => {
       try {
-        const fresh = await fetch(req);
+        const fresh = await fetchWithTimeout(req);
         if (fresh && fresh.ok && req.destination === "document") {
           const cache = await caches.open(SHELL_CACHE);
           cache.put(req, fresh.clone());

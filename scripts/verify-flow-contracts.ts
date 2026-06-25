@@ -299,7 +299,10 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v16/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v17/);
+  assert.match(readRepoFile("public/sw.js"), /pathname\.startsWith\("\/start"\)/);
+  assert.match(readRepoFile("src/hooks/useSupabaseSession.js"), /withTimeout/);
+  assert.match(readRepoFile("app/start/StartClient.tsx"), /login\?next=/);
   assert.match(readRepoFile("public/sw.js"), /skipWaiting/);
   assert.match(readRepoFile("app/layout.tsx"), /fonts-inter/);
   assert.match(readRepoFile("app/layout.tsx"), /ios-font-minimal/);

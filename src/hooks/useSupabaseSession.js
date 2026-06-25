@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { withTimeout } from "@/lib/nfc-flow-timing";
+
+const AUTH_INIT_TIMEOUT_MS = 8_000;
 
 /**
  * Tracks Supabase auth session in the PWA shell (for silent NFC login UX).
@@ -17,15 +20,27 @@ export function useSupabaseSession() {
 
     void (async () => {
       try {
-        await sb.auth.initialize();
+        await withTimeout(
+          sb.auth.initialize(),
+          AUTH_INIT_TIMEOUT_MS,
+          "Auth init timed out"
+        );
       } catch {
         /* offline / blocked — still read any persisted session */
       }
       if (cancelled) return;
-      const { data } = await sb.auth.getSession();
-      if (!cancelled) {
-        setSession(data.session ?? null);
-        setLoading(false);
+      try {
+        const { data } = await withTimeout(
+          sb.auth.getSession(),
+          AUTH_INIT_TIMEOUT_MS,
+          "Auth session timed out"
+        );
+        if (!cancelled) {
+          setSession(data.session ?? null);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
       }
     })();
 

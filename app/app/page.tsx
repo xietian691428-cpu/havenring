@@ -31,6 +31,15 @@ export default function AppHomePage() {
     window.location.replace("/login?next=%2Fapp");
   }, [loading, ready]);
 
+  useEffect(() => {
+    if (!loading || ready) return undefined;
+    const timer = window.setTimeout(() => {
+      captureAppDeepLinkForPostLogin();
+      window.location.replace("/login?next=%2Fapp");
+    }, 10_000);
+    return () => window.clearTimeout(timer);
+  }, [loading, ready]);
+
   if (loading || !ready) {
     return (
       <main

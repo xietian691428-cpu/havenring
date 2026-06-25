@@ -10,6 +10,7 @@ import {
   scrubSupabaseAuthArtifactsFromEntryPages,
 } from "@/lib/appAuthGate";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { withTimeout } from "@/lib/nfc-flow-timing";
 import { APP_ENTRY_PATH, MARKETING_LOGIN_PATH } from "@/lib/site";
 
 function readSafeNextPath(): string {
@@ -70,10 +71,18 @@ export function MarketingLoginClient() {
     deferEntryWork(() => {
       void (async () => {
         try {
-          await supabase.auth.initialize();
+          await withTimeout(
+            supabase.auth.initialize(),
+            8_000,
+            "Auth init timed out"
+          );
           if (cancelled) return;
           scrubSupabaseAuthArtifactsFromEntryPages();
-          const { data } = await supabase.auth.getSession();
+          const { data } = await withTimeout(
+            supabase.auth.getSession(),
+            8_000,
+            "Auth session timed out"
+          );
           if (!cancelled) setSession(data.session ?? null);
         } catch {
           if (!cancelled) setNotice("Sign-in failed. Please try again.");
