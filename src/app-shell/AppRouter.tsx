@@ -281,9 +281,19 @@ function AppRouterInner({
   }, [route.name, route.memoryId]);
   const flowPrimaryUi = useMemo(() => getFlowPrimaryUi(flowState), [flowState]);
   const handleTimelinePullRefresh = useCallback(async () => {
+    await refresh({ force: true });
     if (!shouldAllowTimelinePullRefresh()) return;
-    await syncLightNow();
-  }, [syncLightNow]);
+    try {
+      await Promise.race([
+        syncLightNow(),
+        new Promise((_, reject) => {
+          window.setTimeout(() => reject(new Error("pull_sync_timeout")), 12_000);
+        }),
+      ]);
+    } catch {
+      /* local refresh already ran */
+    }
+  }, [refresh, syncLightNow]);
   const enforceSingleFlowCard = Boolean(flowPrimaryUi?.enforceSingle);
 
   const flowPrimaryAction = useCallback(
@@ -467,6 +477,12 @@ function AppRouterInner({
     } finally {
       setQuickSigningIn(false);
     }
+  }
+
+  function openTimelineFromComposer() {
+    markTabTimelineRefreshClaimed();
+    navigateTo({ name: "timeline", memoryId: null }, "back");
+    void refresh({ force: true });
   }
 
   async function openMemoryFromRingParams(memoryId: string | null | undefined) {
@@ -850,8 +866,7 @@ function AppRouterInner({
                 : null
             }
             initialDraftId={route.fromDraftId || ""}
-            onBack={() => navigateTo({ name: "timeline", memoryId: null }, "back")}
-            onSaveMemory={persistComposerMemory}
+            onBack={openTimelineFromComposer}
             onSaved={async () => {
               await refresh({ force: true });
             }}

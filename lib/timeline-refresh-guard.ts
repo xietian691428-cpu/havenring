@@ -6,6 +6,9 @@ export const TIMELINE_REFRESH_COOLDOWN_MS = 3_000;
 /** Skip mount refresh when tab navigation claimed refresh within this window. */
 export const TIMELINE_TAB_MOUNT_SKIP_MS = 8_000;
 
+/** Min ms since last refresh before mount may auto-refresh again (iOS re-entry). */
+export const TIMELINE_MOUNT_REFRESH_MIN_AGE_MS = 8_000;
+
 let tabRefreshClaimedAt = 0;
 
 export function markTabTimelineRefreshClaimed(): void {
@@ -35,11 +38,9 @@ function writeSessionFlag(key: string): void {
   }
 }
 
-/** First automatic mount refresh only — prevents re-entry refresh loops on iOS. */
-export function claimBootTimelineRefresh(): boolean {
-  if (readSessionFlag(STORAGE_KEYS.timelineBootRefresh)) return false;
-  writeSessionFlag(STORAGE_KEYS.timelineBootRefresh);
-  return true;
+/** Skip duplicate mount refresh soon after a successful load (not for the whole session). */
+export function shouldRunDeferredMountRefresh(): boolean {
+  return getTimelineRefreshAgeMs() >= TIMELINE_MOUNT_REFRESH_MIN_AGE_MS;
 }
 
 /** First automatic background sync only — merges session + mount-sync triggers. */

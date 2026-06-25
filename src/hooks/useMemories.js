@@ -35,12 +35,13 @@ import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 import { runTimelineHeavyTask } from "@/lib/timeline-heavy-lock";
 import {
   claimBootBackgroundSync,
-  claimBootTimelineRefresh,
   getTimelineRefreshAgeMs,
   markTimelineRefreshCompleted,
   shouldAllowTimelineRefresh,
+  shouldRunDeferredMountRefresh,
   shouldSkipMountTimelineRefresh,
 } from "@/lib/timeline-refresh-guard";
+import { wasSealRecentlyCompleted } from "../features/seal/sealCrossTab";
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -632,12 +633,17 @@ export function useMemories(options = {}) {
   useEffect(() => {
     if (!timelineLifecycleActive) return undefined;
     if (shouldSkipMountTimelineRefresh()) return undefined;
-    if (!claimBootTimelineRefresh()) return undefined;
+    const afterSeal = wasSealRecentlyCompleted();
+    if (!shouldRunDeferredMountRefresh() && !afterSeal) return undefined;
     const run = () => {
-      void refresh();
+      void refresh(afterSeal ? { force: true } : undefined);
     };
     deferEntryWork(run, {
-      timeout: isLowMemoryEntryDevice() ? IOS_BOOT_REFRESH_DELAY_MS : 500,
+      timeout: afterSeal
+        ? 300
+        : isLowMemoryEntryDevice()
+          ? IOS_BOOT_REFRESH_DELAY_MS
+          : 500,
     });
   }, [timelineLifecycleActive, refresh]);
 

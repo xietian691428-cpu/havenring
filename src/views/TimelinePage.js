@@ -198,12 +198,16 @@ export function TimelinePage({
 
   const handlePullRefresh = useCallback(async () => {
     setPullSyncActive(true);
-    if (typeof onPullRefresh === "function") {
-      await onPullRefresh();
-      return;
-    }
-    if (typeof onResyncNow === "function") {
-      await onResyncNow();
+    try {
+      if (typeof onPullRefresh === "function") {
+        await onPullRefresh();
+        return;
+      }
+      if (typeof onResyncNow === "function") {
+        await onResyncNow();
+      }
+    } finally {
+      setPullSyncActive(false);
     }
   }, [onPullRefresh, onResyncNow]);
 

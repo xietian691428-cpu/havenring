@@ -295,7 +295,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/ios-reload-guard.ts"), /isIosReloadMinimalMode/);
   assert.match(
     readRepoFile("src/app-shell/AppRouter.tsx"),
-    /handleTimelinePullRefresh = useCallback\(async \(\) => \{[\s\S]*?await syncLightNow\(\)/
+    /handleTimelinePullRefresh[\s\S]*?await refresh\(\{ force: true \}\)[\s\S]*?syncLightNow/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
   assert.match(readRepoFile("public/sw.js"), /haven-shell-v13/);
@@ -307,11 +307,11 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /SettingsPage = dynamic/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /ExplorePage = dynamic/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /refreshInFlightRef/);
-  assert.match(readRepoFile("src/hooks/useMemories.js"), /claimBootTimelineRefresh/);
+  assert.match(readRepoFile("src/hooks/useMemories.js"), /wasSealRecentlyCompleted/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /shouldSyncTriggerRefresh/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /claimBootBackgroundSync/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /syncInFlightRef/);
-  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /claimBootTimelineRefresh/);
+  assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /shouldRunDeferredMountRefresh/);
   assert.match(readRepoFile("lib/timeline-refresh-guard.ts"), /claimBootBackgroundSync/);
   assert.match(readRepoFile("lib/timeline-heavy-lock.ts"), /runTimelineHeavyTask/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_SEAL_THUMB_QUIET_MS/);
@@ -324,7 +324,10 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     readRepoFile("src/app-shell/AppRouter.tsx"),
     /onTabTimeline:[\s\S]*?navigateTo\(\{ name: "timeline"[\s\S]*?void refresh\(\)/
   );
-  assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /tabTimelineBusyRef/);
+  assert.match(
+    readRepoFile("src/app-shell/AppRouter.tsx"),
+    /handleTimelinePullRefresh[\s\S]*?await refresh\(\{ force: true \}\)/
+  );
   assert.match(readRepoFile("src/hooks/useMemories.js"), /autoSyncQueuedRef/);
   assert.match(readRepoFile("src/hooks/useMemories.js"), /queueBackgroundSync/);
   assert.match(readRepoFile("lib/ios-app-boot.ts"), /IOS_PULL_REFRESH_MIN_BOOT_MS = 20_000/);

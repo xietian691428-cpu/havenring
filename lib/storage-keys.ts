@@ -26,8 +26,6 @@ export const STORAGE_KEYS = {
   oomRiskSnapshot: "haven.ios.oom_risk_snapshot.v1",
   /** Last timeline list refresh (session-scoped cooldown). */
   timelineLastRefresh: "haven.timeline.last_refresh.v1",
-  /** One automatic timeline refresh per app session (iOS boot). */
-  timelineBootRefresh: "haven.timeline.boot_refresh.v1",
   /** One automatic background sync per app session (iOS boot). */
   timelineBootSync: "haven.timeline.boot_sync.v1",
   sealNfcTapRelay: "haven.seal.last_nfc_tap.v1",
