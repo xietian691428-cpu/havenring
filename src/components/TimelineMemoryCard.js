@@ -15,9 +15,9 @@ export function TimelineMemoryCard({
 }) {
   const sealed = Boolean(memory?.is_sealed || memory?.ring_id);
   const showThumb =
-    !textFirst &&
-    !deferLargeThumb &&
-    (Boolean(thumbUrl) || memory?.hasPhotos !== false);
+    !textFirst && (Boolean(thumbUrl) || (!deferLargeThumb && memory?.hasPhotos !== false));
+  const showLargePlaceholder =
+    deferLargeThumb && memory?.hasLargePhotos && !thumbUrl && !textFirst;
 
   return (
     <article style={styles.card}>
@@ -41,13 +41,13 @@ export function TimelineMemoryCard({
       {textFirst && memory?.hasPhotos ? (
         <p style={styles.photoHint}>{t.textFirstPhotoHint}</p>
       ) : null}
-      {deferLargeThumb && memory?.hasLargePhotos ? (
+      {showLargePlaceholder ? (
         <div style={styles.thumbRow}>
           <div style={styles.thumbPlaceholder} aria-hidden />
           <p style={styles.largePhotoLabel}>{t.largePhotoLabel || "Contains large photo"}</p>
         </div>
       ) : null}
-      {deferLargeThumb && memory?.hasPhotos && !memory?.hasLargePhotos ? (
+      {deferLargeThumb && memory?.hasPhotos && !memory?.hasLargePhotos && !thumbUrl ? (
         <p style={styles.photoHint}>{t.largePhotoDeferredHint || t.textFirstPhotoHint}</p>
       ) : null}
       {showThumb ? (

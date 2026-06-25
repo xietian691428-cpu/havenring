@@ -6,7 +6,6 @@ import {
   type MemoryPressure,
 } from "@/lib/composer-memory-guard";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
-import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 import { isIosReloadMinimalMode } from "@/lib/ios-reload-guard";
 import {
   estimateOomRisk,
@@ -30,10 +29,9 @@ export function readTimelineMemoryPressure(): MemoryPressure {
   return readMemoryPressure(0);
 }
 
-/** Text-first list when OOM risk is high (iOS) or heap is critical — not elevated alone. */
+/** Text-first only during post-seal quiet, reload recovery, or critical OOM. */
 export function shouldUseTextFirstTimeline(pressure: MemoryPressure): boolean {
   if (isIosReloadMinimalMode()) return true;
-  if (isIosAppBootQuiet()) return true;
   if (isPostSealQuietWindow()) return true;
   if (shouldDisableTimelineThumbsForOomRisk()) return true;
   return pressure === "critical";

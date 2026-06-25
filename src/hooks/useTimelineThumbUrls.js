@@ -73,9 +73,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
 
     const rows = parseVisibleKey(visibleKey);
     const visibleIds = new Set(
-      rows
-        .filter((row) => row.id && row.hasPhotos && !row.hasLargePhotos)
-        .map((row) => row.id)
+      rows.filter((row) => row.id && row.hasPhotos).map((row) => row.id)
     );
 
     for (const id of prevVisibleIdsRef.current) {
@@ -92,7 +90,7 @@ export function useTimelineThumbUrls(visibleKey = "", paused = false, textFirst 
     void (async () => {
       for (const row of rows) {
         if (cancelled || !row.id || !row.hasPhotos) continue;
-        if (row.hasLargePhotos || isPostSealQuietWindow()) continue;
+        if (isPostSealQuietWindow()) continue;
         if (!visibleIds.has(row.id)) continue;
 
         const url = await acquireTimelineThumbUrl(

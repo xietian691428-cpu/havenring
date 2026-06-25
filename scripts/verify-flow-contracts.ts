@@ -428,7 +428,7 @@ check("cloud backup 50GB quota compress and chunk upload", () => {
   assert.match(backup, /encryptCloudBackupPlaintext/);
   assert.match(backup, /restoreFromCloud/);
   assert.match(readRepoFile("lib/photo-blob-migration.ts"), /getAllKeys/);
-  assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /isIosAppBootQuiet/);
+  assert.match(readRepoFile("lib/timeline-memory-guard.ts"), /isPostSealQuietWindow/);
   assert.match(readRepoFile("src/services/cloudBackupService.js"), /IOS_RESTORE_BATCH_SIZE = 1/);
   assert.match(readRepoFile("src/services/cloudBackupService.js"), /restoreFromCloudDeep/);
   assert.match(readRepoFile("src/services/cloudBackupService.js"), /peekCloudBackupManifest/);

@@ -16,7 +16,7 @@ import { useTimelineMemoryMode } from "../hooks/useTimelineMemoryMode";
 import { useTimelineThumbUrls } from "../hooks/useTimelineThumbUrls";
 import { TimelineMemoryCard } from "../components/TimelineMemoryCard";
 import { TimelinePullRefreshBar } from "../components/TimelinePullRefreshBar";
-import { getTimelineVirtualOverscan, shouldUseTimelineVirtualList } from "@/lib/timeline-ios-guard";
+import { getTimelineVirtualOverscan, getTimelinePageSize, shouldUseTimelineVirtualList } from "@/lib/timeline-ios-guard";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { isIosAppBootQuiet } from "@/lib/ios-app-boot";
 
@@ -234,14 +234,18 @@ export function TimelinePage({
 
   const visibleMemories = orderedFiltered;
   const [intersectingIds, setIntersectingIds] = useState(() => new Set());
+  const [intersectionReady, setIntersectionReady] = useState(false);
 
   useEffect(() => {
     if (renderVirtualList || typeof window === "undefined") return undefined;
     const root = document.querySelector(".haven-app-main-scroll");
     if (!root) return undefined;
 
+    let cancelled = false;
     const observer = new IntersectionObserver(
       (entries) => {
+        if (cancelled) return;
+        setIntersectionReady(true);
         setIntersectingIds((prev) => {
           const next = new Set(prev);
           for (const entry of entries) {
@@ -253,20 +257,36 @@ export function TimelinePage({
           return next;
         });
       },
-      { root, rootMargin: "96px 0px", threshold: 0.01 }
+      { root, rootMargin: "120px 0px", threshold: 0.01 }
     );
 
-    const nodes = root.querySelectorAll("[data-memory-id]");
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
+    const observeNodes = () => {
+      const nodes = root.querySelectorAll("[data-memory-id]");
+      nodes.forEach((node) => observer.observe(node));
+    };
+
+    observeNodes();
+    const raf = window.requestAnimationFrame(() => {
+      observeNodes();
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, [renderVirtualList, orderedFiltered.length, loading, memoryTextFirst]);
 
   const thumbMemories = useMemo(() => {
     if (!renderVirtualList) {
-      if (isIosWebKit()) {
+      if (!isIosWebKit()) return visibleMemories;
+      if (intersectingIds.size > 0) {
         return visibleMemories.filter((row) => intersectingIds.has(row.id));
       }
-      return visibleMemories;
+      if (!intersectionReady && visibleMemories.length > 0) {
+        return visibleMemories.slice(0, getTimelinePageSize());
+      }
+      return visibleMemories.slice(0, getTimelinePageSize());
     }
     return virtualItems.map((row) => orderedFiltered[row.index]).filter(Boolean);
   }, [
@@ -275,6 +295,7 @@ export function TimelinePage({
     orderedFiltered,
     visibleMemories,
     intersectingIds,
+    intersectionReady,
   ]);
   const visibleThumbKey = useMemo(
     () =>

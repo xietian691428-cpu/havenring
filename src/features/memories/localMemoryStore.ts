@@ -18,6 +18,7 @@ import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { runTimelineDecodeTask } from "@/lib/timeline-decode-queue";
 import {
   dataUrlToTimelineMediaBlobs,
+  dataUrlToTimelineThumbBlob,
   firstPhotoDataUrl,
 } from "@/lib/timeline-media-decode";
 import {
@@ -410,16 +411,40 @@ async function decryptSummariesForTimeline(
   return Promise.all(records.map((row) => decryptRecordSummary(row)));
 }
 
+async function resolveTimelineThumbFromPhotoRef(
+  photoId: string,
+  memoryId: string,
+  updatedAt: number
+): Promise<Blob | null> {
+  const existing = await getPhotoBlob(photoId, "thumb");
+  if (existing) return existing;
+
+  const full = await getPhotoBlob(photoId, "full");
+  if (!full || typeof URL === "undefined") return null;
+
+  const previewUrl = URL.createObjectURL(full);
+  try {
+    const generated = await dataUrlToTimelineThumbBlob(previewUrl);
+    if (generated) {
+      const medium = (await getPhotoBlob(photoId, "medium")) ?? generated;
+      void writePersistedTimelineMedia(memoryId, updatedAt, generated, medium);
+    }
+    return generated;
+  } finally {
+    URL.revokeObjectURL(previewUrl);
+  }
+}
+
 async function scheduleTimelineThumbWarm(
   memoryId: string,
   memoryUpdatedAt: number,
   photo: unknown
 ): Promise<void> {
-  if (isPostSealQuietWindow() || photoPayloadHasLargeBlob(photo)) return;
+  if (isPostSealQuietWindow()) return;
   const ref = firstPhotoRef(photo);
   if (ref?.id) {
     try {
-      const thumb = await getPhotoBlob(ref.id, "thumb");
+      const thumb = await resolveTimelineThumbFromPhotoRef(ref.id, memoryId, memoryUpdatedAt);
       if (!thumb) return;
       const medium = (await getPhotoBlob(ref.id, "medium")) ?? thumb;
       await writePersistedTimelineMedia(memoryId, memoryUpdatedAt, thumb, medium);
@@ -430,7 +455,7 @@ async function scheduleTimelineThumbWarm(
   }
   const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
   if (!dataUrl) return;
-  if (isIosWebKit()) return;
+  if (isIosWebKit() && photoPayloadHasLargeBlob(photo)) return;
   try {
     await warmTimelineMediaFromDataUrl(memoryId, memoryUpdatedAt, dataUrl);
   } catch {
@@ -555,15 +580,11 @@ export async function getTimelineMemoryThumbBlob(memoryId: string): Promise<Blob
       const photo = await localCrypto.decryptJson(record.photoEnc);
       const ref = firstPhotoRef(photo);
       if (ref?.id) {
-        const blob = await getPhotoBlob(ref.id, "thumb");
-        if (blob) {
-          const medium = (await getPhotoBlob(ref.id, "medium")) ?? blob;
-          void writePersistedTimelineMedia(memoryId, updatedAt, blob, medium);
-          return blob;
-        }
+        const blob = await resolveTimelineThumbFromPhotoRef(ref.id, memoryId, updatedAt);
+        if (blob) return blob;
       }
 
-      if (isIosWebKit()) return null;
+      if (isIosWebKit() && hasLargePhotos) return null;
 
       const dataUrl = firstPhotoDataUrlFromEncrypted(photo);
       if (!dataUrl) return null;

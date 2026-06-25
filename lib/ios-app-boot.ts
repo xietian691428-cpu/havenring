@@ -1,8 +1,8 @@
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
-import { getOomRiskSyncDelayMs } from "@/lib/ios-memory-heuristics";
+import { getOomRiskSyncDelayMs, shouldDisableTimelineThumbsForOomRisk } from "@/lib/ios-memory-heuristics";
 import { isIosReloadMinimalMode } from "@/lib/ios-reload-guard";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
-import { getSealCompletedAgeMs } from "@/src/features/seal/sealCrossTab";
+import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
 
 const BOOT_SESSION_KEY = "haven.ios.boot.v1";
 
@@ -129,11 +129,9 @@ export function shouldAllowTimelinePullRefresh(): boolean {
 export function shouldAllowIosTimelineThumbs(): boolean {
   if (!isIosWebKit()) return true;
   if (isIosReloadMinimalMode()) return false;
-  const sealAgeMs = getSealCompletedAgeMs();
-  if (sealAgeMs !== null && sealAgeMs < IOS_SEAL_THUMB_QUIET_MS) return false;
-  if (isIosAppBootQuiet()) return false;
-  const ageOk = getIosAppBootAgeMs() >= getOomRiskSyncDelayMs(IOS_THUMB_MIN_BOOT_MS);
-  return ageOk || iosTimelineScrolled;
+  if (isPostSealQuietWindow()) return false;
+  if (shouldDisableTimelineThumbsForOomRisk()) return false;
+  return true;
 }
 
 export function shouldAllowIosLegacyMigration(): boolean {
