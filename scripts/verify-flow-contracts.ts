@@ -400,7 +400,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/timeline-ios-guard.ts"), /getTimelineThumbQuality/);
   assert.match(readRepoFile("lib/post-seal-memory-guard.ts"), /logPostSealMemoryPressure/);
   assert.match(readRepoFile("lib/seal-local-limits.ts"), /SEAL_LOCAL_RELAY_MAX_BYTES/);
-  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /estimateComposerSealSizeLight/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /evaluateLocalComposerSealSize/);
   assert.match(readRepoFile("src/app-shell/AppRouter.tsx"), /dynamic\(/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /flushOfflineSyncQueue/);
   assert.match(readRepoFile("src/services/offlineSyncQueue.ts"), /enqueueSealFinalize/);
@@ -515,6 +515,8 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealPayloadFromDraft/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsSealBudget/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsLocalPersistBudget/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealStagingHandoffPayload/);
+  assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /tryUploadSealStaging/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /0\.85/);
   assert.match(readRepoFile("lib/post-seal-memory-guard.ts"), /subscribePostSealQuietEnd/);
   assert.match(readRepoFile("src/hooks/useTimelineThumbUrls.js"), /IOS_THUMB_GAP_MS = 400/);
@@ -559,7 +561,7 @@ check("seal session boundary: no background auto-arm; live size meter on compose
   assert.doesNotMatch(newMemory, /openSealPromptOnSuccess/);
   assert.doesNotMatch(newMemory, /requiresSealStepUp/);
   assert.match(newMemory, /persistDraftOnBackgroundRef/);
-  assert.match(newMemory, /evaluateComposerSealSize/);
+  assert.match(newMemory, /evaluateLocalComposerSealSize/);
   assert.match(sealMediaPrep, /evaluateComposerSealSize/);
   assert.match(sealMediaPrep, /toServerSealCommitPayload/);
   assert.match(sealMediaPrep, /dataUrl/);

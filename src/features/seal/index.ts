@@ -145,7 +145,9 @@ export {
 export {
   assertDraftFitsLocalPersistBudget,
   assertDraftFitsSealBudget,
+  buildSealStagingHandoffPayload,
   evaluateComposerSealSize,
+  evaluateLocalComposerSealSize,
   estimateComposerSealSizeLight,
 } from "./sealMediaPrep";
 export type { ComposerSealSizeStatus } from "./sealMediaPrep";

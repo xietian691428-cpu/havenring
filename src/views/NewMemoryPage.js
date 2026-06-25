@@ -23,8 +23,7 @@ import {
   isSealFlowArmed,
   navigateToSealWaitPage,
   listenForSealRingTapOnce,
-  evaluateComposerSealSize,
-  estimateComposerSealSizeLight,
+  evaluateLocalComposerSealSize,
   prepareSealForRingTap,
   readComposerSnapshotTextOnly,
   SEAL_STAGING_TOO_LARGE,
@@ -273,7 +272,7 @@ export function NewMemoryPage({
   const [sealFinalizeError, setSealFinalizeError] = useState("");
   const [sealSizeStatus, setSealSizeStatus] = useState({
     withinLimit: true,
-    limitMb: 50,
+    limitMb: 300,
     usedMb: 0,
     usedBytes: 0,
     wouldTrimMedia: false,
@@ -443,7 +442,7 @@ export function NewMemoryPage({
     if (!hasDraftContent) {
       setSealSizeStatus({
         withinLimit: true,
-        limitMb: userEntitlements?.tier === "plus" ? 100 : 50,
+        limitMb: 300,
         usedMb: 0,
         usedBytes: 0,
         wouldTrimMedia: false,
@@ -456,7 +455,6 @@ export function NewMemoryPage({
     const timer = window.setTimeout(() => {
       void (async () => {
         const isPlus = userEntitlements?.tier === "plus";
-        const forStaging = false;
         const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
         const draft = {
           title: title.trim(),
@@ -465,9 +463,7 @@ export function NewMemoryPage({
           attachments,
           releaseAt: Number.isFinite(releaseAt) ? releaseAt : 0,
         };
-        const status = PLATFORM_LIMITS.lightSealSizeEstimate
-          ? estimateComposerSealSizeLight(draft, { forStaging, isPlus })
-          : await evaluateComposerSealSize(draft, { forStaging, isPlus });
+        const status = await evaluateLocalComposerSealSize(draft, { isPlus });
         if (cancelled) return;
         const template = status.withinLimit
           ? pageCopy.sealSizeMeterOk || t.sealSizeMeterOk
@@ -880,14 +876,8 @@ export function NewMemoryPage({
     if (error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL) {
       return pageCopy.sealLocalStorageInsufficient || t.sealLocalStorageInsufficient;
     }
-    if (isSealStagingTooLargeError(error)) {
-      const template = pageCopy.sealStagingTooLarge || t.sealStagingTooLarge;
-      return template.replace("{mb}", String(error.limitMb));
-    }
-    if (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE) {
-      const limitMb = userEntitlements?.tier === "plus" ? 100 : 50;
-      const template = pageCopy.sealStagingTooLarge || t.sealStagingTooLarge;
-      return template.replace("{mb}", String(limitMb));
+    if (isSealStagingTooLargeError(error) || (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE)) {
+      return pageCopy.sealLocalStorageInsufficient || t.sealLocalStorageInsufficient;
     }
     return null;
   }
@@ -903,7 +893,7 @@ export function NewMemoryPage({
       isSealStagingTooLargeError(error) ||
       (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE)
     ) {
-      return pageCopy.sealStagingErrorTitle || t.sealStagingErrorTitle;
+      return pageCopy.sealLocalStorageErrorTitle || t.sealLocalStorageErrorTitle;
     }
     return "";
   }

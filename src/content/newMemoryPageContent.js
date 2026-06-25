@@ -173,9 +173,9 @@ const EN = {
   sealLocalStorageErrorTitle: "Not enough local storage",
   sealLocalStorageInsufficient:
     "Not enough local storage — try removing older memories or saving in smaller parts.",
-  sealSizeMeterOk: "About {used} MB of {limit} MB for ring seal.",
+  sealSizeMeterOk: "About {used} MB of {limit} MB on this device.",
   sealSizeMeterOver:
-    "About {used} MB — over the {limit} MB ring seal limit. Remove a video, file, or some photos.",
+    "About {used} MB — not enough space on this device. Remove older memories or free storage.",
   feedbackReadyNext: "Ready for your next memory.",
   feedbackSealPrepNeedDraftSave: "Save your draft first.",
   untitled: "Untitled memory",

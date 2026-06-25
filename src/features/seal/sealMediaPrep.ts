@@ -10,9 +10,8 @@ import {
 } from "./sealUserMessages";
 import type { SealDraftFinalizePayload } from "./sealTypes";
 import {
-  isDeviceStorageCriticallyLow,
   readStorageEstimate,
-  resolveLocalPersistMaxBytes,
+  SEAL_LOCAL_PERSIST_DEFAULT_BYTES,
 } from "@/lib/storage-quota";
 
 type MediaRow = {
@@ -185,6 +184,26 @@ export async function buildSealPayloadFromDraft(
     return tighter;
   }
   return payload;
+}
+
+/**
+ * Staging upload handoff — draft ids + text only.
+ * Local IDB draft + seal relay hold full media (local-first).
+ */
+export function buildSealStagingHandoffPayload(item: {
+  id: string;
+  title?: string;
+  story?: string;
+  releaseAt?: number;
+}): SealDraftFinalizePayload {
+  return {
+    id: item.id,
+    title: String(item.title || "Untitled memory"),
+    story: String(item.story || ""),
+    photo: [],
+    attachments: [],
+    releaseAt: Number(item.releaseAt || 0) || 0,
+  };
 }
 
 /** Server commit payload — include portable inline media for Pair cross-device sync. */
@@ -401,6 +420,42 @@ export function estimateComposerSealSizeLight(
   };
 }
 
+/**
+ * Local persist seal meter — respects device headroom, never staging caps.
+ */
+export async function evaluateLocalComposerSealSize(
+  item: {
+    title?: string;
+    story?: string;
+    photo?: unknown[];
+    attachments?: unknown[];
+    releaseAt?: number;
+  },
+  opts: { isPlus?: boolean } = {}
+): Promise<ComposerSealSizeStatus> {
+  const light = estimateComposerSealSizeLight(item, {
+    forStaging: false,
+    isPlus: Boolean(opts.isPlus),
+  });
+  const est = await readStorageEstimate();
+  const headroomBytes = est?.headroom ?? SEAL_LOCAL_PERSIST_DEFAULT_BYTES;
+  const effectiveLimitBytes = Math.min(SEAL_LOCAL_MAX_BYTES, headroomBytes);
+  const limitMb = Math.max(1, Math.floor(effectiveLimitBytes / (1024 * 1024)));
+  const withinLimit =
+    light.usedBytes <= SEAL_LOCAL_MAX_BYTES && light.usedBytes <= effectiveLimitBytes;
+  const status = {
+    withinLimit,
+    limitMb,
+    usedMb: light.usedMb,
+    usedBytes: light.usedBytes,
+    wouldTrimMedia: false,
+  };
+  return {
+    ...status,
+    showMeter: shouldShowComposerSealSizeMeter(status, item.attachments ?? []),
+  };
+}
+
 export async function assertDraftFitsSealBudget(
   item: {
     id: string;
@@ -443,7 +498,7 @@ export async function assertDraftFitsSealBudget(
   }
 }
 
-/** Local-first persist — light byte estimate; only fail near device quota or hard cap. */
+/** Local-first persist — only fail when over 300MB cap or physical headroom. */
 export async function assertDraftFitsLocalPersistBudget(
   item: {
     title?: string;
@@ -454,16 +509,26 @@ export async function assertDraftFitsLocalPersistBudget(
   },
   _isPlus = false
 ): Promise<void> {
-  const maxBytes = await resolveLocalPersistMaxBytes();
   const status = estimateComposerSealSizeLight(item, { forStaging: false });
-  if (maxBytes <= 0 || status.usedBytes > maxBytes) {
+  if (status.usedBytes > SEAL_LOCAL_MAX_BYTES) {
+    if (typeof console !== "undefined") {
+      console.warn("[haven-ring] seal local budget exceeded", {
+        usedMb: status.usedMb,
+        capMb: Math.floor(SEAL_LOCAL_MAX_BYTES / (1024 * 1024)),
+      });
+    }
     throwSealLocalStorageFull();
   }
-  if (await isDeviceStorageCriticallyLow()) {
-    const est = await readStorageEstimate();
-    if (est && status.usedBytes > est.headroom) {
-      throwSealLocalStorageFull();
+  const est = await readStorageEstimate();
+  if (est && status.usedBytes > est.headroom) {
+    if (typeof console !== "undefined") {
+      console.warn("[haven-ring] seal blocked — not enough device headroom", {
+        usedMb: status.usedMb,
+        headroomMb: Math.round(est.headroom / (1024 * 1024)),
+        usageRatio: est.usageRatio,
+      });
     }
+    throwSealLocalStorageFull();
   }
 }
 

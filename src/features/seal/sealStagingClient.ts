@@ -12,8 +12,9 @@ import {
 } from "./sealStagingCrypto";
 import { getArmedSealStagingId } from "@/lib/seal-flow";
 import {
-  SEAL_STAGING_TOO_LARGE,
   SEAL_STAGING_OFFLINE,
+  SEAL_STAGING_TOO_LARGE,
+  isSealStagingTooLargeError,
   throwSealStagingTooLarge,
 } from "./sealUserMessages";
 
@@ -240,6 +241,29 @@ export async function uploadSealStaging(opts: {
     accessToken,
     isPlus,
   });
+}
+
+/** Best-effort staging — never blocks local-first seal when payload is too large. */
+export async function tryUploadSealStaging(opts: {
+  draftIds: string[];
+  payloads: SealDraftFinalizePayload[];
+  accessToken: string;
+  isPlus?: boolean;
+}): Promise<string | undefined> {
+  try {
+    return await uploadSealStaging(opts);
+  } catch (error) {
+    if (isSealStagingTooLargeError(error)) {
+      console.warn(
+        "[haven-ring] seal staging skipped (too large); local relay is authoritative"
+      );
+      return undefined;
+    }
+    if (error instanceof Error && error.message === SEAL_STAGING_OFFLINE) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 export async function fetchSealStagingPayloads(opts: {

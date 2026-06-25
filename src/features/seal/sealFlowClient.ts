@@ -52,6 +52,7 @@ import {
 import {
   deleteSealStaging,
   fetchSealStagingPayloads,
+  tryUploadSealStaging,
   uploadSealStaging,
 } from "./sealStagingClient";
 import { getSealStrategy, type SealTransportMode } from "./sealPlatform";
@@ -62,6 +63,7 @@ import {
 import {
   assertDraftFitsLocalPersistBudget,
   buildSealPayloadFromDraft,
+  buildSealStagingHandoffPayload,
   toServerSealCommitPayload,
 } from "./sealMediaPrep";
 import {
@@ -309,6 +311,31 @@ async function payloadsFromLocalSources(
   return payloads;
 }
 
+function mergeSealPayloadsPreferLocal(
+  staged: SealDraftFinalizePayload[],
+  local: SealDraftFinalizePayload[],
+  draftIds: string[]
+): SealDraftFinalizePayload[] {
+  const localById = new Map(local.map((row) => [String(row.id), row]));
+  const stagedById = new Map(staged.map((row) => [String(row.id), row]));
+  const mediaScore = (row: SealDraftFinalizePayload | undefined) => {
+    if (!row) return 0;
+    return (
+      countDisplayablePhotos(row.photo) +
+      (Array.isArray(row.attachments) ? row.attachments.length : 0)
+    );
+  };
+  return draftIds
+    .map((id) => {
+      const loc = localById.get(id);
+      const st = stagedById.get(id);
+      if (!loc) return st;
+      if (!st) return loc;
+      return mediaScore(loc) >= mediaScore(st) ? loc : st;
+    })
+    .filter((row): row is SealDraftFinalizePayload => Boolean(row));
+}
+
 export async function collectDraftPayloadsForSeal(
   draftIds: string[],
   accessToken?: string
@@ -333,6 +360,9 @@ export async function collectDraftPayloadsForSeal(
         expectedDraftIds: draftIds,
       });
       if (staged.length === draftIds.length) {
+        if (local.length) {
+          return mergeSealPayloadsPreferLocal(staged, local, draftIds);
+        }
         return staged;
       }
     } catch {
@@ -562,15 +592,17 @@ export async function finalizeSealWithTicketNetworkFirst(
     strategy.stagingApiEnabled
   ) {
     const item = await getDraftItem(draftIds[0]);
-    const payload = await sealPayloadFromDraftItem(item, { forStaging: true });
-    if (payload) {
-      const stagingId = await uploadSealStaging({
+    if (item) {
+      const handoffPayload = buildSealStagingHandoffPayload(item);
+      const stagingId = await tryUploadSealStaging({
         draftIds,
-        payloads: [payload],
+        payloads: [handoffPayload],
         accessToken,
       });
-      armSealFlowWithPersistence(draftIds, { stagingId });
-      draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+      if (stagingId) {
+        armSealFlowWithPersistence(draftIds, { stagingId });
+        draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+      }
     }
   }
 
@@ -650,14 +682,6 @@ export async function prepareSealForRingTap(opts: {
 
   await assertDraftFitsLocalPersistBudget(item, isPlus);
 
-  const stagingPayload = await sealPayloadFromDraftItem(item, {
-    forStaging: true,
-    isPlus,
-  });
-  if (!stagingPayload) {
-    throw new Error(SEAL_DRAFT_NOT_FOUND);
-  }
-
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids);
   persistSealLocalRelay(ids, payload);
@@ -667,16 +691,19 @@ export async function prepareSealForRingTap(opts: {
     if (!strategy.stagingApiEnabled) {
       throw new Error(SEAL_STAGING_UNAVAILABLE);
     }
-    stagingId = await uploadSealStaging({
+    const handoffPayload = buildSealStagingHandoffPayload(item);
+    stagingId = await tryUploadSealStaging({
       draftIds: ids,
-      payloads: [stagingPayload],
+      payloads: [handoffPayload],
       accessToken: opts.accessToken,
       isPlus,
     });
-    armSealFlowWithPersistence(ids, { stagingId });
+    if (stagingId) {
+      armSealFlowWithPersistence(ids, { stagingId });
+    }
   }
 
-  return { mode: strategy.transport, stagingId };
+  return { mode: stagingId ? strategy.transport : "local", stagingId };
 }
 
 /** @deprecated Use `prepareSealForRingTap`. */
@@ -750,15 +777,17 @@ export async function finalizeSealChainFromSdmResponse(
     strategy.stagingApiEnabled
   ) {
     const item = await getDraftItem(draftIds[0]);
-    const payload = await sealPayloadFromDraftItem(item, { forStaging: true });
-    if (payload) {
-      const stagingId = await uploadSealStaging({
+    if (item) {
+      const handoffPayload = buildSealStagingHandoffPayload(item);
+      const stagingId = await tryUploadSealStaging({
         draftIds,
-        payloads: [payload],
+        payloads: [handoffPayload],
         accessToken,
       });
-      armSealFlowWithPersistence(draftIds, { stagingId });
-      draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+      if (stagingId) {
+        armSealFlowWithPersistence(draftIds, { stagingId });
+        draftPayloads = await collectDraftPayloadsForSeal(draftIds, accessToken);
+      }
     }
   }
 
