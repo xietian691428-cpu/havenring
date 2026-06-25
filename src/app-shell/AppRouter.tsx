@@ -29,6 +29,7 @@ import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelec
 import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
+import { hydrateRingRegistryFromCloud } from "../services/ringSyncService";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   isTemporaryDeviceModeEnabled,
@@ -234,6 +235,7 @@ function AppRouterInner({
     dispatchFlow: AppFlowDispatch;
   };
   const loginSyncDoneForSessionRef = useRef("");
+  const ringHydrateDoneForSessionRef = useRef("");
   const tempWipeStartedRef = useRef(false);
   const tabTimelineBusyRef = useRef(false);
 
@@ -602,6 +604,7 @@ function AppRouterInner({
     });
     if (!supabaseSession) {
       loginSyncDoneForSessionRef.current = "";
+      ringHydrateDoneForSessionRef.current = "";
       return;
     }
     const sessionKey = String(supabaseSession.access_token || "");
@@ -610,6 +613,14 @@ function AppRouterInner({
       scheduleBackgroundSync();
     }
   }, [supabaseSession, sessionLoading, scheduleBackgroundSync]);
+
+  useEffect(() => {
+    if (sessionLoading || !supabaseSession) return;
+    const sessionKey = String(supabaseSession.access_token || "");
+    if (!sessionKey || ringHydrateDoneForSessionRef.current === sessionKey) return;
+    ringHydrateDoneForSessionRef.current = sessionKey;
+    void hydrateRingRegistryFromCloud();
+  }, [supabaseSession, sessionLoading]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -647,9 +658,9 @@ function AppRouterInner({
     });
     dispatchFlow({
       type: "RINGS_CHANGED",
-      hasBoundRing: getBoundRingCount() > 0,
+      hasBoundRing: boundRingCount > 0,
     });
-  }, [supabaseSession, route.name, dispatchFlow]);
+  }, [supabaseSession, boundRingCount, dispatchFlow]);
 
   useEffect(() => {
     dispatchFlow({ type: "SYNC_STATUS", syncing: Boolean(syncing) });

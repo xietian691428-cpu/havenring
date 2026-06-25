@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -21,6 +22,16 @@ export function RingProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const bumpRingRegistry = useCallback(() => {
     setVersion((v) => v + 1);
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onRegistryChange = () => {
+      setVersion((v) => v + 1);
+    };
+    window.addEventListener("haven-ring-registry", onRegistryChange);
+    return () => {
+      window.removeEventListener("haven-ring-registry", onRegistryChange);
+    };
   }, []);
   const boundRingCount = useMemo(() => {
     void version;

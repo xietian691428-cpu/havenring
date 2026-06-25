@@ -98,6 +98,38 @@ function reconcileLocalRingsFromCloud(cloudRings = []) {
   return recovered;
 }
 
+function notifyRingRegistryChanged(detail = {}) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haven-ring-registry", { detail }));
+}
+
+/**
+ * Lightweight ring registry restore after cache clear — no moment/pair import.
+ */
+export async function hydrateRingRegistryFromCloud() {
+  const sb = getSupabaseBrowserClient();
+  const { data } = await sb.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) {
+    return { ok: false, recovered: 0, reason: "auth" };
+  }
+  const cloudRingResult = await fetchCloudRingBindings(accessToken);
+  if (!cloudRingResult.ok) {
+    return {
+      ok: false,
+      recovered: 0,
+      reason: cloudRingResult.reason || "fetch_failed",
+    };
+  }
+  const cloudRings = cloudRingResult.rows || [];
+  pruneStaleLocalRingsFromCloud(cloudRings);
+  const recovered = reconcileLocalRingsFromCloud(cloudRings);
+  if (recovered > 0 || cloudRings.length > 0) {
+    notifyRingRegistryChanged({ recovered, source: "hydrate" });
+  }
+  return { ok: true, recovered, ringCount: getBoundRings().length };
+}
+
 async function fetchMomentsDelta(accessToken, cloudRingIds) {
   if (!Array.isArray(cloudRingIds) || !cloudRingIds.length) {
     return { ok: true, reason: "", rows: [] };
@@ -168,6 +200,9 @@ export async function syncRingScopedCaches(options = {}) {
     pruneStaleLocalRingsFromCloud(cloudRings);
   }
   const recoveredLocalRings = reconcileLocalRingsFromCloud(cloudRings);
+  if (cloudRingResult.ok && (recoveredLocalRings > 0 || cloudRings.length > 0)) {
+    notifyRingRegistryChanged({ recovered: recoveredLocalRings, source: "sync" });
+  }
   const localRingsAll = getBoundRings();
   const active = getActiveRingOrFirst();
   const localRings = targetUidKey

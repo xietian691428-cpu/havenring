@@ -249,7 +249,9 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
   assert.match(readRepoFile("lib/pair-state-resolver.ts"), /pruneStaleLocalRingsFromCloud/);
   assert.match(readRepoFile("lib/nfc-entry-orchestrator.ts"), /runNfcEntryOrchestrator/);
   assert.match(readRepoFile("lib/join-pair-haven.ts"), /tryIdempotentPairJoin/);
-  assert.match(readRepoFile("src/services/ringSyncService.js"), /pruneStaleLocalRingsFromCloud/);
+  assert.match(readRepoFile("src/services/ringSyncService.js"), /hydrateRingRegistryFromCloud/);
+  assert.match(readRepoFile("src/providers/RingProvider.tsx"), /haven-ring-registry/);
+  assert.match(readRepoFile("src/views/NewMemoryPage.js"), /useRingRegistryContext/);
   assert.match(readRepoFile("src/state/appFlowSelectors.js"), /reconcilePairStateOnAppLifecycle/);
   assert.match(ringsContent, /pairActiveBanner/);
   assert.match(ringsContent, /linkedWithPartnerStatus/);
@@ -299,7 +301,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v18/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v19/);
   assert.match(readRepoFile("public/sw.js"), /pathname\.startsWith\("\/start"\)/);
   assert.match(readRepoFile("src/hooks/useSupabaseSession.js"), /withTimeout/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /login\?next=/);

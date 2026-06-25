@@ -41,7 +41,8 @@ import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
 import { getNewMemoryPageCopy, getNfcHoldGuideCopy, getSealFlowCopy } from "../content/havenCopy";
 import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
-import { getBoundRingCount } from "../services/ringRegistryService";
+import { useRingRegistryContext } from "../providers/RingProvider";
+import { hydrateRingRegistryFromCloud } from "../services/ringSyncService";
 import { SealPwaHintCard } from "../components/SealPwaHintCard";
 import { getComposerPlatformLimits, isIosWebKit } from "@/lib/composer-platform-limits";
 import { compressImageFile } from "@/lib/image-compressor-client";
@@ -244,7 +245,19 @@ export function NewMemoryPage({
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
   const showCloudBackupUpsell = !userEntitlements?.canUseCloudBackup;
-  const ringReady = getBoundRingCount() > 0;
+  const { boundRingCount } = useRingRegistryContext();
+  const ringReady = boundRingCount > 0;
+
+  useEffect(() => {
+    if (ringReady) return undefined;
+    let cancelled = false;
+    void hydrateRingRegistryFromCloud().finally(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ringReady]);
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [releaseAtInput, setReleaseAtInput] = useState("");
