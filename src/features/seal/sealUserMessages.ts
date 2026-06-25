@@ -18,7 +18,7 @@ export type SealStagingTooLargeError = Error & { limitMb: number };
 
 export function sealStagingLimitMb(
   isPlus: boolean,
-  forStaging = true
+  forStaging = false
 ): number {
   const bytes = forStaging
     ? resolveSealStagingMaxBytes(isPlus)

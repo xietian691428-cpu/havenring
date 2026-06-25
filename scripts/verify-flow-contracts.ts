@@ -299,7 +299,7 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v17/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v18/);
   assert.match(readRepoFile("public/sw.js"), /pathname\.startsWith\("\/start"\)/);
   assert.match(readRepoFile("src/hooks/useSupabaseSession.js"), /withTimeout/);
   assert.match(readRepoFile("app/start/StartClient.tsx"), /login\?next=/);
@@ -491,7 +491,7 @@ check("seal staging API and encrypted cross-tab handoff", () => {
   assert.match(stagingCrypto, /AES-GCM/);
   assert.match(stagingCrypto, /HKDF/);
   assert.match(sealFlow, /prepareSealForRingTap/);
-  assert.match(sealFlow, /uploadSealStaging/);
+  assert.match(sealFlow, /tryUploadSealStaging/);
   assert.match(sealFlow, /fetchSealStagingPayloads/);
   assert.match(sealPlatform, /platform === "ios"/);
   assert.match(readRepoFile("app/api/seal/finalize/route.ts"), /consumeSealStagingById/);
@@ -521,6 +521,9 @@ check("seal staging phase 3: storage split, cron purge, strategy + limits", () =
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealPayloadFromDraft/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsSealBudget/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /assertDraftFitsLocalPersistBudget/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /await assertDraftFitsLocalPersistBudget/);
+  assert.doesNotMatch(readRepoFile("src/features/seal/sealMediaPrep.ts"), /throwSealStagingTooLarge/);
+  assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /forStaging: false/);
   assert.match(readRepoFile("src/features/seal/sealMediaPrep.ts"), /buildSealStagingHandoffPayload/);
   assert.match(readRepoFile("src/features/seal/sealStagingClient.ts"), /tryUploadSealStaging/);
   assert.match(readRepoFile("src/features/memories/localMemoryStore.ts"), /0\.85/);
@@ -568,6 +571,8 @@ check("seal session boundary: no background auto-arm; live size meter on compose
   assert.doesNotMatch(newMemory, /requiresSealStepUp/);
   assert.match(newMemory, /persistDraftOnBackgroundRef/);
   assert.match(newMemory, /evaluateLocalComposerSealSize/);
+  assert.doesNotMatch(newMemory, /forStaging:\s*true/);
+  assert.match(newMemory, /sealLocalStorageInsufficient/);
   assert.match(sealMediaPrep, /evaluateComposerSealSize/);
   assert.match(sealMediaPrep, /toServerSealCommitPayload/);
   assert.match(sealMediaPrep, /dataUrl/);

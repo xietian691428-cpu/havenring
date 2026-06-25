@@ -81,6 +81,18 @@ const STORY_SOFT_MAX = 8000;
 const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
 
 function formatComposerSaveError(error, t) {
+  if (isSealLocalStorageFullError(error)) {
+    return t.sealLocalStorageInsufficient || t.feedbackSaveFailed;
+  }
+  if (error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL) {
+    return t.sealLocalStorageInsufficient || t.feedbackSaveFailed;
+  }
+  if (isSealStagingTooLargeError(error)) {
+    return t.sealLocalStorageInsufficient || t.feedbackSaveFailed;
+  }
+  if (error instanceof Error && error.message === SEAL_STAGING_TOO_LARGE) {
+    return t.sealLocalStorageInsufficient || t.feedbackSaveFailed;
+  }
   const message = error instanceof Error ? error.message : String(error || "");
   const lower = message.toLowerCase();
   if (
@@ -471,9 +483,12 @@ export function NewMemoryPage({
           !status.withinLimit || status.headroomLow
             ? pageCopy.sealSizeMeterOver || t.sealSizeMeterOver
             : pageCopy.sealSizeMeterOk || t.sealSizeMeterOk;
+        const limitDisplay = status.limitApprox
+          ? `~${status.limitMb}`
+          : String(status.limitMb);
         const message = template
           .replace("{used}", String(status.usedMb))
-          .replace("{limit}", String(status.limitMb));
+          .replace("{limit}", limitDisplay);
         setSealSizeStatus({ ...status, message });
       })();
     }, PLATFORM_LIMITS.sealSizeDebounceMs);
@@ -1199,7 +1214,7 @@ export function NewMemoryPage({
               <p
                 style={{
                   ...styles.sealSizeMeter,
-                  ...(sealSizeStatus.withinLimit
+                  ...(sealSizeStatus.withinLimit && !sealSizeStatus.headroomLow
                     ? styles.sealSizeMeterOk
                     : styles.sealSizeMeterOver),
                 }}

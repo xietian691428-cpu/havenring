@@ -6,7 +6,6 @@ import {
 } from "@/lib/seal-staging-shared";
 import {
   throwSealLocalStorageFull,
-  throwSealStagingTooLarge,
 } from "./sealUserMessages";
 import type { SealDraftFinalizePayload } from "./sealTypes";
 import {
@@ -274,6 +273,8 @@ export type ComposerSealSizeStatus = {
   showMeter: boolean;
   /** Device headroom lower than draft size — advisory meter only. */
   headroomLow?: boolean;
+  /** True when displayed limit reflects device headroom below 300MB. */
+  limitApprox?: boolean;
 };
 
 function formatUsedMb(usedBytes: number): number {
@@ -302,6 +303,20 @@ export function shouldShowComposerSealSizeMeter(
   return status.usedBytes >= SEAL_SIZE_METER_MIN_BYTES;
 }
 
+function resolveComposerSealDisplayLimitMb(
+  est: Awaited<ReturnType<typeof readStorageEstimate>>
+): { limitMb: number; limitApprox: boolean } {
+  const productMb = Math.floor(SEAL_LOCAL_MAX_BYTES / (1024 * 1024));
+  if (!est || est.headroom <= 0) {
+    return { limitMb: productMb, limitApprox: false };
+  }
+  const fromHeadroom = Math.floor((est.headroom * 0.9) / (1024 * 1024));
+  if (fromHeadroom > 0 && fromHeadroom < productMb) {
+    return { limitMb: Math.max(1, fromHeadroom), limitApprox: true };
+  }
+  return { limitMb: productMb, limitApprox: false };
+}
+
 export async function evaluateComposerSealSize(
   item: {
     title?: string;
@@ -310,47 +325,9 @@ export async function evaluateComposerSealSize(
     attachments?: unknown[];
     releaseAt?: number;
   },
-  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+  opts: { isPlus?: boolean } = {}
 ): Promise<ComposerSealSizeStatus> {
-  const isPlus = Boolean(opts.isPlus);
-  const forStaging = Boolean(opts.forStaging);
-  const maxBytes = forStaging
-    ? resolveSealStagingPlaintextMaxBytes(isPlus)
-    : SEAL_LOCAL_MAX_BYTES;
-  const limitMb = Math.floor(maxBytes / (1024 * 1024));
-
-  const draft = {
-    id: "composer-estimate",
-    title: String(item.title || ""),
-    story: String(item.story || ""),
-    photo: Array.isArray(item.photo) ? item.photo : [],
-    attachments: Array.isArray(item.attachments) ? item.attachments : [],
-    releaseAt: Number(item.releaseAt || 0) || 0,
-  };
-
-  const payload = await buildSealPayloadFromDraft(draft, { maxBytes });
-  const usedBytes = payload ? estimateJsonBytes(payload) : 0;
-  const usedMb = formatUsedMb(usedBytes);
-
-  const origPhotoCount = countMediaWithInlineData(draft.photo);
-  const origAttachCount = countMediaWithInlineData(draft.attachments);
-  const stagedPhotoCount = countMediaWithInlineData(payload?.photo ?? []);
-  const stagedAttachCount = countMediaWithInlineData(payload?.attachments ?? []);
-  const wouldTrimMedia =
-    origPhotoCount > stagedPhotoCount || origAttachCount > stagedAttachCount;
-  const overBudget = usedBytes > maxBytes;
-
-  const status = {
-    withinLimit: !wouldTrimMedia && !overBudget,
-    limitMb,
-    usedMb,
-    usedBytes,
-    wouldTrimMedia,
-  };
-  return {
-    ...status,
-    showMeter: shouldShowComposerSealSizeMeter(status, draft.attachments),
-  };
+  return evaluateLocalComposerSealSize(item, opts);
 }
 
 function estimateInlineMediaBytes(items: unknown[]): number {
@@ -385,7 +362,7 @@ export function estimateComposerSealSizeLight(
     attachments?: unknown[];
     releaseAt?: number;
   },
-  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+  opts: { forStaging?: boolean; isPlus?: boolean } = { forStaging: false }
 ): ComposerSealSizeStatus {
   const isPlus = Boolean(opts.isPlus);
   const forStaging = Boolean(opts.forStaging);
@@ -438,9 +415,9 @@ export async function evaluateLocalComposerSealSize(
     forStaging: false,
     isPlus: Boolean(opts.isPlus),
   });
-  const limitMb = Math.floor(SEAL_LOCAL_MAX_BYTES / (1024 * 1024));
-  const overCap = light.usedBytes > SEAL_LOCAL_MAX_BYTES;
   const est = await readStorageEstimate();
+  const { limitMb, limitApprox } = resolveComposerSealDisplayLimitMb(est);
+  const overCap = light.usedBytes > SEAL_LOCAL_MAX_BYTES;
   const headroomLow =
     est != null && est.headroom > 0 && light.usedBytes > est.headroom && !overCap;
   const withinLimit = !overCap;
@@ -451,6 +428,7 @@ export async function evaluateLocalComposerSealSize(
     usedBytes: light.usedBytes,
     wouldTrimMedia: false,
     headroomLow,
+    limitApprox,
   };
   return {
     ...status,
@@ -470,37 +448,10 @@ export async function assertDraftFitsSealBudget(
     attachments?: unknown[];
     releaseAt?: number;
   } | null,
-  opts: { forStaging: boolean; isPlus?: boolean } = { forStaging: true }
+  opts: { forStaging?: boolean; isPlus?: boolean } = {}
 ): Promise<void> {
   if (!item?.id) return;
-  const isPlus = Boolean(opts.isPlus);
-  const forStaging = Boolean(opts.forStaging);
-
-  if (!forStaging) {
-    await assertDraftFitsLocalPersistBudget(item, isPlus);
-    return;
-  }
-
-  const maxBytes = resolveSealStagingPlaintextMaxBytes(isPlus);
-
-  const payload = await buildSealPayloadFromDraft(item, { maxBytes });
-  if (!payload) return;
-
-  const origPhotoCount = countMediaWithInlineData(
-    Array.isArray(item.photo) ? item.photo : []
-  );
-  const origAttachCount = countMediaWithInlineData(
-    Array.isArray(item.attachments) ? item.attachments : []
-  );
-  const stagedPhotoCount = countMediaWithInlineData(payload.photo);
-  const stagedAttachCount = countMediaWithInlineData(payload.attachments);
-  const trimmed =
-    origPhotoCount > stagedPhotoCount || origAttachCount > stagedAttachCount;
-  const overBudget = estimateJsonBytes(payload) > maxBytes;
-
-  if (trimmed || overBudget) {
-    throwSealStagingTooLarge(isPlus, forStaging);
-  }
+  await assertDraftFitsLocalPersistBudget(item, Boolean(opts.isPlus));
 }
 
 /** Local-first persist — only fail when over 300MB cap or physical headroom. */
