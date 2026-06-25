@@ -193,12 +193,15 @@ const HAVEN_NEW_MEMORY_SHARED = {
   sealVerifyConfirm: "Verify and seal",
   sealVerifyCancel: "Cancel",
   backgroundDraftSaved: "Saved to Draft Box",
-  sealStagingErrorTitle: "Memory too large to seal",
+  sealStagingErrorTitle: "Not enough local storage",
   sealStagingTooLarge:
-    "This memory is too large to seal (limit: {mb} MB). Remove a video, file, or some photos to shrink it, then try again.",
-  sealSizeMeterOk: "About {used} MB of {limit} MB for ring seal.",
+    "Not enough local storage — try removing older memories or saving in smaller parts.",
+  sealLocalStorageErrorTitle: "Not enough local storage",
+  sealLocalStorageInsufficient:
+    "Not enough local storage — try removing older memories or saving in smaller parts.",
+  sealSizeMeterOk: "About {used} MB of {limit} MB on this device.",
   sealSizeMeterOver:
-    "About {used} MB — over the {limit} MB ring seal limit. Remove a video, file, or some photos.",
+    "About {used} MB — not enough space on this device. Remove older memories or free storage.",
 } as const;
 
 const HAVEN_NEW_MEMORY_BY_PLATFORM: Record<HavenPlatform, NewMemoryPlatformSlice> = {
@@ -274,6 +277,8 @@ export type NewMemoryPageCopyEn = NewMemoryHeroCopy & {
   backgroundDraftSaved: string;
   sealStagingErrorTitle: string;
   sealStagingTooLarge: string;
+  sealLocalStorageErrorTitle: string;
+  sealLocalStorageInsufficient: string;
   sealSizeMeterOk: string;
   sealSizeMeterOver: string;
 };

@@ -196,6 +196,8 @@ function buildNewMemoryPageCopy(locale, platform, t) {
     cloudBackupHint: en.cloudBackupHint,
     sealStagingErrorTitle: en.sealStagingErrorTitle,
     sealStagingTooLarge: en.sealStagingTooLarge,
+    sealLocalStorageErrorTitle: en.sealLocalStorageErrorTitle,
+    sealLocalStorageInsufficient: en.sealLocalStorageInsufficient,
     sealSizeMeterOk: en.sealSizeMeterOk,
     sealSizeMeterOver: en.sealSizeMeterOver,
   };
@@ -465,9 +467,10 @@ export function NewMemoryPage({
         };
         const status = await evaluateLocalComposerSealSize(draft, { isPlus });
         if (cancelled) return;
-        const template = status.withinLimit
-          ? pageCopy.sealSizeMeterOk || t.sealSizeMeterOk
-          : pageCopy.sealSizeMeterOver || t.sealSizeMeterOver;
+        const template =
+          !status.withinLimit || status.headroomLow
+            ? pageCopy.sealSizeMeterOver || t.sealSizeMeterOver
+            : pageCopy.sealSizeMeterOk || t.sealSizeMeterOk;
         const message = template
           .replace("{used}", String(status.usedMb))
           .replace("{limit}", String(status.limitMb));
@@ -999,11 +1002,6 @@ export function NewMemoryPage({
       setFeedback(t.feedbackNeedContent);
       return;
     }
-    if (hasDraftContent && !sealSizeStatus.withinLimit) {
-      setSealFinalizeError(sealSizeStatus.message);
-      setFeedback(sealSizeStatus.message);
-      return;
-    }
     setRingTapError("");
     setSaveDialog({ open: false, status: "saving", errorMessage: "", errorTitle: "" });
     setSealFinalizeError("");
@@ -1457,18 +1455,14 @@ export function NewMemoryPage({
               <button
                 type="button"
                 onClick={handleHeroPrimaryClick}
-                disabled={
-                  saving ||
-                  sealPromptOpen ||
-                  (hasDraftContent && !sealSizeStatus.withinLimit)
-                }
+                disabled={saving || sealPromptOpen}
                 aria-busy={saving || sealPromptOpen}
                 aria-label={`${getPrimaryButtonText()}. ${pageCopy.sealPrimaryHint}`}
                 style={{
                   ...styles.heroSealButton,
                   ...(saving || sealPromptOpen
                     ? styles.heroSealButtonBusy
-                    : ringReady && sealSizeStatus.withinLimit
+                    : ringReady
                       ? styles.heroSealButtonActive
                       : styles.heroSealButtonMuted),
                 }}

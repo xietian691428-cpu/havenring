@@ -64,7 +64,7 @@ const EN = {
   addFilesCta: "Add Files (max 5)",
   mediaZoneAria: "Photos, videos, and files",
   mediaLimitsSummary:
-    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each. Ring seal handoff: up to 50 MB total (free).",
+    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each. Local seal: up to 300 MB on this device.",
   photosSectionHeading: "Photos",
   videosSectionHeading: "Videos",
   filesSectionHeading: "Documents & audio",
@@ -167,9 +167,9 @@ const EN = {
     "This memory is too large for this device right now. Remove a photo or try again.",
   feedbackOomSaveBlocked:
     "This device is low on memory — remove some photos or restart Safari, then try again.",
-  sealStagingErrorTitle: "Memory too large to seal",
+  sealStagingErrorTitle: "Not enough local storage",
   sealStagingTooLarge:
-    "This memory is too large to seal (limit: {mb} MB). Remove a video, file, or some photos to shrink it, then try again.",
+    "Not enough local storage — try removing older memories or saving in smaller parts.",
   sealLocalStorageErrorTitle: "Not enough local storage",
   sealLocalStorageInsufficient:
     "Not enough local storage — try removing older memories or saving in smaller parts.",

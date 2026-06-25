@@ -26,8 +26,8 @@ export function sealStagingLimitMb(
   return Math.floor(bytes / (1024 * 1024));
 }
 
-export function formatSealStagingTooLargeEn(limitMb: number): string {
-  return `This memory is too large to seal (limit: ${limitMb} MB). Remove a video, file, or some photos to shrink it, then try again.`;
+export function formatSealStagingTooLargeEn(_limitMb: number): string {
+  return "Not enough local storage — try removing older memories or saving in smaller parts.";
 }
 
 export function formatSealLocalStorageInsufficientEn(): string {

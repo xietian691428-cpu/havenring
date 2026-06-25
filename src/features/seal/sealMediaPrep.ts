@@ -11,7 +11,6 @@ import {
 import type { SealDraftFinalizePayload } from "./sealTypes";
 import {
   readStorageEstimate,
-  SEAL_LOCAL_PERSIST_DEFAULT_BYTES,
 } from "@/lib/storage-quota";
 
 type MediaRow = {
@@ -273,6 +272,8 @@ export type ComposerSealSizeStatus = {
   usedBytes: number;
   wouldTrimMedia: boolean;
   showMeter: boolean;
+  /** Device headroom lower than draft size — advisory meter only. */
+  headroomLow?: boolean;
 };
 
 function formatUsedMb(usedBytes: number): number {
@@ -421,7 +422,7 @@ export function estimateComposerSealSizeLight(
 }
 
 /**
- * Local persist seal meter — respects device headroom, never staging caps.
+ * Local persist seal meter — 300MB cap for display; headroom is advisory only.
  */
 export async function evaluateLocalComposerSealSize(
   item: {
@@ -437,22 +438,26 @@ export async function evaluateLocalComposerSealSize(
     forStaging: false,
     isPlus: Boolean(opts.isPlus),
   });
+  const limitMb = Math.floor(SEAL_LOCAL_MAX_BYTES / (1024 * 1024));
+  const overCap = light.usedBytes > SEAL_LOCAL_MAX_BYTES;
   const est = await readStorageEstimate();
-  const headroomBytes = est?.headroom ?? SEAL_LOCAL_PERSIST_DEFAULT_BYTES;
-  const effectiveLimitBytes = Math.min(SEAL_LOCAL_MAX_BYTES, headroomBytes);
-  const limitMb = Math.max(1, Math.floor(effectiveLimitBytes / (1024 * 1024)));
-  const withinLimit =
-    light.usedBytes <= SEAL_LOCAL_MAX_BYTES && light.usedBytes <= effectiveLimitBytes;
+  const headroomLow =
+    est != null && est.headroom > 0 && light.usedBytes > est.headroom && !overCap;
+  const withinLimit = !overCap;
   const status = {
     withinLimit,
     limitMb,
     usedMb: light.usedMb,
     usedBytes: light.usedBytes,
     wouldTrimMedia: false,
+    headroomLow,
   };
   return {
     ...status,
-    showMeter: shouldShowComposerSealSizeMeter(status, item.attachments ?? []),
+    showMeter:
+      overCap ||
+      headroomLow ||
+      shouldShowComposerSealSizeMeter(status, item.attachments ?? []),
   };
 }
 
@@ -522,13 +527,12 @@ export async function assertDraftFitsLocalPersistBudget(
   const est = await readStorageEstimate();
   if (est && status.usedBytes > est.headroom) {
     if (typeof console !== "undefined") {
-      console.warn("[haven-ring] seal blocked — not enough device headroom", {
+      console.warn("[haven-ring] seal headroom low (advisory only)", {
         usedMb: status.usedMb,
         headroomMb: Math.round(est.headroom / (1024 * 1024)),
         usageRatio: est.usageRatio,
       });
     }
-    throwSealLocalStorageFull();
   }
 }
 
