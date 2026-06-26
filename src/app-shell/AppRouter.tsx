@@ -29,7 +29,6 @@ import { getFlowPrimaryUi, getRecoveryActionIntent } from "../state/appFlowSelec
 import { getSecuritySummary } from "../services/deviceTrustService";
 import { FIRST_MEMORY_DONE_KEY } from "../services/firstRunTelemetryService";
 import { getBoundRingCount } from "../services/ringRegistryService";
-import { hydrateRingRegistryFromCloud } from "../services/ringSyncService";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import {
   isTemporaryDeviceModeEnabled,
@@ -235,7 +234,6 @@ function AppRouterInner({
     dispatchFlow: AppFlowDispatch;
   };
   const loginSyncDoneForSessionRef = useRef("");
-  const ringHydrateDoneForSessionRef = useRef("");
   const tempWipeStartedRef = useRef(false);
   const tabTimelineBusyRef = useRef(false);
 
@@ -604,7 +602,6 @@ function AppRouterInner({
     });
     if (!supabaseSession) {
       loginSyncDoneForSessionRef.current = "";
-      ringHydrateDoneForSessionRef.current = "";
       return;
     }
     const sessionKey = String(supabaseSession.access_token || "");
@@ -613,26 +610,6 @@ function AppRouterInner({
       scheduleBackgroundSync();
     }
   }, [supabaseSession, sessionLoading, scheduleBackgroundSync]);
-
-  useEffect(() => {
-    if (sessionLoading || !supabaseSession) return;
-    const sessionKey = String(supabaseSession.access_token || "");
-    if (!sessionKey || ringHydrateDoneForSessionRef.current === sessionKey) return;
-
-    let cancelled = false;
-    void (async () => {
-      const outcome = await hydrateRingRegistryFromCloud(sessionKey);
-      if (cancelled) return;
-      if (!outcome?.ok) return;
-      if (outcome.ringCount > 0 || Number(outcome.ownedOnServer || 0) === 0) {
-        ringHydrateDoneForSessionRef.current = sessionKey;
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [supabaseSession, sessionLoading]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

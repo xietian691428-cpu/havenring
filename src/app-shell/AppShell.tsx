@@ -76,9 +76,7 @@ function DeferredAppProviders({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SubscriptionProvider>
-      <RingProvider>{children}</RingProvider>
-    </SubscriptionProvider>
+    <SubscriptionProvider>{children}</SubscriptionProvider>
   );
 }
 
@@ -112,9 +110,11 @@ export default function AppShell() {
     <AppFlowProvider>
       <SessionProvider>
         <SessionOrStartRedirect>
-          <DeferredAppProviders>
-            <DeferredAppRouter />
-          </DeferredAppProviders>
+          <RingProvider>
+            <DeferredAppProviders>
+              <DeferredAppRouter />
+            </DeferredAppProviders>
+          </RingProvider>
         </SessionOrStartRedirect>
       </SessionProvider>
     </AppFlowProvider>

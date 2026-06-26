@@ -10,6 +10,7 @@ import {
   scrubSupabaseAuthArtifactsFromEntryPages,
 } from "@/lib/appAuthGate";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { hydrateRingRegistryFromCloud } from "@/src/services/ringSyncService";
 import { withTimeout } from "@/lib/nfc-flow-timing";
 import { APP_ENTRY_PATH, MARKETING_LOGIN_PATH } from "@/lib/site";
 
@@ -106,11 +107,25 @@ export function MarketingLoginClient() {
 
   useEffect(() => {
     if (!signedIn || !nextHref.startsWith(APP_ENTRY_PATH)) return undefined;
-    const timer = window.setTimeout(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token || "";
+        if (token) {
+          await hydrateRingRegistryFromCloud(token);
+        }
+      } catch {
+        /* best-effort — RingProvider retries inside /app */
+      }
+      if (cancelled) return;
       scrubSupabaseAuthArtifactsFromEntryPages();
       window.location.replace(nextHref);
-    }, 200);
-    return () => window.clearTimeout(timer);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [signedIn, nextHref]);
 
   async function signOut() {

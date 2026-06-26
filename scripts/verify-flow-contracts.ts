@@ -301,7 +301,9 @@ check("pair model: haven-scoped sync and owner-only seal", () => {
     /handleTimelinePullRefresh[\s\S]*?syncLightNow\(\{ pullRefresh: true \}\)/
   );
   assert.match(readRepoFile("src/services/ringSyncService.js"), /shouldImportPairMemories/);
-  assert.match(readRepoFile("public/sw.js"), /haven-shell-v21/);
+  assert.match(readRepoFile("public/sw.js"), /haven-shell-v22/);
+  assert.match(readRepoFile("src/providers/RingProvider.tsx"), /hydrateRingRegistryWithRetries/);
+  assert.match(readRepoFile("src/app-shell/AppShell.tsx"), /<RingProvider>/);
   assert.match(readRepoFile("src/services/ringRegistryService.js"), /restoreLocalRingsFromCloud/);
   assert.match(readRepoFile("lib/pair-state-resolver.ts"), /restoreLocalRingsFromCloud/);
   assert.match(readRepoFile("src/app-shell/SessionOrStartRedirect.tsx"), /LOGIN_REDIRECT_GRACE_MS/);
