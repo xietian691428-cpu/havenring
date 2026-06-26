@@ -105,8 +105,12 @@ export function MarketingLoginClient() {
   const signedIn = isPermanentSupabaseSession(session);
 
   useEffect(() => {
-    if (!signedIn || !nextHref.startsWith(APP_ENTRY_PATH)) return;
-    window.location.replace(nextHref);
+    if (!signedIn || !nextHref.startsWith(APP_ENTRY_PATH)) return undefined;
+    const timer = window.setTimeout(() => {
+      scrubSupabaseAuthArtifactsFromEntryPages();
+      window.location.replace(nextHref);
+    }, 200);
+    return () => window.clearTimeout(timer);
   }, [signedIn, nextHref]);
 
   async function signOut() {

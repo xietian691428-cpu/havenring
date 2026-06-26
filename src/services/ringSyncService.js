@@ -105,29 +105,42 @@ function notifyRingRegistryChanged(detail = {}) {
 
 /**
  * Lightweight ring registry restore after cache clear — no moment/pair import.
+ * @param {string} [accessToken] — prefer session from context to avoid getSession races.
  */
-export async function hydrateRingRegistryFromCloud() {
-  const sb = getSupabaseBrowserClient();
-  const { data } = await sb.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) {
-    return { ok: false, recovered: 0, reason: "auth" };
+export async function hydrateRingRegistryFromCloud(accessToken) {
+  let token = String(accessToken || "").trim();
+  if (!token) {
+    const sb = getSupabaseBrowserClient();
+    const { data } = await sb.auth.getSession();
+    token = data.session?.access_token || "";
   }
-  const cloudRingResult = await fetchCloudRingBindings(accessToken);
+  if (!token) {
+    return {
+      ok: false,
+      recovered: 0,
+      ringCount: getBoundRings().length,
+      reason: "auth",
+    };
+  }
+  const cloudRingResult = await fetchCloudRingBindings(token);
   if (!cloudRingResult.ok) {
     return {
       ok: false,
       recovered: 0,
+      ringCount: getBoundRings().length,
       reason: cloudRingResult.reason || "fetch_failed",
     };
   }
   const cloudRings = cloudRingResult.rows || [];
+  const ownedRings = cloudRings.filter((row) => row?.ownedByYou === true);
+  const ringsToRestore = ownedRings.length ? ownedRings : cloudRings;
   pruneStaleLocalRingsFromCloud(cloudRings);
-  const recovered = reconcileLocalRingsFromCloud(cloudRings);
-  if (recovered > 0 || cloudRings.length > 0) {
-    notifyRingRegistryChanged({ recovered, source: "hydrate" });
+  const recovered = reconcileLocalRingsFromCloud(ringsToRestore);
+  const ringCount = getBoundRings().length;
+  if (cloudRingResult.ok) {
+    notifyRingRegistryChanged({ recovered, source: "hydrate", ringCount });
   }
-  return { ok: true, recovered, ringCount: getBoundRings().length };
+  return { ok: true, recovered, ringCount, ownedOnServer: ownedRings.length };
 }
 
 async function fetchMomentsDelta(accessToken, cloudRingIds) {

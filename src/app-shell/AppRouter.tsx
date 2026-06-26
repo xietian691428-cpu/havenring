@@ -618,8 +618,17 @@ function AppRouterInner({
     if (sessionLoading || !supabaseSession) return;
     const sessionKey = String(supabaseSession.access_token || "");
     if (!sessionKey || ringHydrateDoneForSessionRef.current === sessionKey) return;
-    ringHydrateDoneForSessionRef.current = sessionKey;
-    void hydrateRingRegistryFromCloud();
+
+    let cancelled = false;
+    void (async () => {
+      const outcome = await hydrateRingRegistryFromCloud(sessionKey);
+      if (cancelled || !outcome?.ok) return;
+      ringHydrateDoneForSessionRef.current = sessionKey;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [supabaseSession, sessionLoading]);
 
   useEffect(() => {

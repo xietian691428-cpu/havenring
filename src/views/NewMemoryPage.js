@@ -42,6 +42,7 @@ import { getNewMemoryPageCopy, getNfcHoldGuideCopy, getSealFlowCopy } from "../c
 import { IndeterminateStepStatus } from "../components/IndeterminateStepStatus";
 import { RingReadyBadge } from "../components/RingReadyBadge";
 import { useRingRegistryContext } from "../providers/RingProvider";
+import { useSessionContext } from "../providers/SessionProvider";
 import { hydrateRingRegistryFromCloud } from "../services/ringSyncService";
 import { SealPwaHintCard } from "../components/SealPwaHintCard";
 import { getComposerPlatformLimits, isIosWebKit } from "@/lib/composer-platform-limits";
@@ -144,6 +145,7 @@ function buildNewMemoryPageCopy(locale, platform, t) {
           ? t.heroSealSubtitleAndroid
           : t.heroSealSubtitleOther,
     sealPrimaryCta: t.sealPrimaryShort,
+    sealPrimaryCtaChecking: en.sealPrimaryCtaChecking,
     sealPrimaryCtaReady: t.sealPrimaryCtaReady,
     sealPrimaryCtaWaiting: t.sealPrimaryCtaWaiting,
     sealPrimaryHint:
@@ -245,19 +247,52 @@ export function NewMemoryPage({
   const sealFlow = useMemo(() => getSealFlowCopy(platform), [platform]);
   const nfcHoldCopy = useMemo(() => getNfcHoldGuideCopy(platform), [platform]);
   const showCloudBackupUpsell = !userEntitlements?.canUseCloudBackup;
+  const { session, sessionLoading } = useSessionContext();
   const { boundRingCount } = useRingRegistryContext();
   const ringReady = boundRingCount > 0;
+  const [ringHydrateState, setRingHydrateState] = useState(() =>
+    boundRingCount > 0 ? "ready" : "pending"
+  );
 
   useEffect(() => {
-    if (ringReady) return undefined;
+    if (ringReady) {
+      setRingHydrateState("ready");
+      return undefined;
+    }
+    if (sessionLoading || !session?.access_token) return undefined;
+
     let cancelled = false;
-    void hydrateRingRegistryFromCloud().finally(() => {
+    let attempt = 0;
+    const maxAttempts = 5;
+
+    async function tryHydrate() {
+      if (cancelled || ringReady) return;
+      setRingHydrateState("loading");
+      const outcome = await hydrateRingRegistryFromCloud(session.access_token);
       if (cancelled) return;
-    });
+      if (outcome?.ok && outcome.ringCount > 0) {
+        setRingHydrateState("ready");
+        return;
+      }
+      if (outcome?.ok && outcome.ringCount === 0) {
+        setRingHydrateState("none");
+        return;
+      }
+      attempt += 1;
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 1000 * attempt);
+        });
+        return tryHydrate();
+      }
+      setRingHydrateState("none");
+    }
+
+    void tryHydrate();
     return () => {
       cancelled = true;
     };
-  }, [ringReady]);
+  }, [ringReady, sessionLoading, session?.access_token]);
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [releaseAtInput, setReleaseAtInput] = useState("");
@@ -1130,7 +1165,10 @@ export function NewMemoryPage({
     return sealFlow.tapPlacement;
   }
 
+  const ringHydrating = ringHydrateState === "loading" && !ringReady;
+
   function getPrimaryButtonText() {
+    if (ringHydrating) return pageCopy.sealPrimaryCtaChecking || "Checking ring…";
     if (sealPromptOpen) return pageCopy.sealPrimaryCtaWaiting;
     if (editingDraftId) return pageCopy.sealPrimaryCtaReady;
     return pageCopy.sealPrimaryCta;
@@ -1494,7 +1532,9 @@ export function NewMemoryPage({
                     ? styles.heroSealButtonBusy
                     : ringReady
                       ? styles.heroSealButtonActive
-                      : styles.heroSealButtonMuted),
+                      : ringHydrating
+                        ? styles.heroSealButtonBusy
+                        : styles.heroSealButtonMuted),
                 }}
               >
                 {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}

@@ -8,15 +8,29 @@ import {
   isPermanentSupabaseSession,
   scrubSupabaseAuthArtifactsFromAppUrl,
 } from "@/lib/appAuthGate";
+import { urlLooksLikeSupabaseAuthReturn } from "@/lib/supabaseAuthUrlSignal";
 import { useSupabaseSession } from "@/src/hooks/useSupabaseSession";
 
 export default function AppHomePage() {
   const { session, loading } = useSupabaseSession();
   const ready = isPermanentSupabaseSession(session);
   const [redirecting, setRedirecting] = useState(false);
+  const [authReturnPending, setAuthReturnPending] = useState(
+    () => typeof window !== "undefined" && urlLooksLikeSupabaseAuthReturn()
+  );
 
   useEffect(() => {
-    if (loading) return;
+    if (!authReturnPending) return undefined;
+    if (ready) {
+      setAuthReturnPending(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setAuthReturnPending(false), 14_000);
+    return () => window.clearTimeout(timer);
+  }, [authReturnPending, ready]);
+
+  useEffect(() => {
+    if (loading || authReturnPending) return;
     if (ready) {
       try {
         window.localStorage.removeItem(FTUX_STARTED_KEY);
@@ -26,21 +40,23 @@ export default function AppHomePage() {
       scrubSupabaseAuthArtifactsFromAppUrl();
       return;
     }
+    if (urlLooksLikeSupabaseAuthReturn()) return;
     captureAppDeepLinkForPostLogin();
     queueMicrotask(() => setRedirecting(true));
     window.location.replace("/login?next=%2Fapp");
-  }, [loading, ready]);
+  }, [loading, ready, authReturnPending]);
 
   useEffect(() => {
-    if (!loading || ready) return undefined;
+    if (!loading || ready || authReturnPending) return undefined;
+    if (urlLooksLikeSupabaseAuthReturn()) return undefined;
     const timer = window.setTimeout(() => {
       captureAppDeepLinkForPostLogin();
       window.location.replace("/login?next=%2Fapp");
-    }, 10_000);
+    }, 14_000);
     return () => window.clearTimeout(timer);
-  }, [loading, ready]);
+  }, [loading, ready, authReturnPending]);
 
-  if (loading || !ready) {
+  if (loading || authReturnPending || !ready) {
     return (
       <main
         style={{

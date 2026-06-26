@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { withTimeout } from "@/lib/nfc-flow-timing";
+import { urlLooksLikeSupabaseAuthReturn } from "@/lib/supabaseAuthUrlSignal";
 
 const AUTH_INIT_TIMEOUT_MS = 8_000;
+const AUTH_RETURN_MAX_WAIT_MS = 14_000;
 
 /**
  * Tracks Supabase auth session in the PWA shell (for silent NFC login UX).
@@ -17,6 +19,9 @@ export function useSupabaseSession() {
   useEffect(() => {
     const sb = getSupabaseBrowserClient();
     let cancelled = false;
+    const authReturnPending =
+      typeof window !== "undefined" && urlLooksLikeSupabaseAuthReturn();
+    let authReturnTimer;
 
     void (async () => {
       try {
@@ -37,12 +42,22 @@ export function useSupabaseSession() {
         );
         if (!cancelled) {
           setSession(data.session ?? null);
-          setLoading(false);
+          if (!authReturnPending || data.session) {
+            setLoading(false);
+          }
         }
       } catch {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !authReturnPending) {
+          setLoading(false);
+        }
       }
     })();
+
+    if (authReturnPending) {
+      authReturnTimer = window.setTimeout(() => {
+        if (!cancelled) setLoading(false);
+      }, AUTH_RETURN_MAX_WAIT_MS);
+    }
 
     const {
       data: { subscription },
@@ -53,6 +68,9 @@ export function useSupabaseSession() {
 
     return () => {
       cancelled = true;
+      if (authReturnTimer !== undefined) {
+        window.clearTimeout(authReturnTimer);
+      }
       subscription.unsubscribe();
     };
   }, []);

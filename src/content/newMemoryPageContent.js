@@ -13,6 +13,7 @@ const EN = {
   saveSecureLinkAndroid: "Save securely",
   saveSecureLinkOther: "Save securely",
   sealPrimaryShort: "Seal with Ring",
+  sealPrimaryCtaChecking: "Checking ring…",
   editorSectionTitle: "Your story & media",
   storyCharCount: "{n} characters",
   storyCharSoftMaxWarn: "Very long text may slow saving on older phones.",
