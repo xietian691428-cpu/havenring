@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   getBoundRings,
   pruneStaleLocalRingsFromCloud,
+  restoreLocalRingsFromCloud,
   updateRingCloudMetadata,
 } from "@/src/services/ringRegistryService";
 
@@ -187,6 +188,7 @@ async function resolvePairStateInner(
 
     const cloudRows = (Array.isArray(payload.rings) ? payload.rings : []) as CloudRingRow[];
     const prunedStaleCount = pruneStaleLocalRingsFromCloud(cloudRows);
+    restoreLocalRingsFromCloud(cloudRows);
     const metadataReconciled = reconcileLocalMetadataFromCloud(cloudRows);
     const pairActive = Boolean(payload.pairActive);
     const drift = detectDrift(cloudRows, prunedStaleCount, metadataReconciled);

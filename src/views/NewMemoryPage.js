@@ -274,6 +274,21 @@ export function NewMemoryPage({
         setRingHydrateState("ready");
         return;
       }
+      if (
+        outcome?.ok &&
+        outcome.ringCount === 0 &&
+        Number(outcome.ownedOnServer || 0) > 0
+      ) {
+        attempt += 1;
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, 1000 * attempt);
+          });
+          return tryHydrate();
+        }
+        setRingHydrateState("failed");
+        return;
+      }
       if (outcome?.ok && outcome.ringCount === 0) {
         setRingHydrateState("none");
         return;
@@ -292,6 +307,16 @@ export function NewMemoryPage({
     return () => {
       cancelled = true;
     };
+  }, [ringReady, sessionLoading, session?.access_token]);
+
+  useEffect(() => {
+    if (ringReady || sessionLoading || !session?.access_token) return undefined;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void hydrateRingRegistryFromCloud(session.access_token);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [ringReady, sessionLoading, session?.access_token]);
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");

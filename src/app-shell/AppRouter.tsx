@@ -622,8 +622,11 @@ function AppRouterInner({
     let cancelled = false;
     void (async () => {
       const outcome = await hydrateRingRegistryFromCloud(sessionKey);
-      if (cancelled || !outcome?.ok) return;
-      ringHydrateDoneForSessionRef.current = sessionKey;
+      if (cancelled) return;
+      if (!outcome?.ok) return;
+      if (outcome.ringCount > 0 || Number(outcome.ownedOnServer || 0) === 0) {
+        ringHydrateDoneForSessionRef.current = sessionKey;
+      }
     })();
 
     return () => {

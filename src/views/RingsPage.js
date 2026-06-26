@@ -16,6 +16,7 @@ import { PartnerInvitePanel } from "../components/PartnerInvitePanel";
 import { setPairSharingEnabled } from "../services/pairSharingService";
 import { consumeOpenPartnerInviteOnRings } from "@/lib/partner-invite-ui";
 import { resolvePairState } from "@/lib/pair-state-resolver";
+import { useRingRegistryContext } from "../providers/RingProvider";
 
 export function RingsPage({
   locale = "en",
@@ -24,6 +25,7 @@ export function RingsPage({
   onOpenHelp,
 }) {
   const t = RINGS_PAGE_CONTENT[locale] || RINGS_PAGE_CONTENT.en;
+  const { bumpRingRegistry } = useRingRegistryContext();
   const [localRings, setLocalRings] = useState(() => getBoundRings());
   const [cloudRings, setCloudRings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,6 +145,7 @@ export function RingsPage({
         setPairSharingEnabled(true);
       }
       setLocalRings(getBoundRings());
+      bumpRingRegistry();
     } catch {
       setSyncPending(true);
     } finally {

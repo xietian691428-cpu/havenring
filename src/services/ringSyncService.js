@@ -18,7 +18,7 @@ import {
   getActiveRingOrFirst,
   getBoundRings,
   pruneStaleLocalRingsFromCloud,
-  upsertBoundRingByUidKey,
+  restoreLocalRingsFromCloud,
   updateRingCloudMetadata,
 } from "./ringRegistryService";
 import { syncPairMemoriesFromServer } from "./pairSharingService";
@@ -80,27 +80,11 @@ function buildCloudRingMapById(rows) {
   return map;
 }
 
+/**
+ * @deprecated Use restoreLocalRingsFromCloud from ringRegistryService.
+ */
 function reconcileLocalRingsFromCloud(cloudRings = []) {
-  let recovered = 0;
-  for (const row of cloudRings) {
-    const uidKey = String(row?.nfc_uid_hash || "");
-    if (!uidKey || !row?.id) continue;
-    const before = getBoundRings().find((ring) => ring.uidKey === uidKey);
-    const ring = upsertBoundRingByUidKey(uidKey, {
-      label: row.nickname || "Recovered ring",
-      cloudRingId: row.id,
-      havenId: row.haven_id || null,
-      cloudBoundAt: row.bound_at || null,
-      cloudLastUsedAt: row.last_used_at || null,
-    });
-    if (!before && ring) recovered += 1;
-  }
-  return recovered;
-}
-
-function notifyRingRegistryChanged(detail = {}) {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("haven-ring-registry", { detail }));
+  return restoreLocalRingsFromCloud(cloudRings).recovered;
 }
 
 /**
@@ -119,6 +103,7 @@ export async function hydrateRingRegistryFromCloud(accessToken) {
       ok: false,
       recovered: 0,
       ringCount: getBoundRings().length,
+      ownedOnServer: 0,
       reason: "auth",
     };
   }
@@ -128,19 +113,21 @@ export async function hydrateRingRegistryFromCloud(accessToken) {
       ok: false,
       recovered: 0,
       ringCount: getBoundRings().length,
+      ownedOnServer: 0,
       reason: cloudRingResult.reason || "fetch_failed",
     };
   }
   const cloudRings = cloudRingResult.rows || [];
-  const ownedRings = cloudRings.filter((row) => row?.ownedByYou === true);
-  const ringsToRestore = ownedRings.length ? ownedRings : cloudRings;
   pruneStaleLocalRingsFromCloud(cloudRings);
-  const recovered = reconcileLocalRingsFromCloud(ringsToRestore);
-  const ringCount = getBoundRings().length;
-  if (cloudRingResult.ok) {
-    notifyRingRegistryChanged({ recovered, source: "hydrate", ringCount });
-  }
-  return { ok: true, recovered, ringCount, ownedOnServer: ownedRings.length };
+  const { recovered, ringCount, skipped, ownedOnServer } =
+    restoreLocalRingsFromCloud(cloudRings);
+  return {
+    ok: true,
+    recovered,
+    ringCount,
+    skipped,
+    ownedOnServer,
+  };
 }
 
 async function fetchMomentsDelta(accessToken, cloudRingIds) {
@@ -213,9 +200,6 @@ export async function syncRingScopedCaches(options = {}) {
     pruneStaleLocalRingsFromCloud(cloudRings);
   }
   const recoveredLocalRings = reconcileLocalRingsFromCloud(cloudRings);
-  if (cloudRingResult.ok && (recoveredLocalRings > 0 || cloudRings.length > 0)) {
-    notifyRingRegistryChanged({ recovered: recoveredLocalRings, source: "sync" });
-  }
   const localRingsAll = getBoundRings();
   const active = getActiveRingOrFirst();
   const localRings = targetUidKey

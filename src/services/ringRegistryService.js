@@ -278,6 +278,55 @@ export function pruneStaleLocalRingsFromCloud(cloudRings = []) {
   return removed;
 }
 
+function notifyRingRegistryChanged(detail = {}) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("haven-ring-registry", { detail }));
+}
+
+/**
+ * After cache clear, rebuild local PWA registry from GET /api/nfc/list rows.
+ * Prefer rings owned by the signed-in user; fall back to all active haven rings.
+ */
+export function restoreLocalRingsFromCloud(cloudRings = [], opts = {}) {
+  const preferOwned = opts.preferOwned !== false;
+  let rows = Array.isArray(cloudRings) ? cloudRings : [];
+  const ownedOnServer = rows.filter((row) => row?.ownedByYou === true).length;
+  if (preferOwned) {
+    const owned = rows.filter((row) => row?.ownedByYou === true);
+    if (owned.length) rows = owned;
+  }
+  let recovered = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const uidKey = String(row?.nfc_uid_hash || "").trim();
+    if (!uidKey || !row?.id) {
+      skipped += 1;
+      continue;
+    }
+    const before = getBoundRings().find((ring) => ring.uidKey === uidKey);
+    const defaultLabel = row.ownedByYou === false ? "Partner ring" : "My ring";
+    const ring = upsertBoundRingByUidKey(uidKey, {
+      label: String(row.nickname || "").trim() || defaultLabel,
+      cloudRingId: row.id,
+      havenId: row.haven_id || null,
+      cloudBoundAt: row.bound_at || null,
+      cloudLastUsedAt: row.last_used_at || null,
+    });
+    if (!before && ring) recovered += 1;
+  }
+  const ringCount = getBoundRings().length;
+  if (recovered > 0 || rows.length > 0) {
+    notifyRingRegistryChanged({
+      recovered,
+      source: "restore",
+      ringCount,
+      skipped,
+      ownedOnServer,
+    });
+  }
+  return { recovered, ringCount, skipped, ownedOnServer };
+}
+
 export const RING_COLOR_OPTIONS = [
   { key: "gold", hex: "#d9a67a" },
   { key: "rose", hex: "#c97b84" },
