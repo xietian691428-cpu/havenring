@@ -18,23 +18,35 @@ import {
 } from "../services/firstRunTelemetryService";
 import {
   clearComposerSnapshot,
+  evaluateLocalComposerSealSize,
+  readComposerSnapshotTextOnly,
+  writeComposerSnapshotTextOnly,
+} from "../features/seal/sealComposer";
+import {
   clearSealPrepState,
+  closeSealBroadcastChannel,
   getSealArmedRemainingMs,
   isSealFlowArmed,
   navigateToSealWaitPage,
-  listenForSealRingTapOnce,
-  evaluateLocalComposerSealSize,
-  prepareSealForRingTap,
-  readComposerSnapshotTextOnly,
+  subscribeSealBroadcast,
   SEAL_STAGING_TOO_LARGE,
   SEAL_LOCAL_STORAGE_FULL,
   isSealStagingTooLargeError,
   isSealLocalStorageFullError,
-  subscribeSealBroadcast,
-  writeComposerSnapshotTextOnly,
-} from "../features/seal";
+  SEAL_VIDEO_TOO_LARGE,
+  isSealVideoTooLargeError,
+} from "../features/seal/sealCore";
+import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
+import { clearSealPrepBundle } from "../features/seal/sealPrepBundle";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
-import { SEAL_ARMED_KEY } from "../../lib/seal-flow";
+import {
+  ingestVideoFileLight,
+  buildPendingVideoRef,
+  attachmentsForLightVideoSeal,
+  composerAttachmentsForDraft,
+} from "@/lib/video-attachment-prep";
+import { isVideoAttachmentRef } from "@/lib/memory-video-types";
+import { shouldForceVideoLightSealMode } from "../features/seal/sealMediaPrep";
 import { getFreeEntitlements } from "../services/subscriptionService";
 import { resolvePlatformTarget } from "../hooks/usePlatformTarget";
 import { useSealArmCountdown } from "../hooks/useSealArmCountdown";
@@ -66,22 +78,33 @@ import {
   composerPhotosForDraft,
   createComposerPhotoFromBlob,
   getComposerPhotoDisplayUrl,
+  hydrateComposerPhotosFromMemory,
   prepareComposerPhotosForSave,
   revokeComposerPhoto,
   revokeComposerPhotos,
 } from "@/lib/composer-photo-utils";
+import {
+  MAX_FILE_ATTACHMENT_MB,
+  MAX_VIDEO_ATTACHMENT_MB,
+  SEAL_LOCAL_MAX_MB,
+  maxAttachmentBytesForMime,
+} from "@/lib/composer-attachment-limits";
 import { ComposerMemoryRecovery } from "../components/ComposerMemoryRecovery";
 
 const PLATFORM_LIMITS = getComposerPlatformLimits();
 const MAX_PHOTOS = PLATFORM_LIMITS.maxPhotos;
 const MAX_VIDEOS = 6;
 const MAX_FILE_ATTACHMENTS = 5;
-const MAX_ATTACHMENT_SIZE_MB = 50;
-const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 const STORY_SOFT_MAX = 8000;
 const SECURE_SAVE_UPSELL_KEY = "haven.newMemory.postSecureUpgradeNudge.v1";
 
 function formatComposerSaveError(error, t) {
+  if (isSealVideoTooLargeError(error)) {
+    return t.feedbackVideoTooLarge || t.feedbackSaveFailed;
+  }
+  if (error instanceof Error && error.message === SEAL_VIDEO_TOO_LARGE) {
+    return t.feedbackVideoTooLarge || t.feedbackSaveFailed;
+  }
   if (isSealLocalStorageFullError(error)) {
     return t.sealLocalStorageInsufficient || t.feedbackSaveFailed;
   }
@@ -121,6 +144,17 @@ function countVideoAttachments(items) {
 
 function clearDraftSnapshot() {
   clearComposerSnapshot();
+}
+
+function composerRowHasInlineBlob(photo) {
+  return photo?.blob instanceof Blob || Boolean(photo?.dataUrl);
+}
+
+function photosAreVaultRefsOnly(photos = []) {
+  return (
+    photos.length > 0 &&
+    photos.every((photo) => photo?.id && !composerRowHasInlineBlob(photo))
+  );
 }
 
 /**
@@ -292,7 +326,7 @@ export function NewMemoryPage({
   const [sealFinalizeError, setSealFinalizeError] = useState("");
   const [sealSizeStatus, setSealSizeStatus] = useState({
     withinLimit: true,
-    limitMb: 300,
+    limitMb: SEAL_LOCAL_MAX_MB,
     usedMb: 0,
     usedBytes: 0,
     wouldTrimMedia: false,
@@ -315,6 +349,7 @@ export function NewMemoryPage({
   const photosRef = useRef(photos);
   const handleSaveRef = useRef(null);
   const autoArmBusyRef = useRef(false);
+  const sealCoverOnlyRef = useRef(false);
 
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -329,21 +364,28 @@ export function NewMemoryPage({
   }, []);
 
   useEffect(() => {
-    // Hydrate composer once per memory id.
+    // Hydrate composer once per memory id (full vault row from IDB, not timeline summary).
     const m = initialEditMemory;
     if (!m?.id) return undefined;
-    queueMicrotask(() => {
+    let active = true;
+    void (async () => {
+      const ph = await hydrateComposerPhotosFromMemory(m.id, m.photo);
+      if (!active) {
+        revokeComposerPhotos(ph);
+        return;
+      }
       setTitle(String(m.title || ""));
       setStory(String(m.story || ""));
       const ra = Number(m.releaseAt || 0) || 0;
       setReleaseAtInput(ra ? new Date(ra).toISOString().slice(0, 16) : "");
-      const ph = Array.isArray(m.photo) ? m.photo : m.photo ? [m.photo] : [];
       setPhotos(ph);
       setAttachments(Array.isArray(m.attachments) ? m.attachments : []);
       setEditingDraftId(String(m.id));
       setFeedback("");
-    });
-    return undefined;
+    })();
+    return () => {
+      active = false;
+    };
   }, [initialEditMemory, initialEditMemory?.id]);
 
   useEffect(() => {
@@ -375,6 +417,9 @@ export function NewMemoryPage({
           URL.revokeObjectURL(item.previewUrl);
         }
       });
+      releaseAllTimelineThumbUrls();
+      clearSealPrepBundle();
+      closeSealBroadcastChannel();
     };
   }, []);
 
@@ -462,7 +507,7 @@ export function NewMemoryPage({
     if (!hasDraftContent) {
       setSealSizeStatus({
         withinLimit: true,
-        limitMb: 300,
+        limitMb: SEAL_LOCAL_MAX_MB,
         usedMb: 0,
         usedBytes: 0,
         wouldTrimMedia: false,
@@ -487,8 +532,14 @@ export function NewMemoryPage({
         if (cancelled) return;
         const template =
           !status.withinLimit || status.headroomLow
-            ? pageCopy.sealSizeMeterOver || t.sealSizeMeterOver
-            : pageCopy.sealSizeMeterOk || t.sealSizeMeterOk;
+            ? status.hasVideo
+              ? pageCopy.sealSizeMeterVideoOver || t.sealSizeMeterVideoOver
+              : pageCopy.sealSizeMeterOver || t.sealSizeMeterOver
+            : status.videoHeadroomLow
+              ? pageCopy.sealSizeMeterVideoHeadroom || t.sealSizeMeterVideoHeadroom
+              : status.hasVideo
+                ? pageCopy.sealSizeMeterVideoOk || t.sealSizeMeterVideoOk
+                : pageCopy.sealSizeMeterOk || t.sealSizeMeterOk;
         const limitDisplay = status.limitApprox
           ? `~${status.limitMb}`
           : String(status.limitMb);
@@ -513,8 +564,13 @@ export function NewMemoryPage({
     userEntitlements,
     t.sealSizeMeterOk,
     t.sealSizeMeterOver,
+    t.sealSizeMeterVideoOk,
+    t.sealSizeMeterVideoOver,
     pageCopy.sealSizeMeterOk,
     pageCopy.sealSizeMeterOver,
+    pageCopy.sealSizeMeterVideoOk,
+    t.sealSizeMeterVideoHeadroom,
+    pageCopy.sealSizeMeterVideoHeadroom,
   ]);
 
   useEffect(() => {
@@ -641,7 +697,12 @@ export function NewMemoryPage({
           maxDim: compressProfile.imageMaxDim,
           quality: compressProfile.jpegQuality,
         });
-        return createComposerPhotoFromBlob(blob, `${Date.now()}-${index}`);
+        return createComposerPhotoFromBlob(
+          blob,
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 9)}`
+        );
       };
 
       if (PLATFORM_LIMITS.compressSequentially) {
@@ -663,7 +724,12 @@ export function NewMemoryPage({
         return;
       }
 
-      setPhotos((prev) => [...prev, ...newPhotos]);
+      if (photosAreVaultRefsOnly(photos)) {
+        revokeComposerPhotos(photos);
+        setPhotos(newPhotos);
+      } else {
+        setPhotos((prev) => [...prev, ...newPhotos]);
+      }
       const overLimit = files.length > allowedFiles.length;
       setFeedback(
         overLimit
@@ -691,12 +757,13 @@ export function NewMemoryPage({
       let skippedOverFileCap = 0;
 
       for (const file of files) {
-        if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        const cand = fileToAttachmentCandidate(file, { preferVideo });
+        const maxBytes = maxAttachmentBytesForMime(cand.mimeType);
+        if (file.size > maxBytes) {
           tooLargeNames.push(file.name || "file");
           continue;
         }
 
-        const cand = fileToAttachmentCandidate(file, { preferVideo });
         const isVideo = isVideoMime(cand.mimeType);
 
         if (preferVideo && !isVideo) {
@@ -717,6 +784,17 @@ export function NewMemoryPage({
             skippedOverVideoCap += 1;
             continue;
           }
+          try {
+            const light = await ingestVideoFileLight(file);
+            selected.push(light);
+          } catch (error) {
+            if (isSealVideoTooLargeError(error)) {
+              tooLargeNames.push(file.name || "video");
+            } else {
+              console.warn("[NewMemory] video ingest skipped", file.name, error);
+            }
+          }
+          continue;
         } else if (baseFiles + fileSel >= MAX_FILE_ATTACHMENTS) {
           skippedOverFileCap += 1;
           continue;
@@ -737,8 +815,13 @@ export function NewMemoryPage({
       }
       if (tooLargeNames.length) {
         const preview = tooLargeNames.slice(0, 2).join(", ");
+        const mbLabel = preferVideo
+          ? MAX_VIDEO_ATTACHMENT_MB
+          : MAX_FILE_ATTACHMENT_MB;
         messages.push(
-          `${t.feedbackAttachmentTooLargeManyPrefix}${tooLargeNames.length}${t.feedbackAttachmentTooLargeManyMiddle}${MAX_ATTACHMENT_SIZE_MB}${t.feedbackAttachmentTooLargeManySuffix}${preview}`
+          preferVideo
+            ? t.feedbackVideoTooLarge
+            : `${t.feedbackAttachmentTooLargeManyPrefix}${tooLargeNames.length}${t.feedbackAttachmentTooLargeManyMiddle}${mbLabel}${t.feedbackAttachmentTooLargeManySuffix}${preview}`
         );
       }
       if (wrongPickerVideos.length) {
@@ -752,7 +835,7 @@ export function NewMemoryPage({
           t.feedbackSkippedVideoClips
             .replace("{n}", String(skippedOverVideoCap))
             .replace("{max}", String(MAX_VIDEOS))
-            .replace("{mb}", String(MAX_ATTACHMENT_SIZE_MB))
+            .replace("{mb}", String(MAX_VIDEO_ATTACHMENT_MB))
         );
       }
       if (skippedOverFileCap > 0) {
@@ -760,7 +843,7 @@ export function NewMemoryPage({
           t.feedbackSkippedFileAttachments
             .replace("{n}", String(skippedOverFileCap))
             .replace("{max}", String(MAX_FILE_ATTACHMENTS))
-            .replace("{mb}", String(MAX_ATTACHMENT_SIZE_MB))
+            .replace("{mb}", String(MAX_VIDEO_ATTACHMENT_MB))
         );
       }
       if (messages.length) {
@@ -775,10 +858,14 @@ export function NewMemoryPage({
 
   async function persistDraftForSealPrep() {
     const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-    const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+    const scopeId = editingDraftId || crypto.randomUUID();
+    let draftAttachments = await prepareAttachmentsForSave(attachments, t, scopeId);
+    if (sealCoverOnlyRef.current) {
+      draftAttachments = attachmentsForLightVideoSeal(draftAttachments);
+    }
     const sealPhotos = composerPhotosForDraft(photos);
     return saveDraftItem({
-      id: editingDraftId || undefined,
+      id: editingDraftId || scopeId,
       title: title.trim() || t.untitled,
       story: story.trim(),
       photo: sealPhotos.length ? sealPhotos : photos,
@@ -818,10 +905,11 @@ export function NewMemoryPage({
     setSecureSaveToast(false);
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-      const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const scopeId = editingDraftId || crypto.randomUUID();
+      const draftAttachments = await prepareAttachmentsForSave(attachments, t, scopeId);
       const draftPhotoRows = composerPhotosForDraft(photos);
       const savedDraft = await saveDraftItem({
-        id: editingDraftId || undefined,
+        id: editingDraftId || scopeId,
         title: title.trim() || t.untitled,
         story: story.trim(),
         photo: draftPhotoRows,
@@ -896,6 +984,12 @@ export function NewMemoryPage({
   }
 
   function resolveSealLimitMessage(error) {
+    if (isSealVideoTooLargeError(error)) {
+      return pageCopy.feedbackVideoTooLarge || t.feedbackVideoTooLarge;
+    }
+    if (error instanceof Error && error.message === SEAL_VIDEO_TOO_LARGE) {
+      return pageCopy.feedbackVideoTooLarge || t.feedbackVideoTooLarge;
+    }
     if (isSealLocalStorageFullError(error)) {
       return pageCopy.sealLocalStorageInsufficient || t.sealLocalStorageInsufficient;
     }
@@ -909,6 +1003,9 @@ export function NewMemoryPage({
   }
 
   function resolveSealErrorDialogTitle(error) {
+    if (isSealVideoTooLargeError(error)) {
+      return pageCopy.feedbackVideoTooLarge || t.feedbackVideoTooLarge;
+    }
     if (
       isSealLocalStorageFullError(error) ||
       (error instanceof Error && error.message === SEAL_LOCAL_STORAGE_FULL)
@@ -982,7 +1079,18 @@ export function NewMemoryPage({
         setFeedback("Sign in to seal with your ring.");
         return;
       }
+      if (
+        !sealCoverOnlyRef.current &&
+        videoItems.length > 0 &&
+        (await shouldForceVideoLightSealMode())
+      ) {
+        sealCoverOnlyRef.current = true;
+        setFeedback(t.sealSizeMeterVideoHeadroom || pageCopy.sealSizeMeterVideoHeadroom);
+      }
       const savedDraft = await persistDraftForSealPrep();
+      const prepareSealForRingTap = (
+        await import("../features/seal/sealFinalize")
+      ).prepareSealForRingTap;
       await prepareSealForRingTap({
         draftId: savedDraft.id,
         accessToken,
@@ -1008,7 +1116,13 @@ export function NewMemoryPage({
       });
     } finally {
       setSealPreparingOverlay(false);
+      sealCoverOnlyRef.current = false;
     }
+  }
+
+  async function handleSealCoverOnly() {
+    sealCoverOnlyRef.current = true;
+    await handleSealNow();
   }
 
   async function handleSealNow() {
@@ -1040,10 +1154,11 @@ export function NewMemoryPage({
     autoArmBusyRef.current = true;
     try {
       const releaseAt = releaseAtInput ? Date.parse(releaseAtInput) : 0;
-      const draftAttachments = await prepareAttachmentsForSave(attachments, t);
+      const scopeId = editingDraftId || crypto.randomUUID();
+      const draftAttachments = await prepareAttachmentsForSave(attachments, t, scopeId);
       const preparedPhotos = composerPhotosForDraft(photos);
       const savedDraft = await saveDraftItem({
-        id: editingDraftId || undefined,
+        id: editingDraftId || scopeId,
         title: title.trim() || t.untitled,
         story: story.trim(),
         photo: preparedPhotos.length ? preparedPhotos : photos,
@@ -1096,6 +1211,9 @@ export function NewMemoryPage({
     setRingTapError("");
     setNfcSealScanBusy(true);
     try {
+      const listenForSealRingTapOnce = (
+        await import("../features/seal/sealCore")
+      ).listenForSealRingTapOnce;
       const result = await listenForSealRingTapOnce(window.location.origin);
       if (!result.ok) {
         setRingTapError(result.message);
@@ -1313,6 +1431,7 @@ export function NewMemoryPage({
                 <div style={styles.photoGrid} role="group" aria-label={t.videoAttachmentsLabel}>
                   {videoItems.map((item) => {
                     const src = item.previewUrl || item.dataUrl || "";
+                    const thumb = item.thumbDataUrl || "";
                     return (
                       <div key={item.id} style={styles.mediaThumbWrap}>
                         {src ? (
@@ -1323,6 +1442,8 @@ export function NewMemoryPage({
                             preload="metadata"
                             style={styles.mediaCellVideo}
                           />
+                        ) : thumb ? (
+                          <img src={thumb} alt="" style={styles.mediaCellVideo} />
                         ) : (
                           <div style={styles.videoPlaceholderCompact}>{t.videoPreviewPending}</div>
                         )}
@@ -1496,6 +1617,21 @@ export function NewMemoryPage({
                 {saving ? <span style={styles.heroSealSpinner} aria-hidden /> : null}
                 {getPrimaryButtonText()}
               </button>
+              {videoItems.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleSealCoverOnly()}
+                    disabled={saving || sealPromptOpen}
+                    style={styles.saveSecureButton}
+                  >
+                    {pageCopy.sealCoverOnlyCta || t.sealCoverOnlyCta}
+                  </button>
+                  <p style={styles.heroSealHint}>
+                    {pageCopy.sealCoverOnlyHint || t.sealCoverOnlyHint}
+                  </p>
+                </>
+              ) : null}
               <p style={styles.heroSealHint}>{pageCopy.sealPrimaryHint}</p>
               {showCloudBackupUpsell ? (
                 <p style={styles.heroUpgrade}>{pageCopy.cloudBackupHint}</p>
@@ -1603,10 +1739,10 @@ function fileToAttachmentCandidate(file, opts = {}) {
     name: file.name || (isVideo ? "Video" : "attachment"),
     mimeType,
     size: file.size || 0,
-    file,
+    file: isVideo ? undefined : file,
   };
-  if (isVideo && typeof URL !== "undefined" && file) {
-    base.previewUrl = URL.createObjectURL(file);
+  if (!isVideo) {
+    base.file = file;
   }
   return base;
 }
@@ -1616,21 +1752,38 @@ function formatAttachmentSize(size = 0) {
   return `${mb.toFixed(1)}MB`;
 }
 
-async function prepareAttachmentsForSave(attachments, t) {
+async function prepareAttachmentsForSave(attachments, t, scopeId = "") {
   const prepared = [];
   for (const item of attachments || []) {
+    const mime = String(item?.mimeType || "");
+    const isVideo = isVideoMime(mime);
+
+    if (isVideoAttachmentRef(item)) {
+      prepared.push(item);
+      continue;
+    }
+
+    if (isVideo) {
+      prepared.push(buildPendingVideoRef(item, { coverOnly: Boolean(item.coverOnly) }));
+      continue;
+    }
+
     if (item?.dataUrl) {
       prepared.push(item);
       continue;
     }
-    if (!item?.file) continue;
+    const file = item?.file || item?.blob;
+    if (!file) {
+      if (item) prepared.push(item);
+      continue;
+    }
     try {
       prepared.push({
         id: item.id,
         name: item.name,
         mimeType: item.mimeType,
         size: item.size,
-        dataUrl: await blobToDataUrl(item.file, t),
+        dataUrl: await blobToDataUrl(file, t),
       });
     } catch (error) {
       // eslint-disable-next-line no-console

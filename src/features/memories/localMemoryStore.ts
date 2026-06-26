@@ -43,9 +43,11 @@ import {
 } from "@/lib/memory-photo-types";
 import {
   deletePhotoBlobsForMemory,
+  deletePhotoBlobsForMemoryPhotoIds,
   deletePhotoBlobsForPhotoIds,
-  getPhotoBlob,
+  getPhotoBlobForMemory,
   listPhotoIdsForMemory,
+  photoBlobExistsForMemory,
   putPhotoBlobVariants,
 } from "@/lib/photo-blob-store";
 import {
@@ -59,6 +61,20 @@ import {
   STORE_PHOTO_BLOBS,
   txDone,
 } from "@/lib/memory-db";
+import {
+  deleteVideoBlobsForMemory,
+  deleteVideoBlobsForMemoryAttachmentIds,
+  clearAllVideoChunks,
+} from "@/lib/video-chunk-store";
+import {
+  isVideoAttachmentRef,
+  isVideoMimeType,
+  type VideoAttachmentRef,
+} from "@/lib/memory-video-types";
+import {
+  buildPendingVideoRef,
+  type ComposerAttachmentRow,
+} from "@/lib/video-attachment-prep";
 import { mergeSupplements, type MemorySupplement } from "@/lib/memory-supplements";
 import {
   clearAllMemorySupplements,
@@ -142,7 +158,7 @@ async function persistPhotoInputs(
 ): Promise<MemoryPhotoRef[] | null> {
   if (photo == null) {
     if (previousPhotoIds.length) {
-      await deletePhotoBlobsForPhotoIds(previousPhotoIds);
+      await deletePhotoBlobsForMemoryPhotoIds(memoryId, previousPhotoIds);
     }
     return null;
   }
@@ -150,7 +166,7 @@ async function persistPhotoInputs(
   const rows = Array.isArray(photo) ? photo : [photo];
   if (!rows.length) {
     if (previousPhotoIds.length) {
-      await deletePhotoBlobsForPhotoIds(previousPhotoIds);
+      await deletePhotoBlobsForMemoryPhotoIds(memoryId, previousPhotoIds);
     }
     return null;
   }
@@ -163,7 +179,10 @@ async function persistPhotoInputs(
       continue;
     }
     if (isMemoryPhotoRef(row)) {
-      refs.push(row);
+      const refId = String(row.id || "");
+      if (refId && (await photoBlobExistsForMemory(memoryId, refId))) {
+        refs.push(row);
+      }
       continue;
     }
     if (photoRowHasInlineDataUrl(row)) {
@@ -174,9 +193,72 @@ async function persistPhotoInputs(
 
   const nextIds = new Set(refs.map((ref) => ref.id));
   const removed = previousPhotoIds.filter((id) => !nextIds.has(id));
-  if (removed.length) await deletePhotoBlobsForPhotoIds(removed);
+  if (removed.length) await deletePhotoBlobsForMemoryPhotoIds(memoryId, removed);
 
   return refs.length ? refs : null;
+}
+
+async function persistVideoInputs(
+  memoryId: string,
+  attachments: unknown[],
+  previousAttachmentIds: string[] = []
+): Promise<unknown[]> {
+  const rows = Array.isArray(attachments) ? attachments : [];
+  if (!rows.length) {
+    if (previousAttachmentIds.length) {
+      await deleteVideoBlobsForMemoryAttachmentIds(memoryId, previousAttachmentIds);
+    }
+    return [];
+  }
+
+  const refs: unknown[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (isVideoAttachmentRef(row)) {
+      refs.push(row);
+      continue;
+    }
+    const mime = String((row as ComposerAttachmentRow).mimeType || "");
+    if (isVideoMimeType(mime) || isVideoAttachmentRef(row)) {
+      if (isVideoAttachmentRef(row)) {
+        refs.push(row);
+        continue;
+      }
+      const pending = buildPendingVideoRef(row as ComposerAttachmentRow);
+      refs.push(pending);
+      continue;
+    }
+    refs.push(row);
+  }
+
+  const nextVideoIds = new Set(
+    refs
+      .filter((row) => isVideoAttachmentRef(row))
+      .map((row) => String((row as VideoAttachmentRef).id || ""))
+      .filter(Boolean)
+  );
+  const removed = previousAttachmentIds.filter((id) => !nextVideoIds.has(id));
+  if (removed.length) {
+    await deleteVideoBlobsForMemoryAttachmentIds(memoryId, removed);
+  }
+
+  return refs;
+}
+
+async function readPreviousVideoAttachmentIds(
+  record: MemoryDbRecord | null
+): Promise<string[]> {
+  if (!record) return [];
+  try {
+    const attachments = await localCrypto.decryptJson(record.attachmentsEnc);
+    const rows = Array.isArray(attachments) ? attachments : [];
+    return rows
+      .filter((row) => isVideoAttachmentRef(row))
+      .map((row) => String((row as VideoAttachmentRef).id || ""))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 async function readPreviousPhotoIds(memoryId: string): Promise<string[]> {
@@ -416,17 +498,17 @@ async function resolveTimelineThumbFromPhotoRef(
   memoryId: string,
   updatedAt: number
 ): Promise<Blob | null> {
-  const existing = await getPhotoBlob(photoId, "thumb");
+  const existing = await getPhotoBlobForMemory(memoryId, photoId, "thumb");
   if (existing) return existing;
 
-  const full = await getPhotoBlob(photoId, "full");
+  const full = await getPhotoBlobForMemory(memoryId, photoId, "full");
   if (!full || typeof URL === "undefined") return null;
 
   const previewUrl = URL.createObjectURL(full);
   try {
     const generated = await dataUrlToTimelineThumbBlob(previewUrl);
     if (generated) {
-      const medium = (await getPhotoBlob(photoId, "medium")) ?? generated;
+      const medium = (await getPhotoBlobForMemory(memoryId, photoId, "medium")) ?? generated;
       void writePersistedTimelineMedia(memoryId, updatedAt, generated, medium);
     }
     return generated;
@@ -447,7 +529,7 @@ async function scheduleTimelineThumbWarm(
     try {
       const thumb = await resolveTimelineThumbFromPhotoRef(ref.id, memoryId, memoryUpdatedAt);
       if (!thumb) return;
-      const medium = (await getPhotoBlob(ref.id, "medium")) ?? thumb;
+      const medium = (await getPhotoBlobForMemory(memoryId, ref.id, "medium")) ?? thumb;
       await writePersistedTimelineMedia(memoryId, memoryUpdatedAt, thumb, medium);
     } catch {
       /* best-effort blob-ref warm */
@@ -626,7 +708,7 @@ export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blo
       const photo = await localCrypto.decryptJson(record.photoEnc);
       const ref = firstPhotoRef(photo);
       if (ref?.id) {
-        const blob = await getPhotoBlob(ref.id, "medium");
+        const blob = await getPhotoBlobForMemory(memoryId, ref.id, "medium");
         if (blob) return blob;
       }
 
@@ -645,13 +727,14 @@ export async function getTimelineMemoryMediumBlob(memoryId: string): Promise<Blo
   });
 }
 
-/** Detail view — load one photo variant from photoBlobs (no base64 in heap). */
+/** Detail view — load one photo variant scoped to a memory (no cross-memory bleed). */
 export async function getMemoryPhotoBlob(
+  memoryId: string,
   photoId: string,
   type: PhotoBlobType = "full"
 ): Promise<Blob | null> {
-  if (!photoId) return null;
-  return getPhotoBlob(photoId, type);
+  if (!memoryId || !photoId) return null;
+  return getPhotoBlobForMemory(memoryId, photoId, type);
 }
 
 /** @deprecated Prefer getTimelineMemoryThumbBlob — avoids keeping data URLs in heap. */
@@ -803,6 +886,7 @@ export async function saveMemory(
   const memory = normalizeMemoryInput(merged);
   const db = await openDb();
   let previousPhotoIds: string[] = [];
+  let previousVideoAttachmentIds: string[] = [];
   try {
     const existingRecord = memory.id
       ? await new Promise<MemoryDbRecord | null>((resolve, reject) => {
@@ -814,6 +898,7 @@ export async function saveMemory(
         })
       : null;
     previousPhotoIds = await readPreviousPhotoIdsFromRecord(existingRecord);
+    previousVideoAttachmentIds = await readPreviousVideoAttachmentIds(existingRecord);
   } catch {
     previousPhotoIds = await readPreviousPhotoIds(memory.id);
   }
@@ -821,6 +906,14 @@ export async function saveMemory(
   if (merged.photo !== undefined) {
     const photoRefs = await persistPhotoInputs(memory.id, memory.photo, previousPhotoIds);
     memory.photo = photoRefs;
+  }
+
+  if (merged.attachments !== undefined) {
+    memory.attachments = await persistVideoInputs(
+      memory.id,
+      memory.attachments,
+      previousVideoAttachmentIds
+    );
   }
 
   const encrypted = await encryptMemoryFields(memory);
@@ -928,6 +1021,7 @@ export async function appendMemorySupplement(
 export async function deleteMemory(id: string): Promise<boolean> {
   if (!id) return false;
   await deletePhotoBlobsForMemory(id);
+  await deleteVideoBlobsForMemory(id);
   await deleteSupplementsForMemory(id);
   const db = await openDb();
   try {
@@ -958,6 +1052,7 @@ export async function clearAllMemories(): Promise<boolean> {
     const tx = blobDb.transaction(STORE_PHOTO_BLOBS, "readwrite");
     tx.objectStore(STORE_PHOTO_BLOBS).clear();
     await txDone(tx);
+    await clearAllVideoChunks();
     return true;
   } finally {
     blobDb.close();

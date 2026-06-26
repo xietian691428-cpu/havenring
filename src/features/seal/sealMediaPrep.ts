@@ -5,7 +5,23 @@ import {
   resolveSealStagingPlaintextMaxBytes,
 } from "@/lib/seal-staging-shared";
 import {
+  draftHasVideoAttachment,
+  logicalAttachmentBytes,
+  meterAttachmentBytes,
+} from "@/lib/video-attachment-prep";
+import { isVideoAttachmentRef, isVideoMimeType } from "@/lib/memory-video-types";
+import { isIosWebKit } from "@/lib/composer-platform-limits";
+import { estimateOomRisk } from "@/lib/ios-memory-heuristics";
+import {
+  MAX_MEMORY_WITH_VIDEO_BYTES,
+  MAX_MEMORY_WITH_VIDEO_MB,
+  MAX_VIDEO_ATTACHMENT_BYTES,
+  VIDEO_HEADROOM_WARN_BYTES,
+  VIDEO_HEADROOM_WARN_MB,
+} from "@/lib/seal-local-limits";
+import {
   throwSealLocalStorageFull,
+  throwSealVideoTooLarge,
 } from "./sealUserMessages";
 import type { SealDraftFinalizePayload } from "./sealTypes";
 import {
@@ -273,8 +289,14 @@ export type ComposerSealSizeStatus = {
   showMeter: boolean;
   /** Device headroom lower than draft size — advisory meter only. */
   headroomLow?: boolean;
-  /** True when displayed limit reflects device headroom below 300MB. */
+  /** True when displayed limit reflects device headroom below 500MB. */
   limitApprox?: boolean;
+  /** Draft includes video — stricter total cap applies. */
+  hasVideo?: boolean;
+  /** Device storage headroom below video-safe threshold. */
+  videoHeadroomLow?: boolean;
+  /** Recommend / force seal text + cover only. */
+  suggestLightVideoSeal?: boolean;
 };
 
 function formatUsedMb(usedBytes: number): number {
@@ -330,25 +352,67 @@ export async function evaluateComposerSealSize(
   return evaluateLocalComposerSealSize(item, opts);
 }
 
-function estimateInlineMediaBytes(items: unknown[]): number {
+function estimatePhotoBytes(items: unknown[], meterOnly = false): number {
   if (!Array.isArray(items)) return 0;
   let total = 0;
   for (const row of items) {
     if (!row || typeof row !== "object") continue;
-    const dataUrl = (row as MediaRow).dataUrl;
-    if (typeof dataUrl === "string" && dataUrl.length > 0) {
-      total += Math.ceil((dataUrl.length * 3) / 4);
-      continue;
-    }
-    const blob = (row as { blob?: Blob }).blob;
-    if (blob instanceof Blob && blob.size > 0) {
-      total += blob.size;
-      continue;
-    }
-    const size = Number((row as MediaRow).size || 0);
-    if (size > 0) total += size;
+    total += meterOnly ? meterAttachmentBytes(row) : logicalAttachmentBytes(row);
   }
   return total;
+}
+
+function estimateAttachmentBytesSplit(
+  items: unknown[],
+  meterOnly = false
+): {
+  videoBytes: number;
+  otherBytes: number;
+} {
+  if (!Array.isArray(items)) return { videoBytes: 0, otherBytes: 0 };
+  let videoBytes = 0;
+  let otherBytes = 0;
+  for (const row of items) {
+    if (!row || typeof row !== "object") continue;
+    const bytes = meterOnly ? meterAttachmentBytes(row) : logicalAttachmentBytes(row);
+    const mime = String((row as MediaRow).mimeType || "");
+    if (isVideoAttachmentRef(row) || isVideoMimeType(mime)) {
+      videoBytes += bytes;
+    } else {
+      otherBytes += bytes;
+    }
+  }
+  return { videoBytes, otherBytes };
+}
+
+export async function shouldForceVideoLightSealMode(): Promise<boolean> {
+  const est = await readStorageEstimate();
+  if (est && est.headroom > 0 && est.headroom < VIDEO_HEADROOM_WARN_BYTES) {
+    return true;
+  }
+  if (isIosWebKit() && estimateOomRisk() !== "low") {
+    return true;
+  }
+  return false;
+}
+
+function resolveSealBudgetBytes(hasVideo: boolean, forStaging: boolean, isPlus: boolean): number {
+  if (forStaging) return resolveSealStagingPlaintextMaxBytes(isPlus);
+  if (hasVideo) return MAX_MEMORY_WITH_VIDEO_BYTES;
+  return SEAL_LOCAL_MAX_BYTES;
+}
+
+function assertVideoAttachmentLimits(attachments: unknown[]): void {
+  if (!Array.isArray(attachments)) return;
+  for (const row of attachments) {
+    if (!row || typeof row !== "object") continue;
+    const mime = String((row as MediaRow).mimeType || "");
+    if (!isVideoAttachmentRef(row) && !isVideoMimeType(mime)) continue;
+    const size = logicalAttachmentBytes(row);
+    if (size > MAX_VIDEO_ATTACHMENT_BYTES) {
+      throwSealVideoTooLarge();
+    }
+  }
 }
 
 /**
@@ -366,10 +430,11 @@ export function estimateComposerSealSizeLight(
 ): ComposerSealSizeStatus {
   const isPlus = Boolean(opts.isPlus);
   const forStaging = Boolean(opts.forStaging);
-  const maxBytes = forStaging
-    ? resolveSealStagingPlaintextMaxBytes(isPlus)
-    : SEAL_LOCAL_MAX_BYTES;
-  const limitMb = Math.floor(maxBytes / (1024 * 1024));
+  const hasVideo = draftHasVideoAttachment(item.attachments ?? []);
+  const maxBytes = resolveSealBudgetBytes(hasVideo, forStaging, isPlus);
+  const limitMb = hasVideo && !forStaging
+    ? MAX_MEMORY_WITH_VIDEO_MB
+    : Math.floor(maxBytes / (1024 * 1024));
 
   const baseBytes = estimateJsonBytes({
     id: "composer-estimate",
@@ -379,18 +444,25 @@ export function estimateComposerSealSizeLight(
     photo: [],
     attachments: [],
   });
-  const mediaBytes =
-    estimateInlineMediaBytes(item.photo ?? []) +
-    estimateInlineMediaBytes(item.attachments ?? []);
-  const usedBytes = baseBytes + mediaBytes;
+  const photoBytes = estimatePhotoBytes(item.photo ?? [], true);
+  const { videoBytes, otherBytes } = estimateAttachmentBytesSplit(
+    item.attachments ?? [],
+    true
+  );
+  const logicalPhotoBytes = estimatePhotoBytes(item.photo ?? [], false);
+  const logicalSplit = estimateAttachmentBytesSplit(item.attachments ?? [], false);
+  const usedBytes = baseBytes + photoBytes + videoBytes + otherBytes;
+  const logicalBytes =
+    baseBytes + logicalPhotoBytes + logicalSplit.videoBytes + logicalSplit.otherBytes;
   const usedMb = formatUsedMb(usedBytes);
 
   const status = {
-    withinLimit: usedBytes <= maxBytes,
+    withinLimit: logicalBytes <= maxBytes,
     limitMb,
     usedMb,
     usedBytes,
     wouldTrimMedia: false,
+    hasVideo,
   };
   return {
     ...status,
@@ -399,7 +471,7 @@ export function estimateComposerSealSizeLight(
 }
 
 /**
- * Local persist seal meter — 300MB cap for display; headroom is advisory only.
+ * Local persist seal meter — 500MB cap for display; headroom is advisory only.
  */
 export async function evaluateLocalComposerSealSize(
   item: {
@@ -416,10 +488,35 @@ export async function evaluateLocalComposerSealSize(
     isPlus: Boolean(opts.isPlus),
   });
   const est = await readStorageEstimate();
-  const { limitMb, limitApprox } = resolveComposerSealDisplayLimitMb(est);
-  const overCap = light.usedBytes > SEAL_LOCAL_MAX_BYTES;
+  const hasVideo = Boolean(light.hasVideo);
+  const productCap = hasVideo ? MAX_MEMORY_WITH_VIDEO_BYTES : SEAL_LOCAL_MAX_BYTES;
+  const { limitMb, limitApprox } = hasVideo
+    ? { limitMb: MAX_MEMORY_WITH_VIDEO_MB, limitApprox: false }
+    : resolveComposerSealDisplayLimitMb(est);
+  const baseBytes = estimateJsonBytes({
+    id: "composer-estimate",
+    title: String(item.title || ""),
+    story: String(item.story || ""),
+    releaseAt: Number(item.releaseAt || 0) || 0,
+    photo: [],
+    attachments: [],
+  });
+  const logicalPhotoBytes = estimatePhotoBytes(item.photo ?? [], false);
+  const logicalSplit = estimateAttachmentBytesSplit(item.attachments ?? [], false);
+  const logicalBytes =
+    baseBytes + logicalPhotoBytes + logicalSplit.videoBytes + logicalSplit.otherBytes;
+  const overCap = logicalBytes > productCap;
   const headroomLow =
-    est != null && est.headroom > 0 && light.usedBytes > est.headroom && !overCap;
+    est != null && est.headroom > 0 && logicalBytes > est.headroom && !overCap;
+  const videoHeadroomLow =
+    hasVideo &&
+    est != null &&
+    est.headroom > 0 &&
+    est.headroom < VIDEO_HEADROOM_WARN_BYTES;
+  const suggestLightVideoSeal =
+    hasVideo &&
+    (videoHeadroomLow ||
+      (isIosWebKit() && estimateOomRisk() !== "low"));
   const withinLimit = !overCap;
   const status = {
     withinLimit,
@@ -429,12 +526,16 @@ export async function evaluateLocalComposerSealSize(
     wouldTrimMedia: false,
     headroomLow,
     limitApprox,
+    hasVideo,
+    videoHeadroomLow,
+    suggestLightVideoSeal,
   };
   return {
     ...status,
     showMeter:
       overCap ||
       headroomLow ||
+      videoHeadroomLow ||
       shouldShowComposerSealSizeMeter(status, item.attachments ?? []),
   };
 }
@@ -454,7 +555,7 @@ export async function assertDraftFitsSealBudget(
   await assertDraftFitsLocalPersistBudget(item, Boolean(opts.isPlus));
 }
 
-/** Local-first persist — only fail when over 300MB cap or physical headroom. */
+/** Local-first persist — only fail when over 500MB cap or physical headroom. */
 export async function assertDraftFitsLocalPersistBudget(
   item: {
     title?: string;
@@ -466,11 +567,42 @@ export async function assertDraftFitsLocalPersistBudget(
   _isPlus = false
 ): Promise<void> {
   const status = estimateComposerSealSizeLight(item, { forStaging: false });
-  if (status.usedBytes > SEAL_LOCAL_MAX_BYTES) {
+  const hasVideo = Boolean(status.hasVideo);
+  const capBytes = hasVideo ? MAX_MEMORY_WITH_VIDEO_BYTES : SEAL_LOCAL_MAX_BYTES;
+  const logicalPhotoBytes = estimatePhotoBytes(item.photo ?? [], false);
+  const logicalSplit = estimateAttachmentBytesSplit(item.attachments ?? [], false);
+  const baseBytes = estimateJsonBytes({
+    id: "cap-check",
+    title: String(item.title || ""),
+    story: String(item.story || ""),
+    releaseAt: Number(item.releaseAt || 0) || 0,
+    photo: [],
+    attachments: [],
+  });
+  const logicalBytes =
+    baseBytes + logicalPhotoBytes + logicalSplit.videoBytes + logicalSplit.otherBytes;
+
+  if (hasVideo) {
+    assertVideoAttachmentLimits(item.attachments ?? []);
+    const est = await readStorageEstimate();
+    if (est && est.headroom > 0 && est.headroom < VIDEO_HEADROOM_WARN_BYTES) {
+      if (typeof console !== "undefined") {
+        console.warn("[haven-ring] video headroom low", {
+          headroomMb: Math.round(est.headroom / (1024 * 1024)),
+          warnMb: VIDEO_HEADROOM_WARN_MB,
+        });
+      }
+    }
+  }
+
+  if (logicalBytes > capBytes) {
+    if (hasVideo) {
+      throwSealVideoTooLarge();
+    }
     if (typeof console !== "undefined") {
       console.warn("[haven-ring] seal local budget exceeded", {
         usedMb: status.usedMb,
-        capMb: Math.floor(SEAL_LOCAL_MAX_BYTES / (1024 * 1024)),
+        capMb: Math.floor(capBytes / (1024 * 1024)),
       });
     }
     throwSealLocalStorageFull();

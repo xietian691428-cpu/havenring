@@ -30,3 +30,8 @@ export function useMemoriesContext(): MemoriesContextValue {
   }
   return ctx;
 }
+
+/** Returns null outside Timeline/Detail subtree (Phase A layered loading). */
+export function useOptionalMemoriesContext(): MemoriesContextValue | null {
+  return useContext(MemoriesContext);
+}

@@ -48,14 +48,14 @@ import {
   isSealWaitSearch,
   sealRelayNavigateHref,
   shouldDeferSdmResolveToOwnerTab,
-} from "@/src/features/seal/sealNavigate";
+} from "@/src/features/seal/sealCore";
 import {
   clearSealNfcTapHref,
   consumeFreshSealNfcTapHref,
   readFreshSealNfcTapHref,
   recordSealNfcTapHref,
   SEAL_NFC_TAP_STORAGE_KEY,
-} from "@/src/features/seal/sealNfcTapRelay";
+} from "@/src/features/seal/sealCore";
 import {
   clearSealWaitTabActive,
   markSealWaitTabActive,
@@ -63,7 +63,7 @@ import {
   SEAL_COMPLETE_STORAGE_KEY,
   tryAcquireSealResolveLockForSealTap,
   wasSealRecentlyCompleted,
-} from "@/src/features/seal/sealCrossTab";
+} from "@/src/features/seal/sealCore";
 import { startPageStyles as styles } from "./startPageStyles";
 import { StartPageSkeleton } from "./StartPageSkeleton";
 
@@ -391,7 +391,7 @@ export default function StartClient() {
     clearSealWaitTabActive();
     const armedIds = getArmedSealDraftIds();
     const { readPendingSealDraftIds, clearSealPrepState } = await import(
-      "@/src/features/seal/sealFlowClient"
+      "@/src/features/seal/sealPrepState"
     );
     const draftId = armedIds[0] || readPendingSealDraftIds()[0] || "";
     clearSealPrepState();
@@ -693,15 +693,24 @@ export default function StartClient() {
         setNotice(USER_FACING.tapRingAgain);
       }, NFC_FLOW_TIMING.sdmResolveWatchdogMs);
       try {
-        const sealFlow = await import("@/src/features/seal/sealFlowClient");
-        sealFlow.syncHydrateSealPrepFromStorage();
-        setSealPrepRevision((n) => n + 1);
+        const likelySeal =
+          hasLocalSealPrep() ||
+          isRingTapSealLandingPage(search) ||
+          isSealWaitSearch(search);
+        let context = "";
+        let pendingSealDraftIds: string[] = [];
+        let pendingSealStagingId: string | null = null;
 
-        const {
-          context,
-          draft_ids: pendingSealDraftIds,
-          staging_id: pendingSealStagingId,
-        } = sealFlow.getSealSdmContextPayload();
+        if (likelySeal) {
+          const sealFinalize = await import("@/src/features/seal/sealFinalize");
+          sealFinalize.syncHydrateSealPrepFromStorage();
+          setSealPrepRevision((n) => n + 1);
+          const payload = sealFinalize.getSealSdmContextPayload();
+          context = payload.context;
+          pendingSealDraftIds = payload.draft_ids;
+          pendingSealStagingId = payload.staging_id ?? null;
+        }
+
         pendingSealTapRef.current =
           Boolean(String(context || "").trim()) || pendingSealDraftIds.length > 0;
         setSealLeaveGuard(pendingSealTapRef.current);
@@ -844,7 +853,7 @@ export default function StartClient() {
           if (myGen !== nfcSdmResolveGenerationRef.current) return;
           setNotice(START_PAGE_EN.preparingMemory);
           const { finalizeSealChainFromSdmResponseSafe } = await import(
-            "@/src/features/seal/sealFinalizeSafe"
+            "@/src/features/seal/sealFinalize"
           );
           const finalizeResult = await withTimeout(
             finalizeSealChainFromSdmResponseSafe({

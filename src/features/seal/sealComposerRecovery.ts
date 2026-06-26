@@ -6,7 +6,7 @@
 
 import { getDraftItem, saveDraftItem } from "../memories/draftBoxStore";
 import { isSealFlowArmed } from "../../../lib/seal-flow";
-import { readPendingSealDraftIds } from "./sealFlowClient";
+import { readPendingSealDraftIds } from "./sealPrepState";
 import {
   COMPOSER_SNAPSHOT_KEY,
   composerSnapshotHasTextContent,

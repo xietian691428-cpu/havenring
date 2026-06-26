@@ -33,10 +33,8 @@ import {
   type SealDraftFinalizePayload,
   type SealSdmContextPayload,
 } from "./sealTypes";
-import {
-  userMessageFromFinalizeResponse,
-  type SealFinalizeResponseBody,
-} from "./sealFinalizeMessaging";
+import { runSealFinalizeNetwork } from "@/lib/background-sync-client";
+import { markMemoriesServerSealedLocally } from "../../services/sealLocalFinalizeMarks";
 import { requestStoragePersistenceFromUserGesture } from "../../../lib/requestStoragePersistence";
 import {
   broadcastSealComplete,
@@ -68,9 +66,18 @@ import {
 import {
   createComposerPhotoFromBlob,
   prepareComposerPhotosForSave,
+  resolveComposerMediaRowForSeal,
   type ComposerPhotoRow,
 } from "@/lib/composer-photo-utils";
-import { isMemoryPhotoRef } from "@/lib/memory-photo-types";
+import {
+  isComposerPhotoBlobRow,
+  isMemoryPhotoRef,
+  isPreparedComposerPhoto,
+} from "@/lib/memory-photo-types";
+import {
+  deletePhotoBlobsForMemory,
+  photoBlobExistsForMemory,
+} from "@/lib/photo-blob-store";
 import {
   clearSealPrepBundle,
   readSealPrepRelay,
@@ -84,6 +91,14 @@ import {
 import { releaseAllTimelineThumbUrls } from "@/lib/timeline-thumb-cache";
 import { photoPayloadHasLargeBlob } from "@/lib/timeline-large-media";
 import {
+  draftHasVideoAttachment,
+  draftHasPendingFullVideo,
+  revokeComposerAttachmentPreviews,
+  type ComposerAttachmentRow,
+} from "@/lib/video-attachment-prep";
+import { scheduleDeferredVideoPersist } from "@/lib/video-deferred-persist";
+import { slimVideoAttachmentsForRelay } from "@/lib/seal-relay-slim";
+import {
   logPostSealMemoryPressure,
   markPostSealComplete,
 } from "@/lib/post-seal-memory-guard";
@@ -93,7 +108,21 @@ import {
   flushOfflineSyncQueue,
 } from "../../services/offlineSyncQueue";
 
-const PENDING_SEAL_DRAFT_IDS_COOKIE = "haven_pending_seal_draft_ids_v1";
+import {
+  clearSealPrepState,
+  clearPendingSealDraftIds,
+  readPendingSealDraftIds,
+  syncSealPrepWithSessionArm,
+  writePendingSealDraftIds,
+} from "./sealPrepState";
+
+export {
+  readPendingSealDraftIds,
+  writePendingSealDraftIds,
+  clearPendingSealDraftIds,
+  syncSealPrepWithSessionArm,
+  clearSealPrepState,
+} from "./sealPrepState";
 
 export {
   armSealFlow,
@@ -107,54 +136,12 @@ export {
 } from "../../../lib/seal-flow";
 export { getArmedSealStagingId } from "../../../lib/seal-flow";
 
-function sealCookieOptions(maxAgeSeconds: number): string {
-  const secure =
-    typeof window !== "undefined" && window.location.protocol === "https:"
-      ? "; Secure"
-      : "";
-  return `Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
-}
-
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const prefix = `${name}=`;
-  const parts = document.cookie ? document.cookie.split(";") : [];
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (trimmed.startsWith(prefix)) return trimmed.slice(prefix.length);
-  }
-  return null;
-}
-
-function readPendingSealDraftIdsCookie(): string[] {
-  try {
-    const raw = readCookie(PENDING_SEAL_DRAFT_IDS_COOKIE);
-    if (!raw) return [];
-    const parsed = JSON.parse(decodeURIComponent(raw));
-    return Array.isArray(parsed)
-      ? parsed
-          .map((id) => String(id || "").trim())
-          .filter(Boolean)
-          .slice(0, MAX_SEAL_DRAFT_IDS)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePendingSealDraftIdsCookie(ids: string[]) {
-  if (typeof document === "undefined") return;
-  try {
-    if (!ids.length) {
-      document.cookie = `${PENDING_SEAL_DRAFT_IDS_COOKIE}=; ${sealCookieOptions(0)}`;
-      return;
-    }
-    document.cookie = `${PENDING_SEAL_DRAFT_IDS_COOKIE}=${encodeURIComponent(
-      JSON.stringify(ids)
-    )}; ${sealCookieOptions(5 * 60)}`;
-  } catch {
-    /* ignore */
-  }
+function scheduleStagingCleanup(stagingId: string | null, accessToken?: string) {
+  const id = String(stagingId || "").trim();
+  if (!id || !accessToken) return;
+  void import("@/lib/background-sync-client").then((mod) => {
+    void mod.runStagingDeleteInBackground(id, accessToken);
+  });
 }
 
 /** Re-read armed payload from cross-tab storage (does not arm from orphan draft ids). */
@@ -162,71 +149,6 @@ export function syncHydrateSealPrepFromStorage(): void {
   if (typeof window === "undefined") return;
   if (isSealFlowArmed()) return;
   syncSealPrepWithSessionArm();
-}
-
-export function readPendingSealDraftIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(PENDING_SEAL_DRAFT_IDS_KEY) || "[]"
-    );
-    const ids = Array.isArray(parsed)
-      ? parsed
-          .map((id) => String(id || "").trim())
-          .filter(Boolean)
-          .slice(0, MAX_SEAL_DRAFT_IDS)
-      : [];
-    if (ids.length) return ids;
-  } catch {
-    /* fall through to cookie */
-  }
-  return readPendingSealDraftIdsCookie();
-}
-
-export function writePendingSealDraftIds(ids: string[] = []) {
-  if (typeof window === "undefined") return;
-  if (!ids.length) {
-    window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
-    writePendingSealDraftIdsCookie([]);
-    return;
-  }
-  const normalized = ids
-    .map((id) => String(id || "").trim())
-    .filter(Boolean)
-    .slice(0, MAX_SEAL_DRAFT_IDS);
-  window.localStorage.setItem(
-    PENDING_SEAL_DRAFT_IDS_KEY,
-    JSON.stringify(normalized)
-  );
-  writePendingSealDraftIdsCookie(normalized);
-}
-
-export function clearPendingSealDraftIds() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(PENDING_SEAL_DRAFT_IDS_KEY);
-  writePendingSealDraftIdsCookie([]);
-}
-
-export function syncSealPrepWithSessionArm() {
-  if (typeof window === "undefined") return;
-  if (isSealFlowArmed()) return;
-  clearPendingSealDraftIds();
-}
-
-function scheduleStagingCleanup(stagingId: string | null, accessToken?: string) {
-  const id = String(stagingId || "").trim();
-  if (!id || !accessToken) return;
-  void deleteSealStaging(id, accessToken);
-}
-
-/** Drops session arm + pending draft id list when abandoning composer prep. */
-export function clearSealPrepState(accessToken?: string) {
-  const stagingId = getArmedSealStagingId();
-  clearPendingSealDraftIds();
-  clearSealDraftRelay();
-  clearSealPrepBundle();
-  clearSealFlowArm();
-  scheduleStagingCleanup(stagingId, accessToken);
 }
 
 export async function sealPayloadFromDraftItem(
@@ -248,48 +170,83 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return res.blob();
 }
 
-/** Blob-first persist path — avoids holding full JSON + base64 in heap during seal. */
-async function resolveSealPersistPhotos(photo: unknown): Promise<unknown> {
+/** Blob-first persist path — composer row order is the source of truth. */
+async function resolveSealPersistPhotos(
+  photo: unknown,
+  memoryId = ""
+): Promise<unknown> {
   const rows = Array.isArray(photo) ? photo : photo ? [photo] : [];
   if (!rows.length) return null;
 
-  const hasRefOnly = rows.every(
-    (row) => row && typeof row === "object" && isMemoryPhotoRef(row)
-  );
-  if (hasRefOnly) return photo;
+  const hasNewInline = rows.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    if (isPreparedComposerPhoto(row) || isComposerPhotoBlobRow(row)) return true;
+    const dataUrl = (row as { dataUrl?: string }).dataUrl;
+    return typeof dataUrl === "string" && Boolean(dataUrl);
+  });
 
-  const composerRows: ComposerPhotoRow[] = [];
+  const output: unknown[] = [];
+
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
+    if (isPreparedComposerPhoto(row)) {
+      output.push(row);
+      continue;
+    }
     const typed = row as ComposerPhotoRow & { dataUrl?: string };
     if (typed.blob instanceof Blob) {
-      composerRows.push({
-        id: String(typed.id || crypto.randomUUID()),
-        name: typed.name,
-        mimeType: typed.mimeType,
-        size: typed.size,
-        blob: typed.blob,
-      });
+      const prepared = await prepareComposerPhotosForSave([
+        {
+          id: String(typed.id || crypto.randomUUID()),
+          name: typed.name,
+          mimeType: typed.mimeType,
+          size: typed.size,
+          blob: typed.blob,
+        },
+      ]);
+      if (prepared[0]) output.push(prepared[0]);
       continue;
     }
     if (typeof typed.dataUrl === "string" && typed.dataUrl) {
       const blob = await dataUrlToBlob(typed.dataUrl);
-      composerRows.push(
-        createComposerPhotoFromBlob(blob, String(typed.id || crypto.randomUUID()))
-      );
+      const prepared = await prepareComposerPhotosForSave([
+        createComposerPhotoFromBlob(blob, String(typed.id || crypto.randomUUID())),
+      ]);
+      if (prepared[0]) output.push(prepared[0]);
       continue;
     }
     if (isMemoryPhotoRef(row)) {
-      return photo;
+      if (hasNewInline) continue;
+      const refId = String(row.id || "");
+      if (!refId) continue;
+      if (!memoryId || (await photoBlobExistsForMemory(memoryId, refId))) {
+        output.push(row);
+      }
+      continue;
     }
     await new Promise<void>((resolve) => {
       window.setTimeout(resolve, 0);
     });
   }
 
-  if (!composerRows.length) return photo;
-  const prepared = await prepareComposerPhotosForSave(composerRows);
-  return prepared.length ? prepared : photo;
+  return output.length ? output : null;
+}
+
+/** JSON relay cannot carry Blobs — photos inline; videos thumb + metadata only. */
+async function sealRelayPayloadWithPortableMedia(
+  payload: SealDraftFinalizePayload
+): Promise<SealDraftFinalizePayload> {
+  const photo: unknown[] = [];
+  for (const row of Array.isArray(payload.photo) ? payload.photo : []) {
+    const resolved = await resolveComposerMediaRowForSeal(row);
+    if (typeof resolved.dataUrl === "string" && resolved.dataUrl) {
+      photo.push(resolved);
+    }
+  }
+  const attachments = slimVideoAttachmentsForRelay(
+    Array.isArray(payload.attachments) ? payload.attachments : []
+  );
+  return { ...payload, photo, attachments };
 }
 
 async function payloadsFromLocalSources(
@@ -387,25 +344,28 @@ async function persistSealedDraftsLocally(
   for (const id of draftIds) {
     const localItem = await getDraftItem(id);
     const staged = byId.get(id);
+    const relayPayload =
+      readSealPrepRelay(id) ?? readSealDraftRelay(id);
     const relay =
       !localItem && !staged
-        ? readSealPrepRelay(id) ?? readSealDraftRelay(id)
+        ? relayPayload
         : null;
     const source = localItem ?? staged ?? relay;
     if (!source) continue;
+    const memoryId = String(source.id || id);
+    const relayPhotos = normalizePhotosForStorage(relayPayload?.photo);
     const stagedPhotos = normalizePhotosForStorage(staged?.photo);
-    const localPhotos = normalizePhotosForStorage(localItem?.photo);
     const sourcePhotos = normalizePhotosForStorage(source.photo);
-    const rawPhoto =
-      stagedPhotos && countDisplayablePhotos(stagedPhotos) > 0
-        ? stagedPhotos
-        : localPhotos && countDisplayablePhotos(localPhotos) > 0
-          ? localPhotos
-          : sourcePhotos;
-    const photo =
-      localItem?.photo && Array.isArray(localItem.photo) && localItem.photo.length
-        ? await resolveSealPersistPhotos(localItem.photo)
-        : await resolveSealPersistPhotos(rawPhoto);
+    let photo: unknown = null;
+    if (localItem?.photo && Array.isArray(localItem.photo) && localItem.photo.length) {
+      photo = await resolveSealPersistPhotos(localItem.photo, memoryId);
+    } else if (relayPhotos && countDisplayablePhotos(relayPhotos) > 0) {
+      photo = await resolveSealPersistPhotos(relayPhotos, memoryId);
+    } else if (stagedPhotos && countDisplayablePhotos(stagedPhotos) > 0) {
+      photo = await resolveSealPersistPhotos(stagedPhotos, memoryId);
+    } else if (sourcePhotos && countDisplayablePhotos(sourcePhotos) > 0) {
+      photo = await resolveSealPersistPhotos(sourcePhotos, memoryId);
+    }
     const payload = {
       id: source.id || id,
       title: String(source.title || "").trim() || "Untitled memory",
@@ -435,6 +395,12 @@ async function persistSealedDraftsLocally(
       ring_id: ring?.cloudRingId ?? null,
       haven_id: ring?.havenId ?? null,
     };
+    const hasFreshPreparedPhotos =
+      Array.isArray(photo) &&
+      photo.some((row) => row && typeof row === "object" && isPreparedComposerPhoto(row));
+    if (hasFreshPreparedPhotos) {
+      await deletePhotoBlobsForMemory(memoryId);
+    }
     const existing = await getMemoryById(id);
     let saved;
     if (existing) {
@@ -475,23 +441,11 @@ export async function persistSealedDraftsLocallyFirst(
   clearComposerSnapshot();
 }
 
-async function markMemoriesServerSealed(draftIds: string[]) {
-  const serverSealedAt = Date.now();
-  for (const id of draftIds) {
-    const existing = await getMemoryById(id);
-    if (!existing) continue;
-    await saveMemory(
-      { ...existing, serverSealedAt },
-      { allowCoreEdit: true }
-    );
-  }
-}
-
 export type CommitServerSealFinalizeOptions = FinalizeSealWithTicketOptions & {
   draftPayloads: SealDraftFinalizePayload[];
 };
 
-/** Server audit only — local memory must already exist. */
+/** Server audit only — local memory must already exist. Network runs off main thread when possible. */
 export async function commitServerSealFinalize(
   opts: CommitServerSealFinalizeOptions
 ): Promise<void> {
@@ -503,51 +457,15 @@ export async function commitServerSealFinalize(
     throw new Error(SEAL_DRAFT_NOT_FOUND);
   }
 
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
-
-  const precheckRes = await fetch("/api/seal/finalize", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      seal_ticket: sealTicket,
-      draft_ids: draftIds,
-      mode: "precheck",
-    }),
-  });
-  const precheckJson =
-    ((await precheckRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
-  if (!precheckRes.ok || precheckJson?.ok !== true) {
-    throw new Error(
-      userMessageFromFinalizeResponse(
-        precheckJson,
-        "Seal verification could not be completed."
-      )
-    );
-  }
-
   const serverPayloads = draftPayloads.map(toServerSealCommitPayload);
-  const commitRes = await fetch("/api/seal/finalize", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      seal_ticket: sealTicket,
-      draft_ids: draftIds,
-      mode: "commit",
-      draft_payloads: serverPayloads,
-    }),
+  await runSealFinalizeNetwork({
+    sealTicket,
+    draftIds,
+    accessToken,
+    serverPayloads,
   });
-  const commitJson =
-    ((await commitRes.json().catch(() => ({}))) as SealFinalizeResponseBody);
-  if (!commitRes.ok || commitJson?.ok !== true) {
-    throw new Error(
-      userMessageFromFinalizeResponse(commitJson, "Seal could not be completed.")
-    );
-  }
 
-  await markMemoriesServerSealed(draftIds);
+  await markMemoriesServerSealedLocally(draftIds);
   await dequeueSealFinalize(draftIds);
 }
 
@@ -683,7 +601,8 @@ export async function prepareSealForRingTap(opts: {
 
   writePendingSealDraftIds(ids);
   armSealFlowWithPersistence(ids);
-  persistSealLocalRelay(ids, payload);
+  const relayPayload = await sealRelayPayloadWithPortableMedia(payload);
+  persistSealLocalRelay(ids, relayPayload);
 
   let stagingId: string | undefined;
   if (strategy.stagingOnPrep) {
@@ -721,7 +640,8 @@ export async function primeSealPrepAfterDraftPersisted(
     armSealFlowWithPersistence(ids);
     const payload = await sealPayloadFromDraftItem(await getDraftItem(id));
     if (payload) {
-      persistSealLocalRelay(ids, payload);
+      const relayPayload = await sealRelayPayloadWithPortableMedia(payload);
+      persistSealLocalRelay(ids, relayPayload);
     }
     return;
   }
@@ -799,9 +719,21 @@ export async function finalizeSealChainFromSdmResponse(
   const hasLargeMedia = draftPayloads.some((row) =>
     photoPayloadHasLargeBlob(row.photo)
   );
+  const hasVideo = draftPayloads.some((row) =>
+    draftHasVideoAttachment(row.attachments)
+  );
+  revokeComposerAttachmentPreviews(
+    draftPayloads.flatMap((row) =>
+      (Array.isArray(row.attachments) ? row.attachments : []) as ComposerAttachmentRow[]
+    )
+  );
   releaseAllTimelineThumbUrls();
-  markPostSealComplete({ hasLargeMedia });
+  markPostSealComplete({ hasLargeMedia, hasVideo, draftIds });
   logPostSealMemoryPressure();
+
+  if (hasVideo && draftPayloads.some((row) => draftHasPendingFullVideo(row.attachments))) {
+    scheduleDeferredVideoPersist(draftIds);
+  }
 
   const stagingId = getArmedSealStagingId();
   requestStoragePersistenceFromUserGesture();

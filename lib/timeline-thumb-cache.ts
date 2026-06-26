@@ -18,6 +18,30 @@ export type TimelineThumbAcquireOpts = {
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<string | null>>();
 
+function thumbCacheKey(memoryId: string, memoryUpdatedAt?: number): string {
+  const ts = Number(memoryUpdatedAt || 0);
+  return ts > 0 ? `${memoryId}:${ts}` : memoryId;
+}
+
+function memoryIdFromCacheKey(key: string): string {
+  const idx = key.lastIndexOf(":");
+  if (idx <= 0) return key;
+  const suffix = key.slice(idx + 1);
+  if (/^\d+$/.test(suffix)) return key.slice(0, idx);
+  return key;
+}
+
+function releaseCacheKey(key: string): void {
+  const hit = cache.get(key);
+  if (!hit) return;
+  try {
+    URL.revokeObjectURL(hit.url);
+  } catch {
+    /* ignore */
+  }
+  cache.delete(key);
+}
+
 function evictToLimit() {
   const max = getTimelineThumbCacheMax();
   while (cache.size > max) {
@@ -30,12 +54,12 @@ function evictToLimit() {
       }
     }
     if (!oldestId) break;
-    releaseTimelineThumbUrl(oldestId);
+    releaseCacheKey(oldestId);
   }
 }
 
-function rememberBlobUrl(memoryId: string, blob: Blob): string {
-  const existing = cache.get(memoryId);
+function rememberBlobUrl(cacheKey: string, blob: Blob): string {
+  const existing = cache.get(cacheKey);
   if (existing?.url) {
     try {
       URL.revokeObjectURL(existing.url);
@@ -44,7 +68,7 @@ function rememberBlobUrl(memoryId: string, blob: Blob): string {
     }
   }
   const url = URL.createObjectURL(blob);
-  cache.set(memoryId, { url, lastUsed: Date.now() });
+  cache.set(cacheKey, { url, lastUsed: Date.now() });
   evictToLimit();
   return url;
 }
@@ -59,20 +83,21 @@ export async function acquireTimelineThumbUrl(
   opts: TimelineThumbAcquireOpts = {}
 ): Promise<string | null> {
   const memoryUpdatedAt = Number(opts.memoryUpdatedAt || 0);
+  const cacheKey = thumbCacheKey(memoryId, memoryUpdatedAt);
 
-  const hit = cache.get(memoryId);
+  const hit = cache.get(cacheKey);
   if (hit?.url) {
     hit.lastUsed = Date.now();
     return hit.url;
   }
 
-  const pending = inflight.get(memoryId);
+  const pending = inflight.get(cacheKey);
   if (pending) return pending;
 
   const task = runTimelineDecodeTask(async () => {
     const persisted = await readPersistedTimelineMedia(memoryId, memoryUpdatedAt, "thumb");
     if (persisted) {
-      return rememberBlobUrl(memoryId, persisted);
+      return rememberBlobUrl(cacheKey, persisted);
     }
 
     const sourceBlob = await loader();
@@ -84,14 +109,14 @@ export async function acquireTimelineThumbUrl(
     } else {
       void writePersistedTimelineMedia(memoryId, memoryUpdatedAt, sourceBlob, sourceBlob);
     }
-    return rememberBlobUrl(memoryId, sourceBlob);
+    return rememberBlobUrl(cacheKey, sourceBlob);
   });
 
-  inflight.set(memoryId, task);
+  inflight.set(cacheKey, task);
   try {
     return await task;
   } finally {
-    inflight.delete(memoryId);
+    inflight.delete(cacheKey);
   }
 }
 
@@ -121,28 +146,25 @@ export async function warmTimelineThumbFromDataUrl(
 }
 
 export function releaseTimelineThumbUrl(memoryId: string): void {
-  const hit = cache.get(memoryId);
-  if (!hit) return;
-  try {
-    URL.revokeObjectURL(hit.url);
-  } catch {
-    /* ignore */
+  for (const key of [...cache.keys()]) {
+    if (memoryIdFromCacheKey(key) === memoryId) {
+      releaseCacheKey(key);
+    }
   }
-  cache.delete(memoryId);
 }
 
 /** Revoke object URLs for rows outside the virtual viewport immediately. */
 export function retainTimelineThumbUrls(keepIds: Set<string>): void {
-  for (const id of cache.keys()) {
-    if (!keepIds.has(id)) {
-      releaseTimelineThumbUrl(id);
+  for (const key of cache.keys()) {
+    if (!keepIds.has(memoryIdFromCacheKey(key))) {
+      releaseCacheKey(key);
     }
   }
 }
 
 export function releaseAllTimelineThumbUrls(): void {
-  for (const id of [...cache.keys()]) {
-    releaseTimelineThumbUrl(id);
+  for (const key of [...cache.keys()]) {
+    releaseCacheKey(key);
   }
   inflight.clear();
 }

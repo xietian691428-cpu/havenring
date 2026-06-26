@@ -3,7 +3,7 @@
 export const LOCAL_STORAGE_TIGHT_RATIO = 0.85;
 
 /** Default local persist / relay ceiling when quota is unknown. */
-export const SEAL_LOCAL_PERSIST_DEFAULT_BYTES = 300 * 1024 * 1024;
+export const SEAL_LOCAL_PERSIST_DEFAULT_BYTES = 500 * 1024 * 1024;
 
 export type StorageEstimateSnapshot = {
   usage: number;
@@ -27,7 +27,7 @@ export async function readStorageEstimate(): Promise<StorageEstimateSnapshot | n
   }
 }
 
-/** Local persist budget — min(300MB, ~90% of remaining device quota). */
+/** Local persist budget — min(500MB product cap, ~90% of remaining device quota). */
 export async function resolveLocalPersistMaxBytes(): Promise<number> {
   const est = await readStorageEstimate();
   if (!est) return SEAL_LOCAL_PERSIST_DEFAULT_BYTES;

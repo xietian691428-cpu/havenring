@@ -96,11 +96,29 @@ async function resolveCurrentUserId(accessToken) {
   return data.session?.user?.id || "";
 }
 
-export async function importPairBundle(bundle, currentUserId) {
+export function remintImportedPhotoRows(photo) {
+  if (!Array.isArray(photo)) return photo;
+  return photo.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    return { ...row, id: crypto.randomUUID() };
+  });
+}
+
+async function importPairBundle(bundle, currentUserId) {
   const payload = bundleToLocalPayload(bundle, currentUserId);
   if (!payload) return { imported: false, reason: "decode_failed" };
 
   const existing = await getMemoryById(payload.id);
+
+  // Never let partner/ring sync overwrite a user-owned local memory.
+  if (existing && !existing.fromPartner && payload.fromPartner) {
+    return { imported: false, reason: "user_owned" };
+  }
+
+  if (payload.photo) {
+    payload.photo = remintImportedPhotoRows(payload.photo);
+  }
+
   const mergedPayload = existing
     ? { ...payload, supplements: mergeSupplements(existing.supplements, payload.supplements) }
     : payload;

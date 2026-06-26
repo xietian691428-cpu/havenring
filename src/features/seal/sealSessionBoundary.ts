@@ -5,7 +5,7 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { clearSealWaitTabActive } from "./sealCrossTab";
-import { clearSealPrepState } from "./sealFlowClient";
+import { clearSealPrepState } from "./sealPrepState";
 export function abandonSealPrepOnSessionBoundary(): void {
   if (typeof window === "undefined") return;
   void getSupabaseBrowserClient()

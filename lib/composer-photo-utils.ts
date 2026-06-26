@@ -1,8 +1,11 @@
 import { buildPreparedComposerPhoto } from "@/lib/photo-blob-prep";
 import type { MemoryPhotoRef, PreparedComposerPhoto } from "@/lib/memory-photo-types";
+import { getPhotoBlobForMemory } from "@/lib/photo-blob-store";
 import { compressImageBuffer } from "@/lib/image-compressor-client";
 import { getComposerSaveLimits, isIosWebKit } from "@/lib/composer-platform-limits";
 import { TIMELINE_LARGE_BLOB_BYTES } from "@/lib/timeline-large-media";
+import { isVideoAttachmentRef, isVideoMimeType } from "@/lib/memory-video-types";
+import { attachmentRowByteSize, meterAttachmentBytes } from "@/lib/video-attachment-prep";
 
 export type ComposerPhotoRow = {
   id: string;
@@ -109,9 +112,23 @@ export async function resolveComposerMediaRowForSeal(
   mimeType?: string;
   size?: number;
   dataUrl?: string;
+  thumbDataUrl?: string;
 }> {
   if (!row || typeof row !== "object") return {};
   const typed = row as ComposerPhotoRow;
+  const mime = String(typed.mimeType || "");
+  if (isVideoAttachmentRef(row) || isVideoMimeType(mime)) {
+    return {
+      id: typed.id,
+      name: typed.name,
+      mimeType: typed.mimeType,
+      size: meterAttachmentBytes(row),
+      thumbDataUrl:
+        typeof (row as { thumbDataUrl?: string }).thumbDataUrl === "string"
+          ? (row as { thumbDataUrl?: string }).thumbDataUrl
+          : undefined,
+    };
+  }
   if (typeof typed.dataUrl === "string" && typed.dataUrl) {
     return {
       id: typed.id,
@@ -192,6 +209,45 @@ export function memoryPhotoRefsFromInput(photos: unknown): MemoryPhotoRef[] {
     }
   }
   return refs;
+}
+
+/** Edit flow — vault refs with on-device preview URLs (no blob in heap). */
+export async function hydrateComposerPhotosFromMemory(
+  memoryId: string,
+  photos: unknown = []
+): Promise<ComposerPhotoRow[]> {
+  const memoryKey = String(memoryId || "").trim();
+  const rows = Array.isArray(photos) ? photos : photos ? [photos] : [];
+  const hydrated: ComposerPhotoRow[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const ref = row as MemoryPhotoRef;
+    if (typeof ref.id !== "string" || !ref.id) continue;
+    const base: ComposerPhotoRow = {
+      id: ref.id,
+      name: ref.name,
+      mimeType: ref.mimeType,
+      size: ref.size,
+    };
+    if (!memoryKey || typeof URL === "undefined") {
+      hydrated.push(base);
+      continue;
+    }
+    const blob =
+      (await getPhotoBlobForMemory(memoryKey, ref.id, "medium")) ??
+      (await getPhotoBlobForMemory(memoryKey, ref.id, "thumb"));
+    if (blob) {
+      hydrated.push({
+        ...base,
+        mimeType: ref.mimeType || blob.type || "image/jpeg",
+        size: ref.size || blob.size,
+        previewUrl: URL.createObjectURL(blob),
+      });
+    } else {
+      hydrated.push(base);
+    }
+  }
+  return hydrated;
 }
 
 export type { MemoryPhotoRef, PreparedComposerPhoto };

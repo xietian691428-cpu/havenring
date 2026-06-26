@@ -11,6 +11,9 @@ const EN = {
     "Memories are sealed on this device first. Cloud backup is optional with Haven Plus.",
   localStorageTight:
     "Local storage is getting full — consider removing older memories.",
+  localStorageCleanupCta: "Free up local storage",
+  localStorageCleanupHint:
+    "Removes all memories from this device. Export a backup first if you need one.",
   backgroundSyncPendingOne:
     "1 sealed memory finishing backup in the background.",
   backgroundSyncPendingMany:

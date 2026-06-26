@@ -1,11 +1,15 @@
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 import { shouldAllowIosFullPairSync } from "@/lib/ios-app-boot";
-import { isPostSealQuietWindow } from "@/lib/post-seal-memory-guard";
+import { isPostSealQuietWindow, isHeavyPostSealBackgroundBlocked } from "@/lib/post-seal-memory-guard";
 import { peekCloudBackupManifest, restoreCloudBackupsQuietly } from "./cloudBackupService";
 import { syncPairMemoriesFromServer } from "./pairSharingService";
 import { syncRingScopedCaches } from "./ringSyncService";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { flushOfflineSyncQueue } from "./offlineSyncQueue";
+
+async function flushOfflineQueue(accessToken) {
+  const { flushOfflineSyncQueue } = await import("./offlineSyncQueue");
+  return flushOfflineSyncQueue(accessToken);
+}
 
 /**
  * Pull-refresh sync — local-first on iOS WebKit (metadata only; no pair import / cloud merge).
@@ -20,10 +24,15 @@ export async function runPullRefreshSync() {
 
   const iosSafe = isIosWebKit();
   const postSealQuiet = isPostSealQuietWindow();
+  const heavyVideoQuiet = isHeavyPostSealBackgroundBlocked();
+
+  if (heavyVideoQuiet) {
+    return { ok: true, reason: "video-quiet", issues: [] };
+  }
 
   if (!iosSafe && !postSealQuiet) {
     try {
-      await flushOfflineSyncQueue(accessToken);
+      await flushOfflineQueue(accessToken);
     } catch {
       /* optional */
     }
@@ -66,7 +75,7 @@ export async function runLightManifestSync() {
   }
 
   try {
-    await flushOfflineSyncQueue(accessToken);
+    await flushOfflineQueue(accessToken);
   } catch {
     /* optional */
   }
@@ -99,7 +108,7 @@ export async function runDeepManifestSync() {
   }
 
   try {
-    await flushOfflineSyncQueue(accessToken);
+    await flushOfflineQueue(accessToken);
   } catch {
     /* optional */
   }

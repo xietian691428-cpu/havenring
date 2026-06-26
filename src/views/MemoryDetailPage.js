@@ -68,8 +68,8 @@ function formatStoryRichText(text) {
   });
 }
 
-function MemoryDetailPhoto({ photo, style, onOpen, viewFullSizeLabel }) {
-  const url = useMemoryPhotoDisplayUrl(photo);
+function MemoryDetailPhoto({ photo, memoryId, style, onOpen, viewFullSizeLabel }) {
+  const url = useMemoryPhotoDisplayUrl(photo, "full", memoryId);
   if (!url) {
     const placeholder =
       photo && typeof photo === "object" && photo.placeholder
@@ -109,9 +109,9 @@ function MemoryDetailPhoto({ photo, style, onOpen, viewFullSizeLabel }) {
   );
 }
 
-function MemoryDetailPhotoLightbox({ photos, index, onClose, onIndexChange, labels }) {
+function MemoryDetailPhotoLightbox({ photos, memoryId, index, onClose, onIndexChange, labels }) {
   const photo = photos[index] || null;
-  const url = useMemoryPhotoDisplayUrl(photo);
+  const url = useMemoryPhotoDisplayUrl(photo, "full", memoryId);
   const hasMany = photos.length > 1;
 
   useEffect(() => {
@@ -251,8 +251,8 @@ const lightboxStyles = {
   },
 };
 
-function MemoryDetailThumb({ photo, selected, onSelect, styles }) {
-  const url = useMemoryPhotoDisplayUrl(photo, "medium");
+function MemoryDetailThumb({ photo, memoryId, selected, onSelect, styles }) {
+  const url = useMemoryPhotoDisplayUrl(photo, "medium", memoryId);
   const placeholder =
     photo && typeof photo === "object" && photo.placeholder
       ? String(photo.placeholder)
@@ -676,6 +676,7 @@ export function MemoryDetailPage({
                     <div style={styles.carousel}>
                       <MemoryDetailPhoto
                         photo={currentPhotoRow}
+                        memoryId={memory?.id || ""}
                         style={styles.photo}
                         viewFullSizeLabel={t.photoViewFullSize}
                         onOpen={() => openPhotoLightbox(index)}
@@ -687,6 +688,7 @@ export function MemoryDetailPage({
                               <MemoryDetailThumb
                                 key={String(p?.id || i)}
                                 photo={p}
+                                memoryId={memory?.id || ""}
                                 selected={i === index}
                                 onSelect={() => setIndex(i)}
                                 styles={styles}
@@ -946,6 +948,7 @@ export function MemoryDetailPage({
       {lightboxOpen && photos.length ? (
         <MemoryDetailPhotoLightbox
           photos={photos}
+          memoryId={memory?.id || ""}
           index={lightboxIndex}
           onClose={() => setLightboxOpen(false)}
           onIndexChange={(nextIndex) => {

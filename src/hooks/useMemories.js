@@ -8,7 +8,7 @@ import {
   searchTimelineMemorySummaries,
   saveMemory,
 } from "../services/localStorageService";
-import { computeMemoryBundleHash } from "../utils/memoryIntegrity";
+import { persistComposerMemoryPayload } from "../services/composerPersistService";
 import {
   stageDraftForActiveRing,
   syncRingScopedCaches,
@@ -17,14 +17,6 @@ import { getActiveRingUidKey } from "../services/ringRegistryService";
 import { classifySyncFailure } from "@/lib/sync-failure";
 import { classifySyncHealth } from "../state/recoveryPolicy";
 import { reconcilePairStateOnAppLifecycle } from "../state/appFlowSelectors";
-import { flushOfflineSyncQueue } from "../services/offlineSyncQueue";
-import { restoreCloudBackupsQuietly } from "../services/cloudBackupService";
-import {
-  runDeepManifestSync,
-  runLightManifestSync,
-  runPullRefreshSync,
-} from "../services/lightSyncService";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deferEntryWork, isLowMemoryEntryDevice } from "@/lib/entry-defer";
 import { isIosWebKit } from "@/lib/composer-platform-limits";
 import {
@@ -51,6 +43,32 @@ import {
   shouldSkipMountTimelineRefresh,
 } from "@/lib/timeline-refresh-guard";
 import { wasSealRecentlyCompleted } from "../features/seal/sealCrossTab";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+async function flushOfflineQueue(accessToken) {
+  const { flushOfflineSyncQueue } = await import("../services/offlineSyncQueue");
+  return flushOfflineSyncQueue(accessToken);
+}
+
+async function runPullRefreshSyncDynamic() {
+  const { runPullRefreshSync } = await import("../services/lightSyncService");
+  return runPullRefreshSync();
+}
+
+async function runLightManifestSyncDynamic() {
+  const { runLightManifestSync } = await import("../services/lightSyncService");
+  return runLightManifestSync();
+}
+
+async function runDeepManifestSyncDynamic() {
+  const { runDeepManifestSync } = await import("../services/lightSyncService");
+  return runDeepManifestSync();
+}
+
+async function restoreCloudBackupsQuietlyDynamic() {
+  const { restoreCloudBackupsQuietly } = await import("../services/cloudBackupService");
+  return restoreCloudBackupsQuietly();
+}
 
 const SAVE_RETRY_LIMIT = 2;
 const SYNC_BACKOFF_BASE_MS = 5_000;
@@ -65,7 +83,7 @@ function delay(ms) {
 
 function scheduleQuietCloudRestore(onMerged) {
   const run = () => {
-    void restoreCloudBackupsQuietly()
+    void restoreCloudBackupsQuietlyDynamic()
       .then((outcome) => {
         if (outcome?.merged > 0 && typeof onMerged === "function") {
           onMerged();
@@ -278,69 +296,12 @@ export function useMemories(options = {}) {
   const persistComposerMemory = useCallback(async (payload) => {
     setSaving(true);
     setError(null);
-    releaseAllTimelineThumbUrls();
     try {
-      const id = String(payload?.id || "").trim();
-      if (!id) {
-        throw new Error("Missing memory id.");
-      }
-      const now = Date.now();
-      const enrichedPayload = {
-        ...payload,
-        id,
-        title: String(payload?.title || "").trim() || "Untitled memory",
-        story: String(payload?.story || ""),
-        photo: Array.isArray(payload?.photo) && payload.photo.length ? payload.photo : null,
-        attachments: Array.isArray(payload?.attachments) ? payload.attachments : [],
-        timelineAt: Number(payload?.timelineAt || now) || now,
-        releaseAt: Number(payload?.releaseAt || 0) || 0,
-      };
-      const contentSha = await computeMemoryBundleHash({
-        title: enrichedPayload.title,
-        story: enrichedPayload.story,
-        timelineAt: enrichedPayload.timelineAt,
-        releaseAt: enrichedPayload.releaseAt,
-        photos: Array.isArray(enrichedPayload.photo) ? enrichedPayload.photo : [],
-      });
-      await stageDraftForActiveRing({
-        id,
-        title: enrichedPayload.title || "",
-        timelineAt: enrichedPayload.timelineAt,
-        releaseAt: enrichedPayload.releaseAt,
-        content_sha256: contentSha,
-      });
-
-      const existing = await getMemoryById(id);
-      let savedMeta;
-      if (existing) {
-        savedMeta = await saveMemory({
-          ...existing,
-          title: enrichedPayload.title,
-          story: enrichedPayload.story,
-          photo: enrichedPayload.photo ?? existing.photo,
-          attachments: enrichedPayload.attachments,
-          releaseAt: enrichedPayload.releaseAt,
-          timelineAt: enrichedPayload.timelineAt,
-        });
-      } else {
-        savedMeta = await createMemory(enrichedPayload);
-      }
-
-      const preview = memoryPayloadToTimelinePreview(
-        {
-          ...enrichedPayload,
-          createdAt: savedMeta.createdAt ?? existing?.createdAt,
-          updatedAt: savedMeta.updatedAt,
-        },
-        existing
-      );
+      const { id, preview } = await persistComposerMemoryPayload(payload);
       setMemories((prev) => {
         const filtered = prev.filter((item) => item.id !== id);
         return [preview, ...filtered].sort((a, b) => b.timelineAt - a.timelineAt);
       });
-      if (photoPayloadHasLargeBlob(enrichedPayload.photo)) {
-        markPostSealComplete({ hasLargeMedia: true });
-      }
       return { id, preview };
     } catch (err) {
       const message =
@@ -369,7 +330,7 @@ export function useMemories(options = {}) {
         const { data: sessionData } = await sb.auth.getSession();
         const accessToken = sessionData.session?.access_token || "";
         if (accessToken) {
-          await flushOfflineSyncQueue(accessToken);
+          await flushOfflineQueue(accessToken);
         }
       } catch {
         /* background flush */
@@ -502,7 +463,7 @@ export function useMemories(options = {}) {
         const { data: sessionData } = await sb.auth.getSession();
         const accessToken = sessionData.session?.access_token || "";
         if (accessToken) {
-          await flushOfflineSyncQueue(accessToken);
+          await flushOfflineQueue(accessToken);
         }
       } catch {
         /* background flush */
@@ -603,8 +564,8 @@ export function useMemories(options = {}) {
       try {
         releaseAllTimelineThumbUrls();
         const outcome = pullRefresh
-          ? await runPullRefreshSync()
-          : await runLightManifestSync();
+          ? await runPullRefreshSyncDynamic()
+          : await runLightManifestSyncDynamic();
         setSyncIssues(Array.isArray(outcome?.issues) ? outcome.issues : []);
         await refresh({ force: true });
         if (isIosWebKit() && pullRefresh) {

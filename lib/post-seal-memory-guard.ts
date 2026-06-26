@@ -7,11 +7,20 @@ import {
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 export const POST_SEAL_QUIET_MS = 45_000;
+export const POST_SEAL_VIDEO_QUIET_MS = 90_000;
 
 type PostSealMarker = {
   at: number;
   hasLargeMedia?: boolean;
+  hasVideo?: boolean;
+  /** Draft ids for the seal that just completed — background worker prioritizes these. */
+  priorityDraftIds?: string[];
 };
+
+function resolveQuietMs(marker: PostSealMarker | null): number {
+  if (!marker) return POST_SEAL_QUIET_MS;
+  return marker.hasVideo ? POST_SEAL_VIDEO_QUIET_MS : POST_SEAL_QUIET_MS;
+}
 
 function readMarker(): PostSealMarker | null {
   if (typeof sessionStorage === "undefined") return null;
@@ -20,7 +29,7 @@ function readMarker(): PostSealMarker | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PostSealMarker;
     if (typeof parsed.at !== "number") return null;
-    if (Date.now() - parsed.at > POST_SEAL_QUIET_MS) {
+    if (Date.now() - parsed.at > resolveQuietMs(parsed)) {
       sessionStorage.removeItem(STORAGE_KEYS.postSealQuiet);
       return null;
     }
@@ -30,19 +39,51 @@ function readMarker(): PostSealMarker | null {
   }
 }
 
-export function markPostSealComplete(opts: { hasLargeMedia?: boolean } = {}): void {
+export function markPostSealComplete(
+  opts: { hasLargeMedia?: boolean; hasVideo?: boolean; draftIds?: string[] } = {}
+): void {
   if (typeof sessionStorage === "undefined") return;
+  const priorityDraftIds = (opts.draftIds || [])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
   try {
     sessionStorage.setItem(
       STORAGE_KEYS.postSealQuiet,
       JSON.stringify({
         at: Date.now(),
         hasLargeMedia: Boolean(opts.hasLargeMedia),
+        hasVideo: Boolean(opts.hasVideo),
+        ...(priorityDraftIds.length ? { priorityDraftIds } : {}),
       } satisfies PostSealMarker)
     );
   } catch {
     /* quota */
   }
+}
+
+export function getPostSealPriorityDraftIds(): string[] {
+  const ids = readMarker()?.priorityDraftIds;
+  return Array.isArray(ids) ? ids.map((id) => String(id || "").trim()).filter(Boolean) : [];
+}
+
+function draftIdSetKey(ids: string[]): string {
+  return [...ids].map((id) => String(id).trim()).filter(Boolean).sort().join(",");
+}
+
+/** During post-seal quiet, defer pair sync and non-priority seal finalize rows. */
+export function isDeferredDuringPostSealQuiet(item: {
+  kind: string;
+  draftIds?: string[];
+}): boolean {
+  if (!isPostSealQuietWindow()) return false;
+  const priority = getPostSealPriorityDraftIds();
+  if (item.kind === "pair_sync") return true;
+  if (item.kind === "seal_finalize") {
+    if (!priority.length) return false;
+    const itemIds = Array.isArray(item.draftIds) ? item.draftIds : [];
+    return draftIdSetKey(itemIds) !== draftIdSetKey(priority);
+  }
+  return false;
 }
 
 export function isPostSealQuietWindow(): boolean {
@@ -52,7 +93,7 @@ export function isPostSealQuietWindow(): boolean {
 export function getPostSealQuietRemainingMs(): number {
   const marker = readMarker();
   if (!marker) return 0;
-  return Math.max(0, POST_SEAL_QUIET_MS - (Date.now() - marker.at));
+  return Math.max(0, resolveQuietMs(marker) - (Date.now() - marker.at));
 }
 
 /** Fire once when the post-seal quiet window ends (thumb decode may resume). */
@@ -66,6 +107,15 @@ export function subscribePostSealQuietEnd(onEnd: () => void): () => void {
 
 export function wasPostSealLargeMedia(): boolean {
   return Boolean(readMarker()?.hasLargeMedia);
+}
+
+export function wasPostSealVideo(): boolean {
+  return Boolean(readMarker()?.hasVideo);
+}
+
+/** During video post-seal quiet, block pair/cloud/sync except deferred video chunking. */
+export function isHeavyPostSealBackgroundBlocked(): boolean {
+  return wasPostSealVideo() && isPostSealQuietWindow();
 }
 
 export type MemoryUsageSnapshot = {

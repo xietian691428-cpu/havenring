@@ -20,7 +20,7 @@ const ESTIMATED_ELEVATED_BYTES = 48 * 1024 * 1024;
 /** iOS composer — bytes in the current draft, not library size. */
 const IOS_COMPOSER_ELEVATED_BYTES = 32 * 1024 * 1024;
 const IOS_COMPOSER_CRITICAL_BYTES = 64 * 1024 * 1024;
-/** Hard block only near the local-first persist cap (300MB product budget). */
+/** Hard block only near the local-first persist cap (500MB product budget). */
 const IOS_COMPOSER_SAVE_BLOCK_BYTES = Math.floor(SEAL_LOCAL_MAX_BYTES * 0.95);
 
 /** Reject camera-roll picks above this before decode (iOS) — compress down after pick. */

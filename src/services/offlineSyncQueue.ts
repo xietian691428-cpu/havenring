@@ -1,9 +1,13 @@
 /**
  * Global offline queue for Seal finalize and Pair sync retries.
- * Flushed automatically on reconnect and app lifecycle hooks.
+ * Coordinator on main thread; network work via background-sync Worker.
  */
 import { createStore, get, set } from "idb-keyval";
+import { isDeferredDuringPostSealQuiet, isHeavyPostSealBackgroundBlocked } from "@/lib/post-seal-memory-guard";
+import { runSealFinalizeNetwork } from "@/lib/background-sync-client";
+import { toServerSealCommitPayload } from "@/src/features/seal/sealMediaPrep";
 import type { SealDraftFinalizePayload } from "@/src/features/seal/sealTypes";
+import { markMemoriesServerSealedLocally } from "./sealLocalFinalizeMarks";
 
 const store = createStore("haven-offline-sync-v1", "queue");
 const QUEUE_KEY = "global";
@@ -115,15 +119,16 @@ export async function flushOfflineSyncQueue(
     return { flushed: 0, remaining: pending.length };
   }
 
+  if (isHeavyPostSealBackgroundBlocked()) {
+    const pending = await readQueue();
+    return { flushed: 0, remaining: pending.length };
+  }
+
   const queue = await readQueue();
   if (!queue.length) {
     return { flushed: 0, remaining: 0 };
   }
 
-  const {
-    commitServerSealFinalize,
-    finalizeSealWithTicketNetworkFirst,
-  } = await import("@/src/features/seal/sealFlowClient");
   const { broadcastSealComplete } = await import("@/src/features/seal/sealCrossTab");
 
   let flushed = 0;
@@ -136,22 +141,35 @@ export async function flushOfflineSyncQueue(
       continue;
     }
 
+    if (isDeferredDuringPostSealQuiet(item)) {
+      remaining.push(item);
+      continue;
+    }
+
     try {
       if (item.kind === "seal_finalize") {
         if (item.localCommitted) {
-          await commitServerSealFinalize({
+          const payloads = item.draftPayloads || [];
+          if (payloads.length !== item.draftIds.length) {
+            throw new Error("Missing draft payloads for server finalize.");
+          }
+          await runSealFinalizeNetwork({
             sealTicket: item.sealTicket,
             draftIds: item.draftIds,
             accessToken: token,
-            draftPayloads: item.draftPayloads || [],
+            serverPayloads: payloads.map(toServerSealCommitPayload),
           });
+          await markMemoriesServerSealedLocally(item.draftIds);
+          await dequeueSealFinalize(item.draftIds);
         } else {
+          const { finalizeSealWithTicketNetworkFirst, clearSealPrepState } = await import(
+            "@/src/features/seal/sealFlowClient"
+          );
           await finalizeSealWithTicketNetworkFirst({
             sealTicket: item.sealTicket,
             draftIds: item.draftIds,
             accessToken: token,
           });
-          const { clearSealPrepState } = await import("@/src/features/seal/sealFlowClient");
           clearSealPrepState(token);
           broadcastSealComplete();
         }

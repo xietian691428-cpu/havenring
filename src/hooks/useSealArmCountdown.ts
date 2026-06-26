@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { clearSealFlowArmIfExpired, getSealArmedRemainingMs } from "../features/seal";
+import { clearSealFlowArmIfExpired, getSealArmedRemainingMs } from "../features/seal/sealCore";
 
 function formatSealCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));

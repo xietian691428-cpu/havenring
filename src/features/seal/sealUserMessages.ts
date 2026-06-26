@@ -67,6 +67,16 @@ export function throwSealLocalStorageFull(): never {
   throw new Error(SEAL_LOCAL_STORAGE_FULL);
 }
 
+export const SEAL_VIDEO_TOO_LARGE = "SEAL_VIDEO_TOO_LARGE";
+
+export function isSealVideoTooLargeError(error: unknown): boolean {
+  return error instanceof Error && error.message === SEAL_VIDEO_TOO_LARGE;
+}
+
+export function throwSealVideoTooLarge(): never {
+  throw new Error(SEAL_VIDEO_TOO_LARGE);
+}
+
 export const SEAL_STAGING_UNAVAILABLE =
   "Sealing is briefly unavailable — try again in a moment.";
 

@@ -1,3 +1,11 @@
+import {
+  MAX_FILE_ATTACHMENT_MB,
+  MAX_MEMORY_WITH_VIDEO_MB,
+  MAX_VIDEO_ATTACHMENT_MB,
+  SEAL_LOCAL_MAX_MB,
+  COMPOSER_MEDIA_SEAL_REV,
+} from "@/lib/composer-attachment-limits";
+
 const EN = {
   navComposerTitle: "New memory",
   topBarSealing: "Sealing…",
@@ -64,8 +72,7 @@ const EN = {
   addVideoCta: "Add Videos (max 6)",
   addFilesCta: "Add Files (max 5)",
   mediaZoneAria: "Photos, videos, and files",
-  mediaLimitsSummary:
-    "Photos: up to 6 (compressed on device). Videos & files: up to 50 MB each. Local seal: up to 300 MB on this device.",
+  mediaLimitsSummary: `Photos: up to 6 (compressed on device). Video up to ${MAX_VIDEO_ATTACHMENT_MB} MB each; whole memory up to ${MAX_MEMORY_WITH_VIDEO_MB} MB (${COMPOSER_MEDIA_SEAL_REV}).`,
   photosSectionHeading: "Photos",
   videosSectionHeading: "Videos",
   filesSectionHeading: "Documents & audio",
@@ -84,8 +91,7 @@ const EN = {
   helpAriaLabel: "Help",
   iosComposeHint:
     "iPhone tip: open Haven from your Home Screen for the smoothest seal flow.",
-  androidComposeHint:
-    "Android: use Chrome or your Haven app from the Play Store; keep clips under 10 MB so saving stays quick.",
+  androidComposeHint: `Android: use Chrome or your Haven app from the Play Store; keep clips under ${MAX_VIDEO_ATTACHMENT_MB} MB so saving stays quick.`,
   helperLine: "When you're ready, save or seal — then touch your ring.",
   learnMore: "Learn more",
   modeQuickRecord: "Quick Record",
@@ -112,8 +118,7 @@ const EN = {
   chooseVideo: "Choose video",
   noAttachmentsSelected: "No files selected",
   attachmentsSelectedSuffix: " file(s)",
-  attachmentsHint:
-    "Upload audio, video, or document files. Max 10 MB per file, up to 5 files.",
+  attachmentsHint: `Upload audio, video, or document files. Max ${MAX_FILE_ATTACHMENT_MB} MB per file, up to 5 files.`,
   removeAttachment: "Remove",
   saving: "Saving...",
   quickDraft: "Quick Draft",
@@ -142,7 +147,9 @@ const EN = {
   feedbackMemoryTight:
     "This draft is getting large — fewer or smaller photos will keep editing stable on iPhone.",
   feedbackAttachmentTooLargePrefix: "File too large: ",
-  feedbackAttachmentTooLargeSuffix: ". Max size is 10 MB.",
+  feedbackAttachmentTooLargeSuffix: `. Max size is ${MAX_FILE_ATTACHMENT_MB} MB.`,
+  feedbackVideoTooLarge:
+    "Video memory too high on this device — try a very short clip (<30 seconds) or seal text + cover first.",
   feedbackAttachmentTooLargeManyPrefix: "Skipped ",
   feedbackAttachmentTooLargeManyMiddle: " oversized file(s). Max ",
   feedbackAttachmentTooLargeManySuffix: " MB each. Example: ",
@@ -166,8 +173,7 @@ const EN = {
     "This device is out of storage space. Remove a photo or free space, then try again.",
   feedbackSaveMemoryPressure:
     "This memory is too large for this device right now. Remove a photo or try again.",
-  feedbackOomSaveBlocked:
-    "This memory is over the 300 MB local limit — remove some media or save in smaller parts.",
+  feedbackOomSaveBlocked: `This memory is over the ${SEAL_LOCAL_MAX_MB} MB local limit — remove some media or save in smaller parts.`,
   sealStagingErrorTitle: "Not enough local storage",
   sealStagingTooLarge:
     "Not enough local storage — try removing older memories or saving in smaller parts.",
@@ -175,8 +181,16 @@ const EN = {
   sealLocalStorageInsufficient:
     "Not enough local storage — try removing older memories or saving in smaller parts.",
   sealSizeMeterOk: "About {used} MB of {limit} MB on this device.",
+  sealSizeMeterVideoOk:
+    "About {used} MB shown (cover only). Video files supported up to 80MB.",
   sealSizeMeterOver:
     "About {used} MB — not enough space on this device. Remove older memories or free storage.",
+  sealSizeMeterVideoOver:
+    "About {used} MB — over the {limit} MB video memory limit. Try text + cover first.",
+  sealSizeMeterVideoHeadroom:
+    "Low storage headroom — seal text + cover first, or free space in Settings.",
+  sealCoverOnlyCta: "Seal text + cover only",
+  sealCoverOnlyHint: "Keeps your story and a video thumbnail without saving the full clip yet.",
   feedbackReadyNext: "Ready for your next memory.",
   feedbackSealPrepNeedDraftSave: "Save your draft first.",
   untitled: "Untitled memory",

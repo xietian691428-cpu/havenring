@@ -14,7 +14,11 @@ import {
 import { AppChrome, type ActiveTab } from "./AppChrome";
 import { readPwaInstallDeferred } from "../lib/pwaInstallKeys";
 import { canUseFeature, getSubscriptionLabel } from "../features/subscription";
-import { useMemoriesContext, MemoriesProvider } from "../providers/MemoriesProvider";
+import { useMemoriesContext, MemoriesProvider, useOptionalMemoriesContext } from "../providers/MemoriesProvider";
+import {
+  ComposerDraftProvider,
+  useOptionalComposerDraftContext,
+} from "../providers/ComposerDraftProvider";
 import { getMemoryById } from "../services/localStorageService";
 import { useRingRegistryContext } from "../providers/RingProvider";
 import { useSessionContext } from "../providers/SessionProvider";
@@ -37,6 +41,7 @@ import {
 } from "../services/temporaryDeviceService";
 import { shouldAllowTimelinePullRefresh } from "@/lib/ios-app-boot";
 import { markTabTimelineRefreshClaimed } from "@/lib/timeline-refresh-guard";
+import { shouldMountSealSessionListeners } from "../features/seal/sealCore";
 
 function RoutePageSkeleton({ label }: { label: string }) {
   return (
@@ -157,20 +162,35 @@ export function AppRouter() {
   const [swipeDx, setSwipeDx] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
 
-  return (
-    <MemoriesProvider timelineLifecycleActive={route.name === "timeline"}>
-      <AppRouterInner
-        route={route}
-        setRoute={setRoute}
-        transitionDirection={transitionDirection}
-        setTransitionDirection={setTransitionDirection}
-        swipeDx={swipeDx}
-        setSwipeDx={setSwipeDx}
-        isSwiping={isSwiping}
-        setIsSwiping={setIsSwiping}
-      />
-    </MemoriesProvider>
+  const needsMemoriesProvider =
+    route.name === "timeline" || route.name === "detail";
+  const needsComposerProvider = route.name === "new";
+
+  let body = (
+    <AppRouterInner
+      route={route}
+      setRoute={setRoute}
+      transitionDirection={transitionDirection}
+      setTransitionDirection={setTransitionDirection}
+      swipeDx={swipeDx}
+      setSwipeDx={setSwipeDx}
+      isSwiping={isSwiping}
+      setIsSwiping={setIsSwiping}
+    />
   );
+
+  if (needsComposerProvider) {
+    body = <ComposerDraftProvider>{body}</ComposerDraftProvider>;
+  }
+  if (needsMemoriesProvider) {
+    body = (
+      <MemoriesProvider timelineLifecycleActive={route.name === "timeline"}>
+        {body}
+      </MemoriesProvider>
+    );
+  }
+
+  return body;
 }
 
 type AppRouterInnerProps = {
@@ -196,30 +216,34 @@ function AppRouterInner({
 }: AppRouterInnerProps) {
   const locale = usePwaLocale();
   const touchStartRef = useRef<{ x: number; y: number; ts: number } | null>(null);
-  const {
-    memories,
-    loading,
-    saving,
-    syncing,
-    error,
-    integrityWarning,
-    cloudPlaceholders,
-    syncIssues,
-    syncMeta,
-    syncHealth,
-    refresh,
-    loadMoreMemories,
-    timelineHasMore,
-    loadingMore,
-    searchMemories,
-    syncNow,
-    syncLightNow,
-    syncDeepNow,
-    syncActiveRingNow,
-    persistComposerMemory,
-    deleteMemory,
-    queueBackgroundSync,
-  } = useMemoriesContext();
+  const memoriesCtx = useOptionalMemoriesContext();
+  const composerCtx = useOptionalComposerDraftContext();
+  const memories = memoriesCtx?.memories ?? [];
+  const loading = memoriesCtx?.loading ?? false;
+  const saving = memoriesCtx?.saving ?? composerCtx?.saving ?? false;
+  const syncing = memoriesCtx?.syncing ?? false;
+  const error = memoriesCtx?.error ?? composerCtx?.error ?? null;
+  const integrityWarning = memoriesCtx?.integrityWarning ?? null;
+  const cloudPlaceholders = memoriesCtx?.cloudPlaceholders ?? [];
+  const syncIssues = memoriesCtx?.syncIssues ?? [];
+  const syncMeta = memoriesCtx?.syncMeta ?? null;
+  const syncHealth = memoriesCtx?.syncHealth ?? null;
+  const refresh = memoriesCtx?.refresh ?? (async () => {});
+  const loadMoreMemories = memoriesCtx?.loadMoreMemories ?? (async () => {});
+  const timelineHasMore = memoriesCtx?.timelineHasMore ?? false;
+  const loadingMore = memoriesCtx?.loadingMore ?? false;
+  const searchMemories = memoriesCtx?.searchMemories ?? (async () => []);
+  const syncNow = memoriesCtx?.syncNow ?? (async () => {});
+  const syncLightNow = memoriesCtx?.syncLightNow ?? (async () => {});
+  const syncDeepNow = memoriesCtx?.syncDeepNow ?? (async () => {});
+  const syncActiveRingNow = memoriesCtx?.syncActiveRingNow ?? (async () => {});
+  const persistComposerMemory =
+    composerCtx?.persistComposerMemory ??
+    memoriesCtx?.persistComposerMemory ??
+    (async () => {
+      throw new Error("Composer save is unavailable on this screen.");
+    });
+  const deleteMemory = memoriesCtx?.deleteMemory ?? (async () => {});
   const { session: supabaseSession, sessionLoading } = useSessionContext();
   const { entitlements } = useSubscriptionContext();
   const { boundRingCount, bumpRingRegistry } = useRingRegistryContext();
@@ -266,6 +290,7 @@ function AppRouterInner({
   }, [memories, route.memoryId]);
 
   const [detailMemory, setDetailMemory] = useState(null);
+  const [editMemory, setEditMemory] = useState(null);
   useEffect(() => {
     if (route.name !== "detail" || !route.memoryId) {
       setDetailMemory(null);
@@ -274,6 +299,19 @@ function AppRouterInner({
     let active = true;
     void getMemoryById(String(route.memoryId)).then((row) => {
       if (active) setDetailMemory(row);
+    });
+    return () => {
+      active = false;
+    };
+  }, [route.name, route.memoryId]);
+  useEffect(() => {
+    if (route.name !== "new" || !route.memoryId) {
+      setEditMemory(null);
+      return undefined;
+    }
+    let active = true;
+    void getMemoryById(String(route.memoryId)).then((row) => {
+      if (active) setEditMemory(row);
     });
     return () => {
       active = false;
@@ -451,8 +489,14 @@ function AppRouterInner({
   }
 
   const scheduleBackgroundSync = useCallback(() => {
-    queueBackgroundSync("session");
-  }, [queueBackgroundSync]);
+    if (memoriesCtx?.queueBackgroundSync) {
+      memoriesCtx.queueBackgroundSync("session");
+      return;
+    }
+    void import("../services/lightSyncService").then((mod) => {
+      void mod.runLightManifestSync();
+    });
+  }, [memoriesCtx]);
 
   async function handleQuickSignIn(provider: "apple" | "google", token: string) {
     setQuickSigningIn(true);
@@ -572,6 +616,7 @@ function AppRouterInner({
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    if (!shouldMountSealSessionListeners()) return undefined;
     let unbindBoundary = () => undefined;
     let cancelled = false;
     void import("../features/seal/sealSessionBoundary").then((boundary) => {
@@ -580,20 +625,21 @@ function AppRouterInner({
     });
     const syncOrphans = () => {
       if (document.visibilityState !== "visible") return;
-      void import("../features/seal/sealFlowClient").then((sealFlow) => {
-        sealFlow.syncSealPrepWithSessionArm();
+      if (!shouldMountSealSessionListeners()) return;
+      void import("../features/seal/sealPrepState").then((prep) => {
+        prep.syncSealPrepWithSessionArm();
       });
     };
     document.addEventListener("visibilitychange", syncOrphans);
-    void import("../features/seal/sealFlowClient").then((sealFlow) => {
-      if (!cancelled) sealFlow.syncSealPrepWithSessionArm();
+    void import("../features/seal/sealPrepState").then((prep) => {
+      if (!cancelled) prep.syncSealPrepWithSessionArm();
     });
     return () => {
       cancelled = true;
       unbindBoundary();
       document.removeEventListener("visibilitychange", syncOrphans);
     };
-  }, []);
+  }, [route.name, route.name === "new" ? route.autoSeal : false]);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -867,12 +913,7 @@ function AppRouterInner({
             locale={locale}
             userEntitlements={entitlements}
             autoSealMode={Boolean(route.autoSeal)}
-            initialEditMemory={
-              route.memoryId
-                ? ((memories as Array<{ id: string }>).find((m) => m.id === route.memoryId) ??
-                  null)
-                : null
-            }
+            initialEditMemory={route.memoryId ? editMemory : null}
             initialDraftId={route.fromDraftId || ""}
             onBack={openTimelineFromComposer}
             onSaveMemory={persistComposerMemory}
@@ -944,8 +985,11 @@ function AppRouterInner({
             await refresh({ force: true }).catch(() => null);
           }}
           onDeepSync={async () => {
-            await syncDeepNow();
-            await refresh({ force: true }).catch(() => null);
+            const { runDeepManifestSync } = await import("../services/lightSyncService");
+            await runDeepManifestSync();
+            if (memoriesCtx) {
+              await refresh({ force: true }).catch(() => null);
+            }
           }}
         />
       </FadePage>

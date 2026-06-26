@@ -5,7 +5,7 @@ import { getMemoryPhotoBlob } from "../services/localStorageService";
 /**
  * Resolve one memory photo for detail view — inline dataUrl or lazy blob from photoBlobs.
  */
-export function useMemoryPhotoDisplayUrl(photoRow, variant = "full") {
+export function useMemoryPhotoDisplayUrl(photoRow, variant = "full", memoryId = "") {
   const [url, setUrl] = useState("");
 
   useEffect(() => {
@@ -24,13 +24,14 @@ export function useMemoryPhotoDisplayUrl(photoRow, variant = "full") {
     }
 
     const photoId = String(photoRow.id || "");
-    if (!photoId) {
+    const scopedMemoryId = String(memoryId || "");
+    if (!photoId || !scopedMemoryId) {
       setUrl("");
       return undefined;
     }
 
     setUrl("");
-    void getMemoryPhotoBlob(photoId, variant).then((blob) => {
+    void getMemoryPhotoBlob(scopedMemoryId, photoId, variant).then((blob) => {
       if (!active || !blob || typeof URL === "undefined") return;
       objectUrl = URL.createObjectURL(blob);
       setUrl(objectUrl);
@@ -46,7 +47,7 @@ export function useMemoryPhotoDisplayUrl(photoRow, variant = "full") {
         }
       }
     };
-  }, [photoRow, variant]);
+  }, [photoRow, variant, memoryId]);
 
   return url;
 }

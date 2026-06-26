@@ -1,7 +1,7 @@
 import { hasSdmSearch, readNfcIntent } from "@/lib/nfc-intent";
 import { isSealFlowArmed } from "@/lib/seal-flow";
 import { isSealWaitTabActive } from "./sealCrossTab";
-import { readPendingSealDraftIds } from "./sealFlowClient";
+import { readPendingSealDraftIds } from "./sealPrepState";
 
 export const SEAL_WAIT_QUERY = "seal_wait";
 

@@ -105,7 +105,7 @@ export async function migrateInlinePhotoRow(
   };
   const dataUrl = typed.dataUrl || typed.src || typed.url || "";
   const prepared = await buildPreparedComposerPhoto({
-    id: String(typed.id || crypto.randomUUID()),
+    id: crypto.randomUUID(),
     name: typed.name,
     mimeType: typed.mimeType,
     size: typed.size,

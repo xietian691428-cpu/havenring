@@ -589,6 +589,17 @@ export function SettingsPage({
               {localeCopy.localStorageTight}
             </p>
           ) : null}
+          <div style={styles.actions}>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={busy || loading}
+              style={styles.secondaryButton}
+            >
+              {buttonLabelWithBadge(localeCopy.localStorageCleanupCta)}
+            </button>
+          </div>
+          <p style={styles.copyMuted}>{localeCopy.localStorageCleanupHint}</p>
           <p style={styles.copy}>
             {loading
               ? localeCopy.loadingStats

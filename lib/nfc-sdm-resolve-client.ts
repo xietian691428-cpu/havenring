@@ -1,7 +1,7 @@
 /**
  * Client-side SDM resolve + Web NFC listen with silent auto-retry.
  */
-import { listenForSealRingTapOnce } from "@/src/features/seal";
+import { listenForSealRingTapOnce } from "@/src/features/seal/sealCore";
 import {
   isRetryableHttpStatus,
   isRetryableNetworkFailure,

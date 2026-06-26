@@ -36,6 +36,15 @@ export function photoBlobStoreId(photoId: string, type: PhotoBlobType): string {
   return `${photoId}:${type}`;
 }
 
+/** Memory-scoped blob key — prevents cross-memory / cross-ring photo bleed. */
+export function scopedPhotoBlobStoreId(
+  memoryId: string,
+  photoId: string,
+  type: PhotoBlobType
+): string {
+  return `${memoryId}:${photoId}:${type}`;
+}
+
 export function parsePhotoBlobStoreId(id: string): { photoId: string; type: PhotoBlobType } | null {
   const idx = id.lastIndexOf(":");
   if (idx <= 0) return null;
@@ -45,8 +54,19 @@ export function parsePhotoBlobStoreId(id: string): { photoId: string; type: Phot
   return { photoId, type };
 }
 
+/** Composer draft row with inline blob or data URL — not a persisted vault ref. */
+export function isComposerPhotoBlobRow(row: unknown): boolean {
+  if (!row || typeof row !== "object") return false;
+  const typed = row as { blob?: unknown; dataUrl?: string };
+  if (typed.blob instanceof Blob) return true;
+  const dataUrl = typeof typed.dataUrl === "string" ? typed.dataUrl : "";
+  return Boolean(dataUrl && dataUrl.startsWith("data:image/"));
+}
+
 export function isMemoryPhotoRef(row: unknown): row is MemoryPhotoRef {
   if (!row || typeof row !== "object") return false;
+  if (isPreparedComposerPhoto(row)) return false;
+  if (isComposerPhotoBlobRow(row)) return false;
   const typed = row as MemoryPhotoRef & { dataUrl?: string };
   return typeof typed.id === "string" && !typed.dataUrl;
 }
